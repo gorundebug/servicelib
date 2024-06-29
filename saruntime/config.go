@@ -8,7 +8,7 @@
 package saruntime
 
 import (
-	"gitlab.com/gorundebug/saapi/api"
+	"gitlab.com/gorundebug/servicelib/saapi/api"
 )
 
 type Config interface {
