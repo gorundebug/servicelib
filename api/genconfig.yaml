@@ -2,4 +2,4 @@ package: api
 generate:
   gorilla-server: true
   models: true
-output: api/gen.go
+output: gen.go

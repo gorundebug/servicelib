@@ -6,4 +6,4 @@
 #  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
 #
 
-oapi-codegen -config=genconfig.yaml saapi.yaml
+oapi-codegen -config=genconfig.yaml serviceapi.yaml

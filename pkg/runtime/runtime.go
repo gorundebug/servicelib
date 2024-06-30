@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package saruntime
+package runtime
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"gitlab.com/gorundebug/servicelib/saapi/api"
+	"gitlab.com/gorundebug/servicelib/api"
 	"gopkg.in/yaml.v2"
 	"io"
 	"os"

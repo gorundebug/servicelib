@@ -5,60 +5,62 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package saruntime
+package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ForeachFunction[T any] interface {
-	ForEach(T)
+type FilterFunction[T any] interface {
+	Filter(T) bool
 }
 
-type ForeachFunctionContext[T any] struct {
+type FilterFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]
-	f       ForeachFunction[T]
+	f       FilterFunction[T]
 }
 
-func (f *ForeachFunctionContext[T]) call(value T) {
+func (f *FilterFunctionContext[T]) call(value T) bool {
 	f.BeforeCall()
-	f.f.ForEach(value)
+	result := f.f.Filter(value)
 	f.AfterCall()
+	return result
 }
 
-type ForeachStream[T any] struct {
+type FilterStream[T any] struct {
 	ConsumedStream[T]
-	f ForeachFunctionContext[T]
+	f FilterFunctionContext[T]
 }
 
-func Foreach[T any](name string, stream TypedStream[T], f ForeachFunction[T]) *ForeachStream[T] {
+func Filter[T any](name string, stream TypedStream[T], f FilterFunction[T]) *FilterStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	foreachStream := ForeachStream[T]{
+	filterStream := FilterStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
 		},
-		f: ForeachFunctionContext[T]{
+		f: FilterFunctionContext[T]{
 			f: f,
 		},
 	}
-	foreachStream.f.context = &foreachStream
-	stream.setConsumer(&foreachStream)
-	runtime.registerStream(&foreachStream)
-	return &foreachStream
+	filterStream.f.context = &filterStream
+	stream.setConsumer(&filterStream)
+	runtime.registerStream(&filterStream)
+	return &filterStream
 }
 
-func (s *ForeachStream[T]) Consume(value T) {
-	s.f.call(value)
+func (s *FilterStream[T]) Consume(value T) {
 	if s.caller != nil {
-		s.caller.Consume(value)
+		if s.f.call(value) {
+			s.caller.Consume(value)
+		}
 	}
 }

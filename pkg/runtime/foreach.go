@@ -5,62 +5,60 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package saruntime
+package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
 )
 
-type FilterFunction[T any] interface {
-	Filter(T) bool
+type ForeachFunction[T any] interface {
+	ForEach(T)
 }
 
-type FilterFunctionContext[T any] struct {
+type ForeachFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]
-	f       FilterFunction[T]
+	f       ForeachFunction[T]
 }
 
-func (f *FilterFunctionContext[T]) call(value T) bool {
+func (f *ForeachFunctionContext[T]) call(value T) {
 	f.BeforeCall()
-	result := f.f.Filter(value)
+	f.f.ForEach(value)
 	f.AfterCall()
-	return result
 }
 
-type FilterStream[T any] struct {
+type ForeachStream[T any] struct {
 	ConsumedStream[T]
-	f FilterFunctionContext[T]
+	f ForeachFunctionContext[T]
 }
 
-func Filter[T any](name string, stream TypedStream[T], f FilterFunction[T]) *FilterStream[T] {
+func Foreach[T any](name string, stream TypedStream[T], f ForeachFunction[T]) *ForeachStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	filterStream := FilterStream[T]{
+	foreachStream := ForeachStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
 		},
-		f: FilterFunctionContext[T]{
+		f: ForeachFunctionContext[T]{
 			f: f,
 		},
 	}
-	filterStream.f.context = &filterStream
-	stream.setConsumer(&filterStream)
-	runtime.registerStream(&filterStream)
-	return &filterStream
+	foreachStream.f.context = &foreachStream
+	stream.setConsumer(&foreachStream)
+	runtime.registerStream(&foreachStream)
+	return &foreachStream
 }
 
-func (s *FilterStream[T]) Consume(value T) {
+func (s *ForeachStream[T]) Consume(value T) {
+	s.f.call(value)
 	if s.caller != nil {
-		if s.f.call(value) {
-			s.caller.Consume(value)
-		}
+		s.caller.Consume(value)
 	}
 }

@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package saruntime
+package runtime
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/saapi/api"
+	"gitlab.com/gorundebug/servicelib/api"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"net/http"

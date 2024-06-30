@@ -5,10 +5,10 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package saruntime
+package runtime
 
 import (
-	"gitlab.com/gorundebug/servicelib/saapi/api"
+	"gitlab.com/gorundebug/servicelib/api"
 )
 
 type Config interface {
