@@ -247,6 +247,12 @@ components:
           type: integer
         yPos:
           type: integer
+        functionName:
+          type: string
+        functionPackage:
+          type: string
+        publicFunction:
+          type: boolean
       required:
         - id
         - type
@@ -417,6 +423,10 @@ components:
           type: string
         typeImportLang2:
           type: string
+        package:
+          type: string
+        publicType:
+          type: boolean
       required:
         - name
         - type
