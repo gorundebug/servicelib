@@ -45,18 +45,6 @@ type NetHTTPEndpointRequestData struct {
 	optimized bool
 }
 
-type ReadCloser struct {
-	reader io.Reader
-}
-
-func (rc *ReadCloser) Read(p []byte) (n int, err error) {
-	return rc.reader.Read(p)
-}
-
-func (rc *ReadCloser) Close() error {
-	return nil
-}
-
 func (d *NetHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
 	if d.optimized {
 		return d.r.Body, nil
@@ -68,7 +56,7 @@ func (d *NetHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
 			return nil, err
 		}
 	}
-	return &ReadCloser{reader: bytes.NewReader(d.body)}, nil
+	return io.NopCloser(bytes.NewReader(d.body)), nil
 }
 
 func (d *NetHTTPEndpointRequestData) getForm() (url.Values, error) {
