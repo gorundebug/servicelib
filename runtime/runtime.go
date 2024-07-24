@@ -175,6 +175,13 @@ func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (Serializer, err
 	var t T
 	v := reflect.ValueOf(t)
 	elementType := v.Type().Elem()
+	for {
+		if elementType.Kind() == reflect.Ptr {
+			elementType = elementType.Elem()
+		} else {
+			break
+		}
+	}
 	serElm, err := makeSerdeForType(elementType, runtime)
 	if err != nil {
 		return nil, err
@@ -187,11 +194,25 @@ func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (Serializer, error
 	v := reflect.ValueOf(t)
 	mapType := v.Type()
 	keyType := mapType.Key()
+	for {
+		if keyType.Kind() == reflect.Ptr {
+			keyType = keyType.Elem()
+		} else {
+			break
+		}
+	}
 	serKey, err := makeSerdeForType(keyType, runtime)
 	if err != nil {
 		return nil, err
 	}
 	valueType := mapType.Elem()
+	for {
+		if valueType.Kind() == reflect.Ptr {
+			valueType = valueType.Elem()
+		} else {
+			break
+		}
+	}
 	serValue, err := makeSerdeForType(valueType, runtime)
 	if err != nil {
 		return nil, err
