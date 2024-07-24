@@ -146,11 +146,72 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, config
 	return runtime
 }
 
+func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (Serializer, error) {
+	var err error
+	var ser Serializer
+	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+		ser, err = makeSerdeForType(tp.Elem(), runtime)
+		if err != nil {
+			return nil, err
+		}
+		return makeArraySerde(tp, ser), nil
+	} else if tp.Kind() == reflect.Map {
+		serKey, err := makeSerdeForType(tp.Key(), runtime)
+		if err != nil {
+			return nil, err
+		}
+		serValue, err := makeSerdeForType(tp.Elem(), runtime)
+		if err != nil {
+			return nil, err
+		}
+		return makeMapSerde(tp, serKey, serValue), nil
+	} else {
+		ser, err = runtime.getSerde(tp)
+	}
+	return ser, err
+}
+
+func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (Serializer, error) {
+	var t T
+	v := reflect.ValueOf(t)
+	elementType := v.Type().Elem()
+	serElm, err := makeSerdeForType(elementType, runtime)
+	if err != nil {
+		return nil, err
+	}
+	return MakeArraySerde[T](serElm), nil
+}
+
+func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (Serializer, error) {
+	var t T
+	v := reflect.ValueOf(t)
+	mapType := v.Type()
+	keyType := mapType.Key()
+	serKey, err := makeSerdeForType(keyType, runtime)
+	if err != nil {
+		return nil, err
+	}
+	valueType := mapType.Elem()
+	serValue, err := makeSerdeForType(valueType, runtime)
+	if err != nil {
+		return nil, err
+	}
+	return MakeMapSerde[T](serKey, serValue), nil
+}
+
 func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
 	tp := GetSerdeType[T]()
-	ser, err := runtime.getSerde(tp)
+	var err error
+	var ser Serializer
+	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+		ser, err = makeTypedArraySerde[T](runtime)
+	} else if tp.Kind() == reflect.Map {
+		ser, err = makeTypedMapSerde[T](runtime)
+	} else {
+		ser, err = makeSerdeForType(tp, runtime)
+	}
 	if err != nil {
-		log.Panicf("Serializer for type %s not found. %s", tp.Name(), err)
+		log.Panicln(err)
 	}
 	serT, ok := ser.(Serde[T])
 	if !ok {
