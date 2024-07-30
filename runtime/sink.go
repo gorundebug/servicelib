@@ -11,36 +11,33 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ExternalLinkConsumer struct {
-}
-
-type ExternalLinkStream[T any] struct {
+type SinkStream[T any] struct {
 	Stream[T]
 	consumer Consumer[T]
 }
 
-func ExternalLink[T any](name string, stream TypedStream[T], consumer Consumer[T]) {
+func Sink[T any](name string, stream TypedStream[T], consumer Consumer[T]) {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	externalLinkStream := ExternalLinkStream[T]{
+	sinkStream := SinkStream[T]{
 		Stream: Stream[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},
 		consumer: consumer,
 	}
-	stream.setConsumer(&externalLinkStream)
-	runtime.registerStream(&externalLinkStream)
+	stream.setConsumer(&sinkStream)
+	runtime.registerStream(&sinkStream)
 }
 
-func (s *ExternalLinkStream[T]) Consume(value T) {
+func (s *SinkStream[T]) Consume(value T) {
 	s.consumer.Consume(value)
 }
 
-func (s *ExternalLinkStream[T]) getConsumers() []StreamBase {
+func (s *SinkStream[T]) getConsumers() []StreamBase {
 	return []StreamBase{}
 }

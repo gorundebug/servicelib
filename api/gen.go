@@ -93,9 +93,8 @@ const (
 
 // Defines values for TransformationType.
 const (
-	TransformationTypeAppLink         TransformationType = 14
+	TransformationTypeAppSink         TransformationType = 14
 	TransformationTypeCycleLink       TransformationType = 15
-	TransformationTypeExternalLink    TransformationType = 13
 	TransformationTypeFilter          TransformationType = 3
 	TransformationTypeFlatMap         TransformationType = 7
 	TransformationTypeFlatMapIterable TransformationType = 8
@@ -107,6 +106,7 @@ const (
 	TransformationTypeMerge           TransformationType = 10
 	TransformationTypeMultiJoin       TransformationType = 5
 	TransformationTypeParallels       TransformationType = 12
+	TransformationTypeSink            TransformationType = 13
 	TransformationTypeSplit           TransformationType = 11
 )
 

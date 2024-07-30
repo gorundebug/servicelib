@@ -41,9 +41,9 @@ func (s *StreamConfig) GetProperty(name string) interface{} {
 }
 
 var transformationNameMap = map[api.TransformationType]string{
-	api.TransformationTypeAppLink:         "appLink",
+	api.TransformationTypeAppSink:         "appSink",
 	api.TransformationTypeCycleLink:       "cycleLink",
-	api.TransformationTypeExternalLink:    "externalLink",
+	api.TransformationTypeSink:            "sink",
 	api.TransformationTypeFilter:          "filter",
 	api.TransformationTypeFlatMap:         "flatMap",
 	api.TransformationTypeFlatMapIterable: "flatMapIterable",

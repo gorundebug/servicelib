@@ -172,8 +172,8 @@ components:
         - Merge
         - Split
         - Parallels
-        - ExternalLink
-        - AppLink
+        - Sink
+        - AppSink
         - CycleLink
 
     JoinType:
