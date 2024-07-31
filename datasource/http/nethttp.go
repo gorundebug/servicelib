@@ -28,7 +28,7 @@ type NetHTTPDataSource struct {
 	*runtime.InputDataSource
 	server http.Server
 	mux    *http.ServeMux
-	quit   chan struct{}
+	done   chan struct{}
 }
 
 type NetHTTPEndpoint struct {
@@ -106,7 +106,7 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *N
 			Addr:    fmt.Sprintf("%s:%d", cfg.Properties["ip"].(string), cfg.Properties["port"].(int)),
 			Handler: mux,
 		},
-		quit: make(chan struct{}),
+		done: make(chan struct{}),
 	}
 	execRuntime.AddDataSource(netHTTPDataSource)
 	return netHTTPDataSource
@@ -133,7 +133,7 @@ func (ds *NetHTTPDataSource) Start() error {
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Panicln(err)
 		}
-		ds.quit <- struct{}{}
+		ds.done <- struct{}{}
 	}()
 	return nil
 }
@@ -143,9 +143,9 @@ func (ds *NetHTTPDataSource) Stop() {
 		log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
 	} else {
 		select {
-		case <-ds.quit:
+		case <-ds.done:
 		case <-time.After(defaultShutdownTimeout):
-			log.Warnf("Stop HTTP server for data source '%s' timeout.", ds.GetName())
+			log.Warnf("Stop HTTP server for data source '%s' after timeout.", ds.GetName())
 		}
 	}
 }

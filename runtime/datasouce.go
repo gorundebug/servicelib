@@ -7,9 +7,7 @@
 
 package runtime
 
-import (
-	"io"
-)
+import "golang.org/x/exp/maps"
 
 type DataSource interface {
 	Start() error
@@ -20,6 +18,7 @@ type DataSource interface {
 	GetRuntime() StreamExecutionRuntime
 	AddEndpoint(InputEndpoint)
 	GetEndpoint(id int) InputEndpoint
+	GetEndpoints() []InputEndpoint
 }
 
 type InputEndpoint interface {
@@ -66,12 +65,15 @@ func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
 	return ds.endpoints[id]
 }
 
+func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
+	return maps.Values(ds.endpoints)
+}
+
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 	ds.endpoints[endpoint.GetId()] = endpoint
 }
 
 type EndpointRequestData interface {
-	GetBody() (io.ReadCloser, error)
 }
 
 type EndpointConsumer interface {
