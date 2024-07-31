@@ -21,27 +21,27 @@ const (
 
 // Defines values for CommunicationProtocol.
 const (
-	GRPC CommunicationProtocol = 2
-	HTTP CommunicationProtocol = 1
+	CommunicationProtocolGRPC CommunicationProtocol = 2
+	CommunicationProtocolHTTP CommunicationProtocol = 1
+)
+
+// Defines values for DataConnectorImplementation.
+const (
+	FastHTTP DataConnectorImplementation = "FastHTTP"
+	Nethttp  DataConnectorImplementation = "net/http"
+)
+
+// Defines values for DataConnectorType.
+const (
+	DataConnectorTypeGRPC  DataConnectorType = 2
+	DataConnectorTypeHTTP  DataConnectorType = 1
+	DataConnectorTypeKafka DataConnectorType = 3
 )
 
 // Defines values for DataFormat.
 const (
 	Gorillaschema DataFormat = "gorilla/schema"
 	Json          DataFormat = "json"
-)
-
-// Defines values for DataSourceImplementation.
-const (
-	FastHTTP DataSourceImplementation = "FastHTTP"
-	Nethttp  DataSourceImplementation = "net/http"
-)
-
-// Defines values for DataSourceType.
-const (
-	GRPCServer    DataSourceType = 2
-	HTTPServer    DataSourceType = 1
-	KafkaConsumer DataSourceType = 3
 )
 
 // Defines values for DataType.
@@ -124,38 +124,38 @@ type CallSemantics int
 // CommunicationProtocol defines model for CommunicationProtocol.
 type CommunicationProtocol int
 
-// DataFormat defines model for DataFormat.
-type DataFormat string
-
-// DataSource defines model for DataSource.
-type DataSource struct {
-	Id                  int                      `json:"id"`
-	Implementation      DataSourceImplementation `json:"implementation"`
-	Ip                  *string                  `json:"ip,omitempty"`
-	Name                string                   `json:"name"`
-	Port                *int                     `json:"port,omitempty"`
-	ProgrammingLanguage ProgrammingLanguage      `json:"programmingLanguage"`
-	Type                DataSourceType           `json:"type"`
+// DataConnector defines model for DataConnector.
+type DataConnector struct {
+	Id                  int                         `json:"id"`
+	Implementation      DataConnectorImplementation `json:"implementation"`
+	Ip                  *string                     `json:"ip,omitempty"`
+	Name                string                      `json:"name"`
+	Port                *int                        `json:"port,omitempty"`
+	ProgrammingLanguage ProgrammingLanguage         `json:"programmingLanguage"`
+	Type                DataConnectorType           `json:"type"`
 }
 
-// DataSourceImplementation defines model for DataSourceImplementation.
-type DataSourceImplementation string
+// DataConnectorImplementation defines model for DataConnectorImplementation.
+type DataConnectorImplementation string
 
-// DataSourceType defines model for DataSourceType.
-type DataSourceType int
+// DataConnectorType defines model for DataConnectorType.
+type DataConnectorType int
+
+// DataFormat defines model for DataFormat.
+type DataFormat string
 
 // DataType defines model for DataType.
 type DataType string
 
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
-	Format       *DataFormat `json:"format,omitempty"`
-	Id           int         `json:"id"`
-	IdDataSource int         `json:"idDataSource"`
-	Method       *string     `json:"method,omitempty"`
-	Name         string      `json:"name"`
-	Param        *string     `json:"param,omitempty"`
-	Path         *string     `json:"path,omitempty"`
+	Format          *DataFormat `json:"format,omitempty"`
+	Id              int         `json:"id"`
+	IdDataConnector int         `json:"idDataConnector"`
+	Method          *string     `json:"method,omitempty"`
+	Name            string      `json:"name"`
+	Param           *string     `json:"param,omitempty"`
+	Path            *string     `json:"path,omitempty"`
 }
 
 // JoinStorageType defines model for JoinStorageType.
@@ -218,13 +218,13 @@ type Stream struct {
 
 // StreamApp defines model for StreamApp.
 type StreamApp struct {
-	DataSources []DataSource    `json:"dataSources"`
-	Endpoints   []Endpoint      `json:"endpoints"`
-	Links       []Link          `json:"links"`
-	Services    []Service       `json:"services"`
-	Settings    ProjectSettings `json:"settings"`
-	Streams     []Stream        `json:"streams"`
-	Types       []Type          `json:"types"`
+	DataConnectors []DataConnector `json:"dataConnectors"`
+	Endpoints      []Endpoint      `json:"endpoints"`
+	Links          []Link          `json:"links"`
+	Services       []Service       `json:"services"`
+	Settings       ProjectSettings `json:"settings"`
+	Streams        []Stream        `json:"streams"`
+	Types          []Type          `json:"types"`
 }
 
 // StringBinary defines model for StringBinary.

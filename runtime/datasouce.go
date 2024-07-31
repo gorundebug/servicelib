@@ -14,15 +14,15 @@ import (
 type DataSource interface {
 	Start() error
 	Stop()
-	GetConfig() *DataSourceConfig
+	GetDataConnector() *DataConnector
 	GetName() string
 	GetId() int
 	GetRuntime() StreamExecutionRuntime
-	AddEndpoint(Endpoint)
-	GetEndpoint(id int) Endpoint
+	AddEndpoint(InputEndpoint)
+	GetEndpoint(id int) InputEndpoint
 }
 
-type Endpoint interface {
+type InputEndpoint interface {
 	GetConfig() *EndpointConfig
 	GetName() string
 	GetId() int
@@ -33,40 +33,40 @@ type Endpoint interface {
 }
 
 type InputDataSource struct {
-	config    *DataSourceConfig
-	runtime   StreamExecutionRuntime
-	endpoints map[int]Endpoint
+	dataConnector *DataConnector
+	runtime       StreamExecutionRuntime
+	endpoints     map[int]InputEndpoint
 }
 
-func MakeInputDataSource(config *DataSourceConfig, runtime StreamExecutionRuntime) *InputDataSource {
+func MakeInputDataSource(dataConnector *DataConnector, runtime StreamExecutionRuntime) *InputDataSource {
 	return &InputDataSource{
-		config:    config,
-		runtime:   runtime,
-		endpoints: make(map[int]Endpoint),
+		dataConnector: dataConnector,
+		runtime:       runtime,
+		endpoints:     make(map[int]InputEndpoint),
 	}
 }
 
-func (ds *InputDataSource) GetConfig() *DataSourceConfig {
-	return ds.config
+func (ds *InputDataSource) GetDataConnector() *DataConnector {
+	return ds.dataConnector
 }
 
 func (ds *InputDataSource) GetName() string {
-	return ds.config.Name
+	return ds.dataConnector.Name
 }
 
 func (ds *InputDataSource) GetId() int {
-	return ds.config.ID
+	return ds.dataConnector.ID
 }
 
 func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
 	return ds.runtime
 }
 
-func (ds *InputDataSource) GetEndpoint(id int) Endpoint {
+func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
 	return ds.endpoints[id]
 }
 
-func (ds *InputDataSource) AddEndpoint(endpoint Endpoint) {
+func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 	ds.endpoints[endpoint.GetId()] = endpoint
 }
 

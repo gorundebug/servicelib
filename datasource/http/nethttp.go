@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package httpserver
+package http
 
 import (
 	"bytes"
@@ -114,7 +114,7 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *N
 
 func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) *NetHTTPEndpoint {
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
-	dataSource := getNetHTTPDataSource(cfg.IdDataSource, execRuntime)
+	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint.(*NetHTTPEndpoint)

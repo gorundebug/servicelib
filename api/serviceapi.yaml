@@ -41,9 +41,9 @@ paths:
                     - id: 1
                       name: Service1
                       programmingLanguage: 1
-                  dataSources:
+                  dataConnector:
                     - id: 1
-                      name: DataSource1
+                      name: DataConnector1
                       type: 1
                   endpoints:
                     - id: 1
@@ -81,10 +81,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Type'
-        dataSources:
+        dataConnectors:
           type: array
           items:
-            $ref: '#/components/schemas/DataSource'
+            $ref: '#/components/schemas/DataConnector'
         endpoints:
           type: array
           items:
@@ -94,7 +94,7 @@ components:
         - streams
         - links
         - types
-        - dataSources
+        - dataConnectors
         - endpoints
         - settings
 
@@ -201,13 +201,13 @@ components:
         - HTTP
         - gRPC
 
-    DataSourceType:
+    DataConnectorType:
       type: integer
       enum: [ 1, 2, 3 ]
       x-enum-varnames:
-        - HTTPServer
-        - gRPCServer
-        - KafkaConsumer
+        - HTTP
+        - gRPC
+        - Kafka
 
     Stream:
       type: object
@@ -288,13 +288,13 @@ components:
         - inheritedCallSemantics
         - callSemantics
 
-    DataSourceImplementation:
+    DataConnectorImplementation:
       type: string
       enum: [ 'net/http',
               'FastHTTP'
       ]
 
-    DataSource:
+    DataConnector:
       type: object
       properties:
         id:
@@ -302,14 +302,14 @@ components:
           example: 1
         name:
           type: string
-          example: DataSource1
+          example: DataConnector1
         programmingLanguage:
           $ref: '#/components/schemas/ProgrammingLanguage'
         type:
-          $ref: '#/components/schemas/DataSourceType'
+          $ref: '#/components/schemas/DataConnectorType'
           example: 1
         implementation:
-          $ref: '#/components/schemas/DataSourceImplementation'
+          $ref: '#/components/schemas/DataConnectorImplementation'
         ip:
           type: string
         port:
@@ -338,7 +338,7 @@ components:
         name:
           type: string
           example: Endpoint1
-        idDataSource:
+        idDataConnector:
           type: integer
           example: 1
         method:
@@ -353,7 +353,7 @@ components:
       required:
         - id
         - name
-        - idDataSource
+        - idDataConnector
 
     TypeDefinitionFormat:
       type: integer

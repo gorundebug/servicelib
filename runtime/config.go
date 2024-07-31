@@ -86,22 +86,22 @@ func (s *LinkConfig) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
-type DataSourceConfig struct {
+type DataConnector struct {
 	ID         int                    `yaml:"id"`
 	Name       string                 `yaml:"name"`
-	Type       api.DataSourceType     `yaml:"type"`
+	Type       api.DataConnectorType  `yaml:"type"`
 	Properties map[string]interface{} `mapstructure:",remain"`
 }
 
-func (s *DataSourceConfig) GetProperty(name string) interface{} {
+func (s *DataConnector) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
 type EndpointConfig struct {
-	ID           int                    `yaml:"id"`
-	Name         string                 `yaml:"name"`
-	IdDataSource int                    `yaml:"idDataSource"`
-	Properties   map[string]interface{} `mapstructure:",remain"`
+	ID              int                    `yaml:"id"`
+	Name            string                 `yaml:"name"`
+	IdDataConnector int                    `yaml:"idDataConnector"`
+	Properties      map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *EndpointConfig) GetProperty(name string) interface{} {
@@ -118,11 +118,11 @@ func GetConfigProperty[T any](config ConfigProperties, name string) T {
 }
 
 type ServiceAppConfig struct {
-	Streams     []StreamConfig     `yaml:"streams"`
-	Services    []ServiceConfig    `yaml:"services"`
-	Links       []LinkConfig       `yaml:"links"`
-	DataSources []DataSourceConfig `yaml:"datasources"`
-	Endpoints   []EndpointConfig   `yaml:"endpoints"`
+	Streams        []StreamConfig   `yaml:"streams"`
+	Services       []ServiceConfig  `yaml:"services"`
+	Links          []LinkConfig     `yaml:"links"`
+	DataConnectors []DataConnector  `yaml:"dataConnectors"`
+	Endpoints      []EndpointConfig `yaml:"endpoints"`
 }
 
 func (cfg *ServiceAppConfig) GetServiceConfig() *ServiceAppConfig {
@@ -143,11 +143,11 @@ func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
 	return nil
 }
 
-func (cfg *ServiceAppConfig) GetDataSourceConfigById(id int) *DataSourceConfig {
-	for idx := range cfg.DataSources {
-		dataSource := &cfg.DataSources[idx]
-		if dataSource.ID == id {
-			return dataSource
+func (cfg *ServiceAppConfig) GetDataSourceConfigById(id int) *DataConnector {
+	for idx := range cfg.DataConnectors {
+		dataConnector := &cfg.DataConnectors[idx]
+		if dataConnector.ID == id {
+			return dataConnector
 		}
 	}
 	return nil
