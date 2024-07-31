@@ -97,7 +97,7 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *N
 	if dataSource != nil {
 		return dataSource.(*NetHTTPDataSource)
 	}
-	cfg := execRuntime.GetConfig().GetDataSourceConfigById(id)
+	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
 	netHTTPDataSource := &NetHTTPDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, execRuntime),

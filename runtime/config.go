@@ -143,7 +143,7 @@ func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
 	return nil
 }
 
-func (cfg *ServiceAppConfig) GetDataSourceConfigById(id int) *DataConnector {
+func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnector {
 	for idx := range cfg.DataConnectors {
 		dataConnector := &cfg.DataConnectors[idx]
 		if dataConnector.ID == id {
