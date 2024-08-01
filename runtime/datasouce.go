@@ -17,8 +17,8 @@ type DataSource interface {
 	GetId() int
 	GetRuntime() StreamExecutionRuntime
 	AddEndpoint(InputEndpoint)
-	GetEndpoint(id int) InputEndpoint
-	GetEndpoints() []InputEndpoint
+	GetEndpoint(id int) []InputEndpoint
+	GetEndpoints() [][]InputEndpoint
 }
 
 type InputEndpoint interface {
@@ -34,14 +34,14 @@ type InputEndpoint interface {
 type InputDataSource struct {
 	dataConnector *DataConnector
 	runtime       StreamExecutionRuntime
-	endpoints     map[int]InputEndpoint
+	endpoints     map[int][]InputEndpoint
 }
 
 func MakeInputDataSource(dataConnector *DataConnector, runtime StreamExecutionRuntime) *InputDataSource {
 	return &InputDataSource{
 		dataConnector: dataConnector,
 		runtime:       runtime,
-		endpoints:     make(map[int]InputEndpoint),
+		endpoints:     make(map[int][]InputEndpoint),
 	}
 }
 
@@ -61,16 +61,16 @@ func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
 	return ds.runtime
 }
 
-func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
+func (ds *InputDataSource) GetEndpoint(id int) []InputEndpoint {
 	return ds.endpoints[id]
 }
 
-func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
+func (ds *InputDataSource) GetEndpoints() [][]InputEndpoint {
 	return maps.Values(ds.endpoints)
 }
 
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
-	ds.endpoints[endpoint.GetId()] = endpoint
+	ds.endpoints[endpoint.GetId()] = append(ds.endpoints[endpoint.GetId()], endpoint)
 }
 
 type EndpointRequestData interface {

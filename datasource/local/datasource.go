@@ -61,14 +61,20 @@ func (ds *CustomDataSource) Start() error {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
 		ds.wg.Add(1)
-		go func(endpoint CustomInputEndpoint) {
+		cie := make([]CustomInputEndpoint, 0, len(endpoint))
+		for _, ep := range endpoint {
+			cie = append(cie, ep.(CustomInputEndpoint))
+		}
+		go func(endpoints []CustomInputEndpoint) {
 			defer ds.wg.Done()
-			for {
-				if ds.stop || !endpoint.NextMessage() {
-					break
+			for _, ep := range endpoints {
+				for {
+					if ds.stop || !ep.NextMessage() {
+						break
+					}
 				}
 			}
-		}(endpoint.(CustomInputEndpoint))
+		}(cie)
 	}
 	return nil
 }
@@ -120,7 +126,11 @@ func getCustomDataSourceEndpoint[T any](id int, execRuntime runtime.StreamExecut
 	dataSource := getCustomDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint.(*CustomTypedEndpoint[T])
+		for _, ep := range endpoint {
+			if cep, ok := ep.(*CustomTypedEndpoint[T]); ok {
+				return cep
+			}
+		}
 	}
 	customEndpoint := &CustomTypedEndpoint[T]{
 		CustomEndpoint: &CustomEndpoint{

@@ -116,14 +116,15 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
-	if endpoint != nil {
-		return endpoint.(*NetHTTPEndpoint)
+	if len(endpoint) > 0 {
+		return endpoint[0].(*NetHTTPEndpoint)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
 		method:             runtime.GetConfigProperty[string](cfg, "method"),
 	}
 	dataSource.mux.Handle(runtime.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
+	dataSource.AddEndpoint(netHTTPEndpoint)
 	return netHTTPEndpoint
 }
 

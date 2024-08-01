@@ -203,11 +203,12 @@ components:
 
     DataConnectorType:
       type: integer
-      enum: [ 1, 2, 3 ]
+      enum: [ 1, 2, 3, 4 ]
       x-enum-varnames:
         - HTTP
         - gRPC
         - Kafka
+        - Custom
 
     Stream:
       type: object
