@@ -139,14 +139,15 @@ func (ds *NetHTTPDataSource) Start() error {
 }
 
 func (ds *NetHTTPDataSource) Stop() {
-	if err := ds.server.Shutdown(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	defer cancel()
+	if err := ds.server.Shutdown(ctx); err != nil {
 		log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
-	} else {
-		select {
-		case <-ds.done:
-		case <-time.After(defaultShutdownTimeout):
-			log.Warnf("Stop HTTP server for data source '%s' after timeout.", ds.GetName())
-		}
+	}
+	select {
+	case <-ds.done:
+	case <-time.After(defaultShutdownTimeout):
+		log.Warnf("Stop HTTP server for data source '%s' after timeout.", ds.GetName())
 	}
 }
 
@@ -175,10 +176,12 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) 
 
 func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != ep.method {
-		http.Error(w, fmt.Sprintf("Invalid request method '%s' for endpoint '%s' with path '%s'",
+		errText := fmt.Sprintf("Invalid request method '%s' for endpoint '%s' with path '%s'",
 			r.Method, ep.GetName(),
-			runtime.GetConfigProperty[string](ep.GetConfig(), "path")),
+			runtime.GetConfigProperty[string](ep.GetConfig(), "path"))
+		http.Error(w, errText,
 			http.StatusBadRequest)
+		log.Warnln(errText)
 	}
 	endpointConsumers := ep.GetEndpointConsumers()
 	requestData := NetHTTPEndpointRequestData{
@@ -196,7 +199,9 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 	var t T
 	if netHTTPEndpointRequestData.r.Method == http.MethodPost || len(ec.param) == 0 {
 		if reader, err := netHTTPEndpointRequestData.GetBody(); err != nil {
-			http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Unable to read request: %s", err.Error()), http.StatusBadRequest)
+			errText := fmt.Sprintf("Unable to read request: %s", err.Error())
+			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			log.Warnln(errText)
 			return
 		} else {
 			t, err = func(reader io.ReadCloser) (T, error) {
@@ -208,7 +213,9 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 				return ec.DeserializeJsonBody(reader)
 			}(reader)
 			if err != nil {
-				http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Invalid request body: %s", err.Error()), http.StatusBadRequest)
+				errText := fmt.Sprintf("Invalid request body: %s", err.Error())
+				http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+				log.Warnln(errText)
 				return
 			}
 		}
@@ -216,13 +223,17 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 		query := netHTTPEndpointRequestData.getQuery()
 		data := query.Get(ec.param)
 		if data == "" {
-			http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Missing '%s' parameter", ec.param), http.StatusBadRequest)
+			errText := fmt.Sprintf("Missing '%s' parameter", ec.param)
+			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			log.Warnln(errText)
 			return
 		}
 		var err error
 		t, err = ec.DeserializeJson(data)
 		if err != nil {
-			http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Error deserializing '%s' parameter: %s", ec.param, err.Error()), http.StatusBadRequest)
+			errText := fmt.Sprintf("Error deserializing '%s' parameter: %s", ec.param, err.Error())
+			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			log.Warnln(errText)
 			return
 		}
 	}
@@ -234,7 +245,9 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData r
 	var form url.Values
 	var err error
 	if form, err = netHTTPEndpointRequestData.getForm(); err != nil {
-		http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Unable to parse request: %s", err.Error()), http.StatusBadRequest)
+		errText := fmt.Sprintf("Unable to parse request: %s", err.Error())
+		http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+		log.Warnln(errText)
 		return
 	}
 	var t T
@@ -244,7 +257,9 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData r
 		err = ec.decoder.Decode(&t, form)
 	}
 	if err != nil {
-		http.Error(netHTTPEndpointRequestData.w, fmt.Sprintf("Unable to decode data: %s", err.Error()), http.StatusBadRequest)
+		errText := fmt.Sprintf("Unable to decode data: %s", err.Error())
+		http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+		log.Warnln(errText)
 		return
 	}
 	ec.Consume(t)
