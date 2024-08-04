@@ -13,5 +13,5 @@ import (
 )
 
 func CustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer localsink.DataConsumer[T]) runtime.Consumer[T] {
-	return CustomEndpointSink[T](stream, dataConsumer)
+	return localsink.MakeCustomEndpointSink[T](stream, dataConsumer)
 }
