@@ -151,12 +151,15 @@ type DataType string
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
 	Format          *DataFormat `json:"format,omitempty"`
+	FunctionName    *string     `json:"functionName,omitempty"`
+	FunctionPackage *string     `json:"functionPackage,omitempty"`
 	Id              int         `json:"id"`
 	IdDataConnector int         `json:"idDataConnector"`
 	Method          *string     `json:"method,omitempty"`
 	Name            string      `json:"name"`
 	Param           *string     `json:"param,omitempty"`
 	Path            *string     `json:"path,omitempty"`
+	PublicFunction  *bool       `json:"publicFunction,omitempty"`
 }
 
 // JoinStorageType defines model for JoinStorageType.

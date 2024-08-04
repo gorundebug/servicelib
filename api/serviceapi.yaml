@@ -350,6 +350,12 @@ components:
           $ref: '#/components/schemas/DataFormat'
         param:
           type: string
+        functionName:
+          type: string
+        functionPackage:
+          type: string
+        publicFunction:
+          type: boolean
 
       required:
         - id
