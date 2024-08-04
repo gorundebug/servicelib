@@ -31,7 +31,8 @@ type TypedSplitStream[T any] interface {
 }
 
 type TypedInputStream[T any] interface {
-	StreamConsumer[T]
+	TypedStream[T]
+	Consumer[T]
 	GetEndpointId() int
 }
 
