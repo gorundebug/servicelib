@@ -33,9 +33,10 @@ const (
 
 // Defines values for DataConnectorType.
 const (
-	DataConnectorTypeGRPC  DataConnectorType = 2
-	DataConnectorTypeHTTP  DataConnectorType = 1
-	DataConnectorTypeKafka DataConnectorType = 3
+	DataConnectorTypeCustom DataConnectorType = 4
+	DataConnectorTypeGRPC   DataConnectorType = 2
+	DataConnectorTypeHTTP   DataConnectorType = 1
+	DataConnectorTypeKafka  DataConnectorType = 3
 )
 
 // Defines values for DataFormat.
