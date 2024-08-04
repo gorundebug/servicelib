@@ -27,6 +27,8 @@ type StreamExecutionRuntime interface {
 	StreamExecutionEnvironment
 	AddDataSource(dataSource DataSource)
 	GetDataSource(id int) DataSource
+	AddDataSink(dataSink DataSink)
+	GetDataSink(id int) DataSink
 	configReload(Config)
 	streamsInit(name string, runtime StreamExecutionRuntime, config Config)
 	getSerde(valueType reflect.Type) (Serializer, error)

@@ -33,6 +33,7 @@ type ServiceApp struct {
 	runtime       StreamExecutionRuntime
 	streams       map[int]StreamBase
 	dataSources   map[int]DataSource
+	dataSinks     map[int]DataSink
 	server        http.Server
 	mux           *http.ServeMux
 	quit          chan struct{}
@@ -54,10 +55,6 @@ func (app *ServiceApp) registerStream(stream StreamBase) {
 	app.streams[stream.GetId()] = stream
 }
 
-func (app *ServiceApp) AddDataSource(dataSource DataSource) {
-	app.dataSources[dataSource.GetId()] = dataSource
-}
-
 func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, config Config) {
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
@@ -67,6 +64,7 @@ func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, 
 	app.runtime = runtime
 	app.streams = make(map[int]StreamBase)
 	app.dataSources = make(map[int]DataSource)
+	app.dataSinks = make(map[int]DataSink)
 	app.mux = http.NewServeMux()
 	app.quit = make(chan struct{})
 	app.server = http.Server{
@@ -198,6 +196,18 @@ func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 
 func (app *ServiceApp) GetDataSource(id int) DataSource {
 	return app.dataSources[id]
+}
+
+func (app *ServiceApp) AddDataSource(dataSource DataSource) {
+	app.dataSources[dataSource.GetId()] = dataSource
+}
+
+func (app *ServiceApp) GetDataSink(id int) DataSink {
+	return app.dataSinks[id]
+}
+
+func (app *ServiceApp) AddDataSink(dataSink DataSink) {
+	app.dataSinks[dataSink.GetId()] = dataSink
 }
 
 func (app *ServiceApp) getSerde(valueType reflect.Type) (Serializer, error) {

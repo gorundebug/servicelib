@@ -41,3 +41,7 @@ func (s *SinkStream[T]) Consume(value T) {
 func (s *SinkStream[T]) getConsumers() []StreamBase {
 	return []StreamBase{}
 }
+
+func (s *SinkStream[T]) GetEndpointId() int {
+	return s.config.Properties["idendpoint"].(int)
+}

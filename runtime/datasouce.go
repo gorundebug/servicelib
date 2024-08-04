@@ -17,8 +17,8 @@ type DataSource interface {
 	GetId() int
 	GetRuntime() StreamExecutionRuntime
 	AddEndpoint(InputEndpoint)
-	GetEndpoint(id int) []InputEndpoint
-	GetEndpoints() [][]InputEndpoint
+	GetEndpoint(id int) InputEndpoint
+	GetEndpoints() []InputEndpoint
 }
 
 type InputEndpoint interface {
@@ -27,21 +27,21 @@ type InputEndpoint interface {
 	GetId() int
 	GetRuntime() StreamExecutionRuntime
 	GetDataSource() DataSource
-	AddEndpointConsumer(consumer EndpointConsumer)
-	GetEndpointConsumers() []EndpointConsumer
+	AddEndpointConsumer(consumer InputEndpointConsumer)
+	GetEndpointConsumers() []InputEndpointConsumer
 }
 
 type InputDataSource struct {
 	dataConnector *DataConnector
 	runtime       StreamExecutionRuntime
-	endpoints     map[int][]InputEndpoint
+	endpoints     map[int]InputEndpoint
 }
 
 func MakeInputDataSource(dataConnector *DataConnector, runtime StreamExecutionRuntime) *InputDataSource {
 	return &InputDataSource{
 		dataConnector: dataConnector,
 		runtime:       runtime,
-		endpoints:     make(map[int][]InputEndpoint),
+		endpoints:     make(map[int]InputEndpoint),
 	}
 }
 
@@ -61,57 +61,36 @@ func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
 	return ds.runtime
 }
 
-func (ds *InputDataSource) GetEndpoint(id int) []InputEndpoint {
+func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
 	return ds.endpoints[id]
 }
 
-func (ds *InputDataSource) GetEndpoints() [][]InputEndpoint {
+func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
 	return maps.Values(ds.endpoints)
 }
 
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
-	ds.endpoints[endpoint.GetId()] = append(ds.endpoints[endpoint.GetId()], endpoint)
+	ds.endpoints[endpoint.GetId()] = endpoint
 }
 
-type EndpointRequestData interface {
-}
-
-type EndpointConsumer interface {
-	EndpointRequest(requestData EndpointRequestData)
-}
-
-type TypedEndpointConsumer[T any] interface {
-	EndpointConsumer
-	Consumer[T]
-}
-
-type DataSourceEndpointConsumer[T any] struct {
-	inputStream InputTypedStream[T]
-}
-
-func (ds *DataSourceEndpointConsumer[T]) Consume(value T) {
-	ds.inputStream.Consume(value)
-}
-
-func MakeDataSourceEndpointConsumer[T any](inputStream InputTypedStream[T]) *DataSourceEndpointConsumer[T] {
-	return &DataSourceEndpointConsumer[T]{
-		inputStream: inputStream,
-	}
+type InputEndpointConsumer interface {
+	EndpointRequest(requestData interface{})
+	Endpoint() InputEndpoint
 }
 
 type DataSourceEndpoint struct {
-	config           *EndpointConfig
-	runtime          StreamExecutionRuntime
-	dataSource       DataSource
-	endpoinConsumers []EndpointConsumer
+	config            *EndpointConfig
+	runtime           StreamExecutionRuntime
+	dataSource        DataSource
+	endpointConsumers []InputEndpointConsumer
 }
 
 func MakeDataSourceEndpoint(dataSource DataSource, config *EndpointConfig, runtime StreamExecutionRuntime) *DataSourceEndpoint {
 	return &DataSourceEndpoint{
-		dataSource:       dataSource,
-		config:           config,
-		runtime:          runtime,
-		endpoinConsumers: make([]EndpointConsumer, 0),
+		dataSource:        dataSource,
+		config:            config,
+		runtime:           runtime,
+		endpointConsumers: make([]InputEndpointConsumer, 0),
 	}
 }
 
@@ -135,10 +114,34 @@ func (ep *DataSourceEndpoint) GetDataSource() DataSource {
 	return ep.dataSource
 }
 
-func (ep *DataSourceEndpoint) AddEndpointConsumer(endpointConsumer EndpointConsumer) {
-	ep.endpoinConsumers = append(ep.endpoinConsumers, endpointConsumer)
+func (ep *DataSourceEndpoint) AddEndpointConsumer(endpointConsumer InputEndpointConsumer) {
+	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
 
-func (ep *DataSourceEndpoint) GetEndpointConsumers() []EndpointConsumer {
-	return ep.endpoinConsumers
+func (ep *DataSourceEndpoint) GetEndpointConsumers() []InputEndpointConsumer {
+	return ep.endpointConsumers
+}
+
+type DataSourceEndpointConsumer[T any] struct {
+	inputStream InputTypedStream[T]
+	endpoint    InputEndpoint
+}
+
+func (ec *DataSourceEndpointConsumer[T]) Consume(value T) {
+	ec.inputStream.Consume(value)
+}
+
+func (ec *DataSourceEndpointConsumer[T]) EndpointRequest(requestData interface{}) {
+	ec.Consume(requestData.(T))
+}
+
+func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
+	return ec.endpoint
+}
+
+func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream InputTypedStream[T]) *DataSourceEndpointConsumer[T] {
+	return &DataSourceEndpointConsumer[T]{
+		inputStream: inputStream,
+		endpoint:    endpoint,
+	}
 }

@@ -30,6 +30,11 @@ type InputTypedStream[T any] interface {
 	GetEndpointId() int
 }
 
+type SinkTypedStream[T any] interface {
+	StreamConsumer[T]
+	GetEndpointId() int
+}
+
 type Consumer[T any] interface {
 	Consume(T)
 }

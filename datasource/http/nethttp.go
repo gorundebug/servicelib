@@ -24,6 +24,14 @@ import (
 
 const defaultShutdownTimeout = 30 * time.Second
 
+type NetHTTPEndpointRequestData interface {
+	ResponseWriter() http.ResponseWriter
+	GetBody() (io.ReadCloser, error)
+	GetForm() (url.Values, error)
+	GetQuery() url.Values
+	GetMethod() string
+}
+
 type NetHTTPDataSource struct {
 	*runtime.InputDataSource
 	server http.Server
@@ -36,7 +44,7 @@ type NetHTTPEndpoint struct {
 	method string
 }
 
-type NetHTTPEndpointRequestData struct {
+type netHTTPEndpointRequestData struct {
 	w         http.ResponseWriter
 	r         *http.Request
 	body      []byte
@@ -45,7 +53,11 @@ type NetHTTPEndpointRequestData struct {
 	optimized bool
 }
 
-func (d *NetHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
+func (d *netHTTPEndpointRequestData) GetMethod() string {
+	return d.r.Method
+}
+
+func (d *netHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
 	if d.optimized {
 		return d.r.Body, nil
 	}
@@ -59,7 +71,7 @@ func (d *NetHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(d.body)), nil
 }
 
-func (d *NetHTTPEndpointRequestData) getForm() (url.Values, error) {
+func (d *netHTTPEndpointRequestData) GetForm() (url.Values, error) {
 	if d.form == nil {
 		if err := d.r.ParseForm(); err != nil {
 			return nil, err
@@ -69,7 +81,7 @@ func (d *NetHTTPEndpointRequestData) getForm() (url.Values, error) {
 	return d.form, nil
 }
 
-func (d *NetHTTPEndpointRequestData) getQuery() url.Values {
+func (d *netHTTPEndpointRequestData) GetQuery() url.Values {
 	if d.query == nil {
 		d.query = d.r.URL.Query()
 	}
@@ -116,8 +128,8 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
-	if len(endpoint) > 0 {
-		return endpoint[0].(*NetHTTPEndpoint)
+	if endpoint != nil {
+		return endpoint.(*NetHTTPEndpoint)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
@@ -185,7 +197,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Warnln(errText)
 	}
 	endpointConsumers := ep.GetEndpointConsumers()
-	requestData := NetHTTPEndpointRequestData{
+	requestData := netHTTPEndpointRequestData{
 		w:         w,
 		r:         r,
 		optimized: len(endpointConsumers) == 1,
@@ -195,13 +207,13 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.EndpointRequestData) {
-	netHTTPEndpointRequestData := requestData.(*NetHTTPEndpointRequestData)
+func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData interface{}) {
+	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var t T
-	if netHTTPEndpointRequestData.r.Method == http.MethodPost || len(ec.param) == 0 {
-		if reader, err := netHTTPEndpointRequestData.GetBody(); err != nil {
+	if endpointRequestData.GetMethod() == http.MethodPost || len(ec.param) == 0 {
+		if reader, err := endpointRequestData.GetBody(); err != nil {
 			errText := fmt.Sprintf("Unable to read request: %s", err.Error())
-			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 			log.Warnln(errText)
 			return
 		} else {
@@ -215,17 +227,17 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 			}(reader)
 			if err != nil {
 				errText := fmt.Sprintf("Invalid request body: %s", err.Error())
-				http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+				http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 				log.Warnln(errText)
 				return
 			}
 		}
 	} else {
-		query := netHTTPEndpointRequestData.getQuery()
+		query := endpointRequestData.GetQuery()
 		data := query.Get(ec.param)
 		if data == "" {
 			errText := fmt.Sprintf("Missing '%s' parameter", ec.param)
-			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 			log.Warnln(errText)
 			return
 		}
@@ -233,7 +245,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 		t, err = ec.DeserializeJson(data)
 		if err != nil {
 			errText := fmt.Sprintf("Error deserializing '%s' parameter: %s", ec.param, err.Error())
-			http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+			http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 			log.Warnln(errText)
 			return
 		}
@@ -241,13 +253,13 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData runtime.En
 	ec.Consume(t)
 }
 
-func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData runtime.EndpointRequestData) {
-	netHTTPEndpointRequestData := requestData.(*NetHTTPEndpointRequestData)
+func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData interface{}) {
+	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var form url.Values
 	var err error
-	if form, err = netHTTPEndpointRequestData.getForm(); err != nil {
+	if form, err = endpointRequestData.GetForm(); err != nil {
 		errText := fmt.Sprintf("Unable to parse request: %s", err.Error())
-		http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+		http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 		log.Warnln(errText)
 		return
 	}
@@ -259,46 +271,51 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData r
 	}
 	if err != nil {
 		errText := fmt.Sprintf("Unable to decode data: %s", err.Error())
-		http.Error(netHTTPEndpointRequestData.w, errText, http.StatusBadRequest)
+		http.Error(endpointRequestData.ResponseWriter(), errText, http.StatusBadRequest)
 		log.Warnln(errText)
 		return
 	}
 	ec.Consume(t)
 }
 
-func MakeNetHTTPEndpointConsumer[T any](stream runtime.InputTypedStream[T]) runtime.TypedEndpointConsumer[T] {
+func MakeNetHTTPEndpointConsumer[T any](stream runtime.InputTypedStream[T]) runtime.Consumer[T] {
 	execRuntime := stream.GetRuntime()
 	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
 	cfg := endpoint.GetConfig()
 
-	var endpointConsumer runtime.TypedEndpointConsumer[T]
+	var consumer runtime.Consumer[T]
+	var inputEndpointConsumer runtime.InputEndpointConsumer
 	switch endpoint.GetConfig().Properties["format"].(string) {
 
 	case "json":
-		endpointConsumer = &NetHTTPEndpointJsonConsumer[T]{
+		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
-				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](stream),
+				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 				endpoint:                   endpoint,
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			param: runtime.GetConfigProperty[string](cfg, "param"),
 		}
+		consumer = endpointConsumer
+		inputEndpointConsumer = endpointConsumer
 
 	case "gorilla/schema":
-		endpointConsumer = &NetHTTPEndpointGorillaSchemaConsumer[T]{
+		endpointConsumer := &NetHTTPEndpointGorillaSchemaConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
-				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](stream),
+				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 				endpoint:                   endpoint,
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			decoder: schema.NewDecoder(),
 		}
+		consumer = endpointConsumer
+		inputEndpointConsumer = endpointConsumer
 
 	default:
 		log.Panicf("Unknown endpoint format '%s' for endpoint '%s'.",
 			cfg.Properties["format"].(string), endpoint.GetName())
 	}
 
-	endpoint.AddEndpointConsumer(endpointConsumer)
-	return endpointConsumer
+	endpoint.AddEndpointConsumer(inputEndpointConsumer)
+	return consumer
 }
