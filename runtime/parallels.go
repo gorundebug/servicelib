@@ -32,7 +32,7 @@ type ParallelsStream[T, R any] struct {
 	f ParallelsFunctionContext[T, R]
 }
 
-func Parallels[T, R any](name string, stream TypedStream[T], f ParallelsFunction[T, R]) *ParallelsStream[T, R] {
+func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f ParallelsFunction[T, R]) *ParallelsStream[T, R] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

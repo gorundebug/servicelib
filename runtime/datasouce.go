@@ -123,7 +123,7 @@ func (ep *DataSourceEndpoint) GetEndpointConsumers() []InputEndpointConsumer {
 }
 
 type DataSourceEndpointConsumer[T any] struct {
-	inputStream InputTypedStream[T]
+	inputStream TypedInputStream[T]
 	endpoint    InputEndpoint
 }
 
@@ -139,7 +139,7 @@ func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
 	return ec.endpoint
 }
 
-func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream InputTypedStream[T]) *DataSourceEndpointConsumer[T] {
+func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream TypedInputStream[T]) *DataSourceEndpointConsumer[T] {
 	return &DataSourceEndpointConsumer[T]{
 		inputStream: inputStream,
 		endpoint:    endpoint,

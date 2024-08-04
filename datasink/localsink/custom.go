@@ -133,7 +133,7 @@ func getCustomSinkEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) *
 	return customEndpoint
 }
 
-func MakeCustomEndpointSink[T any](stream runtime.SinkTypedStream[T], dataConsumer DataConsumer[T]) runtime.Consumer[T] {
+func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer DataConsumer[T]) runtime.Consumer[T] {
 	execRuntime := stream.GetRuntime()
 	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), execRuntime)
 	var consumer runtime.Consumer[T]

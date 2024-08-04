@@ -25,12 +25,17 @@ type TypedStream[T any] interface {
 	setConsumer(StreamConsumer[T])
 }
 
-type InputTypedStream[T any] interface {
+type TypedSplitStream[T any] interface {
+	TypedStream[T]
+	Get(index int) TypedStream[T]
+}
+
+type TypedInputStream[T any] interface {
 	StreamConsumer[T]
 	GetEndpointId() int
 }
 
-type SinkTypedStream[T any] interface {
+type TypedSinkStream[T any] interface {
 	StreamConsumer[T]
 	GetEndpointId() int
 }

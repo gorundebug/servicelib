@@ -15,7 +15,7 @@ type InStubStream[T any] struct {
 	ConsumedStream[T]
 }
 
-func InStub[T any](name string, runtime StreamExecutionRuntime) *InStubStream[T] {
+func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStubStream[T] {
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
@@ -37,7 +37,7 @@ type OutStubStream[T any] struct {
 	ConsumedStream[T]
 }
 
-func OutStub[T any](name string, stream TypedStream[T]) *OutStubStream[T] {
+func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

@@ -16,7 +16,7 @@ type LinkStream[T any] struct {
 	consumer StreamConsumer[T]
 }
 
-func Link[T any](name string, runtime StreamExecutionRuntime) {
+func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) {
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {

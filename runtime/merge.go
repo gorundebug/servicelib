@@ -60,7 +60,7 @@ func (s *MergeLink[T]) GetTypeName() string {
 	return s.mergeStream.GetTypeName()
 }
 
-func Merge[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
+func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
 	runtime := streams[0].GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

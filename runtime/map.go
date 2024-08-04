@@ -33,7 +33,7 @@ type MapStream[T, R any] struct {
 	f MapFunctionContext[T, R]
 }
 
-func Map[T, R any](name string, stream TypedStream[T], f MapFunction[T, R]) *MapStream[T, R] {
+func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T, R]) *MapStream[T, R] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

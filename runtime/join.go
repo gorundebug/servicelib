@@ -90,7 +90,7 @@ func (s *JoinStream[K, T1, T2, R]) consume(value R) {
 	}
 }
 
-func Join[K comparable, T1, T2, R any](name string, stream TypedStream[KeyValue[K, T1]],
+func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream[KeyValue[K, T1]],
 	streamRight TypedStream[KeyValue[K, T2]],
 	f JoinFunction[K, T1, T2, R]) *JoinStream[K, T1, T2, R] {
 

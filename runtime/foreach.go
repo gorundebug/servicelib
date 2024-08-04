@@ -32,7 +32,7 @@ type ForeachStream[T any] struct {
 	f ForeachFunctionContext[T]
 }
 
-func Foreach[T any](name string, stream TypedStream[T], f ForeachFunction[T]) *ForeachStream[T] {
+func MakeForeachStream[T any](name string, stream TypedStream[T], f ForeachFunction[T]) *ForeachStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

@@ -16,7 +16,7 @@ type AppSinkStream[T any] struct {
 	consumer Consumer[T]
 }
 
-func AppSink[T any](name string, stream TypedStream[T], consumer Consumer[T]) *AppSinkStream[T] {
+func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consumer[T]) *AppSinkStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

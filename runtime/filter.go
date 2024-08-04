@@ -33,7 +33,7 @@ type FilterStream[T any] struct {
 	f FilterFunctionContext[T]
 }
 
-func Filter[T any](name string, stream TypedStream[T], f FilterFunction[T]) *FilterStream[T] {
+func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunction[T]) *FilterStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

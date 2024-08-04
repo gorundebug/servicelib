@@ -75,7 +75,7 @@ type SplitStream[T any] struct {
 	links []*SplitLink[T]
 }
 
-func Split[T any](name string, stream TypedStream[T], count int) *SplitStream[T] {
+func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *SplitStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -100,7 +100,7 @@ func Split[T any](name string, stream TypedStream[T], count int) *SplitStream[T]
 	return &splitStream
 }
 
-func (s *SplitStream[T]) Get(index int) *SplitLink[T] {
+func (s *SplitStream[T]) Get(index int) TypedStream[T] {
 	return s.links[index]
 }
 

@@ -32,7 +32,7 @@ type FlatMapStream[T, R any] struct {
 	f FlatMapFunctionContext[T, R]
 }
 
-func FlatMap[T, R any](name string, stream TypedStream[T], f FlatMapFunction[T, R]) *FlatMapStream[T, R] {
+func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFunction[T, R]) *FlatMapStream[T, R] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

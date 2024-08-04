@@ -16,7 +16,7 @@ type FlatMapIterableStream[T []any | string, R any] struct {
 	ConsumedStream[R]
 }
 
-func FlatMapIterable[T []any | string, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
+func MakeFlatMapIterableStream[T []any | string, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

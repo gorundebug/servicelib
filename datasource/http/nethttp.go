@@ -278,7 +278,7 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData i
 	ec.Consume(t)
 }
 
-func MakeNetHTTPEndpointConsumer[T any](stream runtime.InputTypedStream[T]) runtime.Consumer[T] {
+func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runtime.Consumer[T] {
 	execRuntime := stream.GetRuntime()
 	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
 	cfg := endpoint.GetConfig()

@@ -101,7 +101,7 @@ type MultiJoinStream[K comparable, T, R any] struct {
 	serdeKey StreamSerde[K]
 }
 
-func MultiJoin[K comparable, T, R any](
+func MakeMultiJoinStream[K comparable, T, R any](
 	name string, leftStream TypedStream[KeyValue[K, T]],
 	f MultiJoinFunction[K, T, R]) *MultiJoinStream[K, T, R] {
 

@@ -15,8 +15,8 @@ type InputStream[T any] struct {
 	ConsumedStream[T]
 }
 
-func Input[T any](name string, runtime StreamExecutionRuntime) *InputStream[T] {
-	config := runtime.GetConfig()
+func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionRuntime) *InputStream[T] {
+	config := streamExecutionRuntime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
@@ -24,12 +24,12 @@ func Input[T any](name string, runtime StreamExecutionRuntime) *InputStream[T] {
 	inputStream := InputStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
-				runtime: runtime,
+				runtime: streamExecutionRuntime,
 				config:  *streamConfig,
 			},
 		},
 	}
-	runtime.registerStream(&inputStream)
+	streamExecutionRuntime.registerStream(&inputStream)
 	return &inputStream
 }
 

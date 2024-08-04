@@ -148,7 +148,7 @@ func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRunt
 	return customEndpoint
 }
 
-func MakeCustomEndpointConsumer[T any](stream runtime.InputTypedStream[T], dataProducer DataProducer[T]) runtime.Consumer[T] {
+func MakeCustomEndpointConsumer[T any](stream runtime.TypedInputStream[T], dataProducer DataProducer[T]) runtime.Consumer[T] {
 	execRuntime := stream.GetRuntime()
 	endpoint := getCustomDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
 	var consumer runtime.Consumer[T]
