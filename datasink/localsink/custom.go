@@ -8,8 +8,13 @@
 package localsink
 
 import (
+	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/runtime"
+	"sync"
+	"time"
 )
+
+const defaultShutdownTimeout = 30 * time.Second
 
 type DataConsumer[T any] interface {
 	runtime.Consumer[T]
@@ -43,8 +48,23 @@ func (ds *CustomDataSink) Start() error {
 
 func (ds *CustomDataSink) Stop() {
 	endpoints := ds.OutputDataSink.GetEndpoints()
+	var wg sync.WaitGroup
 	for _, endpoint := range endpoints {
-		endpoint.(*CustomEndpoint).Stop()
+		wg.Add(1)
+		go func(endpoint *CustomEndpoint) {
+			defer wg.Done()
+			endpoint.Stop()
+		}(endpoint.(*CustomEndpoint))
+	}
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+	case <-time.After(defaultShutdownTimeout):
+		log.Warnf("Stop custom datasink '%s' after timeout.", ds.GetName())
 	}
 }
 
@@ -117,7 +137,7 @@ func MakeCustomEndpointSink[T any](stream runtime.SinkTypedStream[T], dataConsum
 	execRuntime := stream.GetRuntime()
 	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), execRuntime)
 	var consumer runtime.Consumer[T]
-	var endpointConsumer runtime.OutputEndpointConsumer
+	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
 		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T](endpoint),
 		dataConsumer:             dataConsumer,

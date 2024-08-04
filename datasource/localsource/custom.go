@@ -71,14 +71,17 @@ func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
 	ep.DataSourceEndpointConsumer.Consume(value)
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start() {
+func (ep *TypedCustomEndpointConsumer[T]) Start() error {
 	endpoint := ep.DataSourceEndpointConsumer.Endpoint().(*CustomEndpoint)
 	dataSource := endpoint.DataSourceEndpoint.GetDataSource().(*CustomDataSource)
 	dataSource.wg.Add(1)
 	go func() {
 		defer dataSource.wg.Done()
-		ep.dataProducer.Start(ep)
+		if err := ep.dataProducer.Start(ep); err != nil {
+			log.Panicln(err)
+		}
 	}()
+	return nil
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Stop() {
@@ -98,7 +101,11 @@ func (ds *CustomDataSource) Start() error {
 func (ds *CustomDataSource) Stop() {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
-		endpoint.(*CustomEndpoint).Stop()
+		ds.wg.Add(1)
+		go func(endpoint *CustomEndpoint) {
+			defer ds.wg.Done()
+			endpoint.Stop()
+		}(endpoint.(*CustomEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
@@ -108,7 +115,7 @@ func (ds *CustomDataSource) Stop() {
 	select {
 	case <-c:
 	case <-time.After(defaultShutdownTimeout):
-		log.Warnf("Stop push datasource '%s' after timeout.", ds.GetName())
+		log.Warnf("Stop custom datasource '%s' after timeout.", ds.GetName())
 	}
 }
 
@@ -145,7 +152,7 @@ func MakeCustomEndpointConsumer[T any](stream runtime.InputTypedStream[T], dataP
 	execRuntime := stream.GetRuntime()
 	endpoint := getCustomDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
 	var consumer runtime.Consumer[T]
-	var endpointConsumer runtime.InputEndpointConsumer
+	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 		dataProducer:               dataProducer,
