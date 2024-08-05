@@ -151,6 +151,7 @@ func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsum
 	}
 	endpointConsumer = typedEndpointConsumer
 	consumer = typedEndpointConsumer
+	stream.SetConsumer(typedEndpointConsumer)
 	endpoint.AddEndpointConsumer(endpointConsumer)
 	return consumer
 }

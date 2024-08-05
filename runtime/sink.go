@@ -16,7 +16,7 @@ type SinkStream[T any] struct {
 	consumer Consumer[T]
 }
 
-func MakeSinkStream[T any](name string, stream TypedStream[T], consumer Consumer[T]) *SinkStream[T] {
+func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -28,7 +28,6 @@ func MakeSinkStream[T any](name string, stream TypedStream[T], consumer Consumer
 			runtime: runtime,
 			config:  *streamConfig,
 		},
-		consumer: consumer,
 	}
 	stream.setConsumer(&sinkStream)
 	runtime.registerStream(&sinkStream)
@@ -37,6 +36,10 @@ func MakeSinkStream[T any](name string, stream TypedStream[T], consumer Consumer
 
 func (s *SinkStream[T]) Consume(value T) {
 	s.consumer.Consume(value)
+}
+
+func (s *SinkStream[T]) SetConsumer(consumer Consumer[T]) {
+	s.consumer = consumer
 }
 
 func (s *SinkStream[T]) getConsumers() []StreamBase {

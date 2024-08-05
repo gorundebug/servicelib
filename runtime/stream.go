@@ -39,6 +39,7 @@ type TypedInputStream[T any] interface {
 type TypedSinkStream[T any] interface {
 	StreamConsumer[T]
 	GetEndpointId() int
+	SetConsumer(Consumer[T])
 }
 
 type Consumer[T any] interface {
