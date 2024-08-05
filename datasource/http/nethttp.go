@@ -32,6 +32,11 @@ type NetHTTPEndpointRequestData interface {
 	GetMethod() string
 }
 
+type NetHTTPEndpointConsumer interface {
+	runtime.InputEndpointConsumer
+	EndpointRequest(requestData NetHTTPEndpointRequestData)
+}
+
 type NetHTTPDataSource struct {
 	*runtime.InputDataSource
 	server http.Server
@@ -51,6 +56,10 @@ type netHTTPEndpointRequestData struct {
 	form      url.Values
 	query     url.Values
 	optimized bool
+}
+
+func (d *netHTTPEndpointRequestData) ResponseWriter() http.ResponseWriter {
+	return d.w
 }
 
 func (d *netHTTPEndpointRequestData) GetMethod() string {
@@ -203,11 +212,11 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		optimized: len(endpointConsumers) == 1,
 	}
 	for _, endpointConsumer := range endpointConsumers {
-		endpointConsumer.EndpointRequest(&requestData)
+		endpointConsumer.(NetHTTPEndpointConsumer).EndpointRequest(&requestData)
 	}
 }
 
-func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData interface{}) {
+func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) {
 	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var t T
 	if endpointRequestData.GetMethod() == http.MethodPost || len(ec.param) == 0 {
@@ -253,7 +262,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData interface{
 	ec.Consume(t)
 }
 
-func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData interface{}) {
+func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) {
 	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var form url.Values
 	var err error
@@ -284,7 +293,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 	cfg := endpoint.GetConfig()
 
 	var consumer runtime.Consumer[T]
-	var inputEndpointConsumer runtime.InputEndpointConsumer
+	var netHTTPEndpointConsumer NetHTTPEndpointConsumer
 	switch endpoint.GetConfig().Properties["format"].(string) {
 
 	case "json":
@@ -297,7 +306,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 			param: runtime.GetConfigProperty[string](cfg, "param"),
 		}
 		consumer = endpointConsumer
-		inputEndpointConsumer = endpointConsumer
+		netHTTPEndpointConsumer = endpointConsumer
 
 	case "gorilla/schema":
 		endpointConsumer := &NetHTTPEndpointGorillaSchemaConsumer[T]{
@@ -309,13 +318,13 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 			decoder: schema.NewDecoder(),
 		}
 		consumer = endpointConsumer
-		inputEndpointConsumer = endpointConsumer
+		netHTTPEndpointConsumer = endpointConsumer
 
 	default:
 		log.Panicf("Unknown endpoint format '%s' for endpoint '%s'.",
 			cfg.Properties["format"].(string), endpoint.GetName())
 	}
 
-	endpoint.AddEndpointConsumer(inputEndpointConsumer)
+	endpoint.AddEndpointConsumer(netHTTPEndpointConsumer)
 	return consumer
 }

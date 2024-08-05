@@ -150,6 +150,7 @@ type DataType string
 
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
+	Delay           *int        `json:"delay,omitempty"`
 	Format          *DataFormat `json:"format,omitempty"`
 	FunctionName    *string     `json:"functionName,omitempty"`
 	FunctionPackage *string     `json:"functionPackage,omitempty"`

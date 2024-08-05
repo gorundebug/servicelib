@@ -356,6 +356,8 @@ components:
           type: string
         publicFunction:
           type: boolean
+        delay:
+          type: integer
 
       required:
         - id

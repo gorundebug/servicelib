@@ -74,7 +74,6 @@ func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 }
 
 type InputEndpointConsumer interface {
-	EndpointRequest(requestData interface{})
 	Endpoint() InputEndpoint
 }
 
@@ -129,10 +128,6 @@ type DataSourceEndpointConsumer[T any] struct {
 
 func (ec *DataSourceEndpointConsumer[T]) Consume(value T) {
 	ec.inputStream.Consume(value)
-}
-
-func (ec *DataSourceEndpointConsumer[T]) EndpointRequest(requestData interface{}) {
-	ec.Consume(requestData.(T))
 }
 
 func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
