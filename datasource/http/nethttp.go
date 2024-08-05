@@ -37,6 +37,11 @@ type NetHTTPEndpointConsumer interface {
 	EndpointRequest(requestData NetHTTPEndpointRequestData)
 }
 
+type NetHTTPInputDataSource interface {
+	runtime.DataSource
+	AddHandler(pattern string, handler http.Handler)
+}
+
 type NetHTTPDataSource struct {
 	*runtime.InputDataSource
 	server http.Server
@@ -99,7 +104,6 @@ func (d *netHTTPEndpointRequestData) GetQuery() url.Values {
 
 type NetHTTPEndpointTypedConsumer[T any] struct {
 	*runtime.DataSourceEndpointConsumer[T]
-	endpoint  *NetHTTPEndpoint
 	isTypePtr bool
 }
 
@@ -113,10 +117,10 @@ type NetHTTPEndpointGorillaSchemaConsumer[T any] struct {
 	decoder *schema.Decoder
 }
 
-func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *NetHTTPDataSource {
+func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSource {
 	dataSource := execRuntime.GetDataSource(id)
 	if dataSource != nil {
-		return dataSource.(*NetHTTPDataSource)
+		return dataSource
 	}
 	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
@@ -129,22 +133,23 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *N
 		},
 		done: make(chan struct{}),
 	}
-	execRuntime.AddDataSource(netHTTPDataSource)
+	var inputDataSource NetHTTPInputDataSource = netHTTPDataSource
+	execRuntime.AddDataSource(inputDataSource)
 	return netHTTPDataSource
 }
 
-func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) *NetHTTPEndpoint {
+func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.InputEndpoint {
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint.(*NetHTTPEndpoint)
+		return endpoint
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
 		method:             runtime.GetConfigProperty[string](cfg, "method"),
 	}
-	dataSource.mux.Handle(runtime.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
+	dataSource.(NetHTTPInputDataSource).AddHandler(runtime.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
 	dataSource.AddEndpoint(netHTTPEndpoint)
 	return netHTTPEndpoint
 }
@@ -158,6 +163,10 @@ func (ds *NetHTTPDataSource) Start() error {
 		ds.done <- struct{}{}
 	}()
 	return nil
+}
+
+func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
+	ds.mux.Handle(pattern, handler)
 }
 
 func (ds *NetHTTPDataSource) Stop() {
@@ -300,7 +309,6 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				endpoint:                   endpoint,
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			param: runtime.GetConfigProperty[string](cfg, "param"),
@@ -312,7 +320,6 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		endpointConsumer := &NetHTTPEndpointGorillaSchemaConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				endpoint:                   endpoint,
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			decoder: schema.NewDecoder(),

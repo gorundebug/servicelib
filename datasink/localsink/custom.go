@@ -26,6 +26,12 @@ type CustomDataSink struct {
 	*runtime.OutputDataSink
 }
 
+type CustomSinkEndpoint interface {
+	runtime.SinkEndpoint
+	Start() error
+	Stop()
+}
+
 type CustomEndpoint struct {
 	*runtime.DataSinkEndpoint
 }
@@ -39,7 +45,7 @@ type CustomEndpointConsumer interface {
 func (ds *CustomDataSink) Start() error {
 	endpoints := ds.OutputDataSink.GetEndpoints()
 	for _, endpoint := range endpoints {
-		if err := endpoint.(*CustomEndpoint).Start(); err != nil {
+		if err := endpoint.(CustomSinkEndpoint).Start(); err != nil {
 			return err
 		}
 	}
@@ -51,10 +57,10 @@ func (ds *CustomDataSink) Stop() {
 	var wg sync.WaitGroup
 	for _, endpoint := range endpoints {
 		wg.Add(1)
-		go func(endpoint *CustomEndpoint) {
+		go func(endpoint CustomSinkEndpoint) {
 			defer wg.Done()
 			endpoint.Stop()
-		}(endpoint.(*CustomEndpoint))
+		}(endpoint.(CustomSinkEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
@@ -105,10 +111,10 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop() {
 	ep.dataConsumer.Stop()
 }
 
-func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) *CustomDataSink {
+func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSink {
 	dataSink := execRuntime.GetDataSink(id)
 	if dataSink != nil {
-		return dataSink.(*CustomDataSink)
+		return dataSink
 	}
 	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
 	customDataSink := &CustomDataSink{
@@ -118,17 +124,17 @@ func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) *Cust
 	return customDataSink
 }
 
-func getCustomSinkEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) *CustomEndpoint {
+func getCustomSinkEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.SinkEndpoint {
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
 	dataSink := getCustomDataSink(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint.(*CustomEndpoint)
+		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
 		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, cfg, execRuntime),
 	}
-	var sinkEndpoint runtime.SinkEndpoint = customEndpoint
+	var sinkEndpoint CustomSinkEndpoint = customEndpoint
 	dataSink.AddEndpoint(sinkEndpoint)
 	return customEndpoint
 }

@@ -21,6 +21,11 @@ type DataProducer[T any] interface {
 	Stop()
 }
 
+type CustomInputDataSource interface {
+	runtime.DataSource
+	WaitGroup() *sync.WaitGroup
+}
+
 type CustomDataSource struct {
 	*runtime.InputDataSource
 	wg   sync.WaitGroup
@@ -30,6 +35,13 @@ type CustomDataSource struct {
 type CustomEndpoint struct {
 	*runtime.DataSourceEndpoint
 	delay time.Duration
+}
+
+type CustomInputEndpoint interface {
+	runtime.InputEndpoint
+	Start() error
+	Stop()
+	NextMessage()
 }
 
 type CustomEndpointConsumer interface {
@@ -55,7 +67,7 @@ func (ep *CustomEndpoint) Stop() {
 	}
 }
 
-func (ep *CustomEndpoint) nextMessage() {
+func (ep *CustomEndpoint) NextMessage() {
 	if ep.delay > 0 {
 		time.Sleep(ep.delay)
 	}
@@ -67,16 +79,16 @@ type TypedCustomEndpointConsumer[T any] struct {
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
-	ep.Endpoint().(*CustomEndpoint).nextMessage()
+	ep.Endpoint().(CustomInputEndpoint).NextMessage()
 	ep.DataSourceEndpointConsumer.Consume(value)
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Start() error {
-	endpoint := ep.DataSourceEndpointConsumer.Endpoint().(*CustomEndpoint)
-	dataSource := endpoint.DataSourceEndpoint.GetDataSource().(*CustomDataSource)
-	dataSource.wg.Add(1)
+	endpoint := ep.Endpoint()
+	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
+	dataSource.WaitGroup().Add(1)
 	go func() {
-		defer dataSource.wg.Done()
+		defer dataSource.WaitGroup().Done()
 		if err := ep.dataProducer.Start(ep); err != nil {
 			log.Panicln(err)
 		}
@@ -91,21 +103,25 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop() {
 func (ds *CustomDataSource) Start() error {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
-		if err := endpoint.(*CustomEndpoint).Start(); err != nil {
+		if err := endpoint.(CustomInputEndpoint).Start(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (ds *CustomDataSource) WaitGroup() *sync.WaitGroup {
+	return &ds.wg
+}
+
 func (ds *CustomDataSource) Stop() {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
 		ds.wg.Add(1)
-		go func(endpoint *CustomEndpoint) {
+		go func(endpoint CustomInputEndpoint) {
 			defer ds.wg.Done()
 			endpoint.Stop()
-		}(endpoint.(*CustomEndpoint))
+		}(endpoint.(CustomInputEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
@@ -119,31 +135,32 @@ func (ds *CustomDataSource) Stop() {
 	}
 }
 
-func getCustomDataSource(id int, execRuntime runtime.StreamExecutionRuntime) *CustomDataSource {
+func getCustomDataSource(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSource {
 	dataSource := execRuntime.GetDataSource(id)
 	if dataSource != nil {
-		return dataSource.(*CustomDataSource)
+		return dataSource
 	}
 	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
 	customDataSource := &CustomDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, execRuntime),
 	}
-	execRuntime.AddDataSource(customDataSource)
+	var inputDataSource CustomInputDataSource = customDataSource
+	execRuntime.AddDataSource(inputDataSource)
 	return customDataSource
 }
 
-func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) *CustomEndpoint {
+func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.InputEndpoint {
 	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
 	dataSource := getCustomDataSource(cfg.IdDataConnector, execRuntime)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint.(*CustomEndpoint)
+		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
 		delay:              time.Duration(cfg.Properties["delay"].(int)) * time.Microsecond,
 	}
-	var inputEndpoint runtime.InputEndpoint = customEndpoint
+	var inputEndpoint CustomInputEndpoint = customEndpoint
 	dataSource.AddEndpoint(inputEndpoint)
 	return customEndpoint
 }
