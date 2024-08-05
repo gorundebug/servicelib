@@ -26,17 +26,6 @@ type CustomInputDataSource interface {
 	WaitGroup() *sync.WaitGroup
 }
 
-type CustomDataSource struct {
-	*runtime.InputDataSource
-	wg   sync.WaitGroup
-	stop bool
-}
-
-type CustomEndpoint struct {
-	*runtime.DataSourceEndpoint
-	delay time.Duration
-}
-
 type CustomInputEndpoint interface {
 	runtime.InputEndpoint
 	Start() error
@@ -48,6 +37,17 @@ type CustomEndpointConsumer interface {
 	runtime.InputEndpointConsumer
 	Start() error
 	Stop()
+}
+
+type CustomDataSource struct {
+	*runtime.InputDataSource
+	wg   sync.WaitGroup
+	stop bool
+}
+
+type CustomEndpoint struct {
+	*runtime.DataSourceEndpoint
+	delay time.Duration
 }
 
 func (ep *CustomEndpoint) Start() error {

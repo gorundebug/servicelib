@@ -22,8 +22,10 @@ type DataConsumer[T any] interface {
 	Stop()
 }
 
-type CustomDataSink struct {
-	*runtime.OutputDataSink
+type CustomEndpointConsumer interface {
+	runtime.OutputEndpointConsumer
+	Start() error
+	Stop()
 }
 
 type CustomSinkEndpoint interface {
@@ -32,14 +34,12 @@ type CustomSinkEndpoint interface {
 	Stop()
 }
 
-type CustomEndpoint struct {
-	*runtime.DataSinkEndpoint
+type CustomDataSink struct {
+	*runtime.OutputDataSink
 }
 
-type CustomEndpointConsumer interface {
-	runtime.OutputEndpointConsumer
-	Start() error
-	Stop()
+type CustomEndpoint struct {
+	*runtime.DataSinkEndpoint
 }
 
 func (ds *CustomDataSink) Start() error {
@@ -120,7 +120,8 @@ func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) runti
 	customDataSink := &CustomDataSink{
 		OutputDataSink: runtime.MakeOutputDataSink(cfg, execRuntime),
 	}
-	execRuntime.AddDataSink(customDataSink)
+	var outputDataSink runtime.DataSink = customDataSink
+	execRuntime.AddDataSink(outputDataSink)
 	return customDataSink
 }
 

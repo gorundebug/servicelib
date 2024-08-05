@@ -150,7 +150,8 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 		method:             runtime.GetConfigProperty[string](cfg, "method"),
 	}
 	dataSource.(NetHTTPInputDataSource).AddHandler(runtime.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
-	dataSource.AddEndpoint(netHTTPEndpoint)
+	var inputEndpoint runtime.InputEndpoint = netHTTPEndpoint
+	dataSource.AddEndpoint(inputEndpoint)
 	return netHTTPEndpoint
 }
 
