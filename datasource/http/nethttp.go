@@ -178,8 +178,8 @@ func (ds *NetHTTPDataSource) Stop() {
 	}
 	select {
 	case <-ds.done:
-	case <-time.After(defaultShutdownTimeout):
-		log.Warnf("Stop HTTP server for data source '%s' after timeout.", ds.GetName())
+	case <-ctx.Done():
+		log.Warnf("Stop HTTP server for data source '%s' after timeout. %s", ds.GetName(), ctx.Err().Error())
 	}
 }
 

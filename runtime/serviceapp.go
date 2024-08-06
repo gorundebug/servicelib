@@ -247,14 +247,14 @@ func (app *ServiceApp) Stop() {
 	for _, v := range app.dataSources {
 		v.Stop()
 	}
-
-	if err := app.server.Shutdown(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	defer cancel()
+	if err := app.server.Shutdown(ctx); err != nil {
 		log.Warnf("server shutdown: %s", err.Error())
-	} else {
-		select {
-		case <-app.quit:
-		case <-time.After(defaultShutdownTimeout):
-			log.Warnf("Monitoring server stop timeout for service '%s'.", app.serviceConfig.Name)
-		}
+	}
+	select {
+	case <-app.quit:
+	case <-ctx.Done():
+		log.Warnf("Monitoring server stop timeout for service '%s'. %s", app.serviceConfig.Name, ctx.Err().Error())
 	}
 }
