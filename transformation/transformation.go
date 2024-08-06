@@ -63,6 +63,12 @@ func MultiJoin[K comparable, T, R any](
 	return runtime.MakeMultiJoinStream[K, T, R](name, leftStream, f)
 }
 
+func MultiJoinLink[K comparable, T1, T2, R any](
+	multiJoin runtime.TypedStream[R],
+	stream runtime.TypedStream[runtime.KeyValue[K, T2]]) {
+	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoin, stream)
+}
+
 func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.ParallelsFunction[T, R]) runtime.TypedStream[R] {
 	return runtime.MakeParallelsStream[T, R](name, stream, f)
 }

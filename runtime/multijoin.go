@@ -38,9 +38,11 @@ type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
 	serdeValue      StreamSerde[T2]
 }
 
-func MultiJoinLink[K comparable, T1, T2, R any](
-	multiJoinStream *MultiJoinStream[K, T1, R],
+func MakeMultiJoinLink[K comparable, T1, T2, R any](
+	multiJoin TypedStream[R],
 	stream TypedStream[KeyValue[K, T2]]) {
+
+	multiJoinStream := multiJoin.(*MultiJoinStream[K, T1, R])
 
 	runtime := multiJoinStream.runtime
 	link := MultiJoinLinkStream[K, T1, T2, R]{
