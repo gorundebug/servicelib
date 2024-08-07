@@ -83,7 +83,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *Spli
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
 
-	splitStream := SplitStream[T]{
+	splitStream := &SplitStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -93,11 +93,11 @@ func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *Spli
 		links: make([]*SplitLink[T], count),
 	}
 	for i := 0; i < count; i++ {
-		splitStream.links[i] = splitLink[T](i, &splitStream)
+		splitStream.links[i] = splitLink[T](i, splitStream)
 	}
-	stream.setConsumer(&splitStream)
-	runtime.registerStream(&splitStream)
-	return &splitStream
+	stream.setConsumer(splitStream)
+	runtime.registerStream(splitStream)
+	return splitStream
 }
 
 func (s *SplitStream[T]) Get(index int) TypedStream[T] {

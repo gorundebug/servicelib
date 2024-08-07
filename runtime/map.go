@@ -40,7 +40,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	mapStream := MapStream[T, R]{
+	mapStream := &MapStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -51,10 +51,10 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 			f: f,
 		},
 	}
-	mapStream.f.context = &mapStream
-	stream.setConsumer(&mapStream)
-	runtime.registerStream(&mapStream)
-	return &mapStream
+	mapStream.f.context = mapStream
+	stream.setConsumer(mapStream)
+	runtime.registerStream(mapStream)
+	return mapStream
 }
 
 func (s *MapStream[T, R]) Consume(value T) {

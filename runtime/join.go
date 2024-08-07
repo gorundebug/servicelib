@@ -32,10 +32,10 @@ type JoinLink[K comparable, T1, T2, R any] struct {
 }
 
 func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R]) *JoinLink[K, T1, T2, R] {
-	joinLink := JoinLink[K, T1, T2, R]{
+	joinLink := &JoinLink[K, T1, T2, R]{
 		joinStream: joinStream,
 	}
-	return &joinLink
+	return joinLink
 }
 
 func (s *JoinLink[K, T1, T2, R]) Consume(value KeyValue[K, T2]) {
@@ -101,7 +101,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
 
-	joinStream := JoinStream[K, T1, T2, R]{
+	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -115,11 +115,11 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		serdeLeftValue:  makeSerde[T1](runtime),
 		serdeRightValue: makeSerde[T2](runtime),
 	}
-	joinStream.f.context = &joinStream
-	stream.setConsumer(&joinStream)
-	runtime.registerStream(&joinStream)
+	joinStream.f.context = joinStream
+	stream.setConsumer(joinStream)
+	runtime.registerStream(joinStream)
 
-	joinLink := joinLink[K, T1, T2, R](&joinStream)
+	joinLink := joinLink[K, T1, T2, R](joinStream)
 	streamRight.setConsumer(joinLink)
-	return &joinStream
+	return joinStream
 }

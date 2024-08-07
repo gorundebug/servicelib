@@ -39,7 +39,7 @@ func MakeForeachStream[T any](name string, stream TypedStream[T], f ForeachFunct
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	foreachStream := ForeachStream[T]{
+	foreachStream := &ForeachStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -50,10 +50,10 @@ func MakeForeachStream[T any](name string, stream TypedStream[T], f ForeachFunct
 			f: f,
 		},
 	}
-	foreachStream.f.context = &foreachStream
-	stream.setConsumer(&foreachStream)
-	runtime.registerStream(&foreachStream)
-	return &foreachStream
+	foreachStream.f.context = foreachStream
+	stream.setConsumer(foreachStream)
+	runtime.registerStream(foreachStream)
+	return foreachStream
 }
 
 func (s *ForeachStream[T]) Consume(value T) {

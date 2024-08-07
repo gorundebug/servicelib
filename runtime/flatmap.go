@@ -39,7 +39,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	flatMapStream := FlatMapStream[T, R]{
+	flatMapStream := &FlatMapStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -50,10 +50,10 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 			f: f,
 		},
 	}
-	flatMapStream.f.context = &flatMapStream
-	stream.setConsumer(&flatMapStream)
-	runtime.registerStream(&flatMapStream)
-	return &flatMapStream
+	flatMapStream.f.context = flatMapStream
+	stream.setConsumer(flatMapStream)
+	runtime.registerStream(flatMapStream)
+	return flatMapStream
 }
 
 func (s *FlatMapStream[T, R]) Consume(value T) {

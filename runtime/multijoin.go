@@ -45,14 +45,14 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 	multiJoinStream := multiJoin.(*MultiJoinStream[K, T1, R])
 
 	runtime := multiJoinStream.runtime
-	link := MultiJoinLinkStream[K, T1, T2, R]{
+	link := &MultiJoinLinkStream[K, T1, T2, R]{
 		multiJoinStream: multiJoinStream,
 		index:           len(multiJoinStream.links),
 		serdeValue:      makeSerde[T2](runtime),
 	}
-	multiJoinStream.links = append(multiJoinStream.links, &link)
+	multiJoinStream.links = append(multiJoinStream.links, link)
 
-	stream.setConsumer(&link)
+	stream.setConsumer(link)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) serializeValue(value interface{}) ([]byte, error) {
@@ -113,7 +113,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	multiJoinStream := MultiJoinStream[K, T, R]{
+	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -125,11 +125,11 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		},
 		serdeKey: makeSerde[K](runtime),
 	}
-	multiJoinStream.f.context = &multiJoinStream
-	leftStream.setConsumer(&multiJoinStream)
-	runtime.registerStream(&multiJoinStream)
+	multiJoinStream.f.context = multiJoinStream
+	leftStream.setConsumer(multiJoinStream)
+	runtime.registerStream(multiJoinStream)
 
-	return &multiJoinStream
+	return multiJoinStream
 }
 
 func (s *MultiJoinStream[K, T, R]) Consume(value KeyValue[K, T]) {

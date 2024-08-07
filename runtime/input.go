@@ -21,7 +21,7 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	inputStream := InputStream[T]{
+	inputStream := &InputStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: streamExecutionRuntime,
@@ -29,8 +29,8 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 			},
 		},
 	}
-	streamExecutionRuntime.registerStream(&inputStream)
-	return &inputStream
+	streamExecutionRuntime.registerStream(inputStream)
+	return inputStream
 }
 
 func (s *InputStream[T]) GetEndpointId() int {

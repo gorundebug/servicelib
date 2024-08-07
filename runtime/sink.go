@@ -23,15 +23,15 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	sinkStream := SinkStream[T]{
+	sinkStream := &SinkStream[T]{
 		Stream: Stream[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},
 	}
-	stream.setConsumer(&sinkStream)
-	runtime.registerStream(&sinkStream)
-	return &sinkStream
+	stream.setConsumer(sinkStream)
+	runtime.registerStream(sinkStream)
+	return sinkStream
 }
 
 func (s *SinkStream[T]) Consume(value T) {

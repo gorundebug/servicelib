@@ -23,7 +23,7 @@ func MakeFlatMapIterableStream[T []any | string, R any](name string, stream Type
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	flatMapStreamIterable := FlatMapIterableStream[T, R]{
+	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -31,9 +31,9 @@ func MakeFlatMapIterableStream[T []any | string, R any](name string, stream Type
 			},
 		},
 	}
-	stream.setConsumer(&flatMapStreamIterable)
-	runtime.registerStream(&flatMapStreamIterable)
-	return &flatMapStreamIterable
+	stream.setConsumer(flatMapStreamIterable)
+	runtime.registerStream(flatMapStreamIterable)
+	return flatMapStreamIterable
 }
 
 func isRuneType(value interface{}) bool {

@@ -22,13 +22,13 @@ func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) {
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	linkStream := LinkStream[T]{
+	linkStream := &LinkStream[T]{
 		Stream: Stream[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},
 	}
-	runtime.registerStream(&linkStream)
+	runtime.registerStream(linkStream)
 }
 
 func (s *LinkStream[T]) Consume(value T) {

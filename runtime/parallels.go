@@ -40,7 +40,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
 
-	parallelsStream := ParallelsStream[T, R]{
+	parallelsStream := &ParallelsStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			Stream: Stream[R]{
 				runtime: runtime,
@@ -51,10 +51,10 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 			f: f,
 		},
 	}
-	parallelsStream.f.context = &parallelsStream
-	stream.setConsumer(&parallelsStream)
-	runtime.registerStream(&parallelsStream)
-	return &parallelsStream
+	parallelsStream.f.context = parallelsStream
+	stream.setConsumer(parallelsStream)
+	runtime.registerStream(parallelsStream)
+	return parallelsStream
 }
 
 func (s *ParallelsStream[T, R]) Consume(value T) {

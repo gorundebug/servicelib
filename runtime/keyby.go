@@ -40,7 +40,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	keyByStream := KeyByStream[T, K, V]{
+	keyByStream := &KeyByStream[T, K, V]{
 		ConsumedStream: ConsumedStream[KeyValue[K, V]]{
 			Stream: Stream[KeyValue[K, V]]{
 				runtime: runtime,
@@ -51,10 +51,10 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 			f: f,
 		},
 	}
-	keyByStream.f.context = &keyByStream
-	stream.setConsumer(&keyByStream)
-	runtime.registerStream(&keyByStream)
-	return &keyByStream
+	keyByStream.f.context = keyByStream
+	stream.setConsumer(keyByStream)
+	runtime.registerStream(keyByStream)
+	return keyByStream
 }
 
 func (s *KeyByStream[T, K, V]) setConsumer(consumer StreamConsumer[KeyValue[K, V]]) {

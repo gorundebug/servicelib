@@ -23,16 +23,16 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	appSink := AppSinkStream[T]{
+	appSink := &AppSinkStream[T]{
 		Stream: Stream[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},
 		consumer: consumer,
 	}
-	stream.setConsumer(&appSink)
-	runtime.registerStream(&appSink)
-	return &appSink
+	stream.setConsumer(appSink)
+	runtime.registerStream(appSink)
+	return appSink
 }
 
 func (s *AppSinkStream[T]) Consume(value T) {

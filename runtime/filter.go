@@ -40,7 +40,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	filterStream := FilterStream[T]{
+	filterStream := &FilterStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -51,10 +51,10 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 			f: f,
 		},
 	}
-	filterStream.f.context = &filterStream
-	stream.setConsumer(&filterStream)
-	runtime.registerStream(&filterStream)
-	return &filterStream
+	filterStream.f.context = filterStream
+	stream.setConsumer(filterStream)
+	runtime.registerStream(filterStream)
+	return filterStream
 }
 
 func (s *FilterStream[T]) Consume(value T) {

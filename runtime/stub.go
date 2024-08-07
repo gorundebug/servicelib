@@ -21,7 +21,7 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	inStubStream := InStubStream[T]{
+	inStubStream := &InStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -29,8 +29,8 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 			},
 		},
 	}
-	runtime.registerStream(&inStubStream)
-	return &inStubStream
+	runtime.registerStream(inStubStream)
+	return inStubStream
 }
 
 type OutStubStream[T any] struct {
@@ -44,7 +44,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	outStubStream := OutStubStream[T]{
+	outStubStream := &OutStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -52,9 +52,9 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream
 			},
 		},
 	}
-	stream.setConsumer(&outStubStream)
-	runtime.registerStream(&outStubStream)
-	return &outStubStream
+	stream.setConsumer(outStubStream)
+	runtime.registerStream(outStubStream)
+	return outStubStream
 }
 
 func (s *OutStubStream[T]) Consume(T) {}

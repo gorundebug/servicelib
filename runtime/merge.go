@@ -67,7 +67,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	mergeStream := MergeStream[T]{
+	mergeStream := &MergeStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
@@ -75,10 +75,10 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 			},
 		},
 	}
-	runtime.registerStream(&mergeStream)
+	runtime.registerStream(mergeStream)
 	for index, stream := range streams {
-		link := mergeLink[T](index, &mergeStream)
+		link := mergeLink[T](index, mergeStream)
 		stream.setConsumer(link)
 	}
-	return &mergeStream
+	return mergeStream
 }
