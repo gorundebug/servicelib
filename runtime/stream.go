@@ -26,7 +26,6 @@ type TypedStream[T any] interface {
 }
 
 type TypedSplitStream[T any] interface {
-	TypedStream[T]
 	Get(index int) TypedStream[T]
 }
 
