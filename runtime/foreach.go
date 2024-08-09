@@ -11,52 +11,52 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ForeachFunction[T any] interface {
+type ForEachFunction[T any] interface {
 	ForEach(T)
 }
 
-type ForeachFunctionContext[T any] struct {
+type ForEachFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]
-	f       ForeachFunction[T]
+	f       ForEachFunction[T]
 }
 
-func (f *ForeachFunctionContext[T]) call(value T) {
+func (f *ForEachFunctionContext[T]) call(value T) {
 	f.BeforeCall()
 	f.f.ForEach(value)
 	f.AfterCall()
 }
 
-type ForeachStream[T any] struct {
+type ForEachStream[T any] struct {
 	ConsumedStream[T]
-	f ForeachFunctionContext[T]
+	f ForEachFunctionContext[T]
 }
 
-func MakeForeachStream[T any](name string, stream TypedStream[T], f ForeachFunction[T]) *ForeachStream[T] {
+func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunction[T]) *ForEachStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
-	foreachStream := &ForeachStream[T]{
+	forEachStream := &ForEachStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			Stream: Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
 		},
-		f: ForeachFunctionContext[T]{
+		f: ForEachFunctionContext[T]{
 			f: f,
 		},
 	}
-	foreachStream.f.context = foreachStream
-	stream.setConsumer(foreachStream)
-	runtime.registerStream(foreachStream)
-	return foreachStream
+	forEachStream.f.context = forEachStream
+	stream.setConsumer(forEachStream)
+	runtime.registerStream(forEachStream)
+	return forEachStream
 }
 
-func (s *ForeachStream[T]) Consume(value T) {
+func (s *ForEachStream[T]) Consume(value T) {
 	s.f.call(value)
 	if s.caller != nil {
 		s.caller.Consume(value)

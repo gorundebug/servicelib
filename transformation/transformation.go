@@ -31,8 +31,8 @@ func FlatMapIterable[T []any | string, R any](name string, stream runtime.TypedS
 	return runtime.MakeFlatMapIterableStream[T, R](name, stream)
 }
 
-func Foreach[T any](name string, stream runtime.TypedStream[T], f runtime.ForeachFunction[T]) runtime.TypedStream[T] {
-	return runtime.MakeForeachStream[T](name, stream, f)
+func ForEach[T any](name string, stream runtime.TypedStream[T], f runtime.ForEachFunction[T]) runtime.TypedStream[T] {
+	return runtime.MakeForEachStream[T](name, stream, f)
 }
 
 func Input[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedInputStream[T] {
