@@ -17,14 +17,14 @@ type FlatMapIterableStream[T, R any] struct {
 }
 
 func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
-	tp := GetSerdeType[T]()
-	tr := GetSerdeType[R]()
-	if tp.Kind() != reflect.Array && tp.Kind() != reflect.Slice {
-		log.Panicf("Type %s is not an array or slice", tp.Name())
+	tpT := reflect.TypeOf((*T)(nil)).Elem()
+	tpR := reflect.TypeOf((*R)(nil)).Elem()
+	if tpT.Kind() != reflect.Array && tpT.Kind() != reflect.Slice {
+		log.Panicf("Type %s is not an array or slice", tpR.Name())
 	}
-	te := tp.Elem()
-	if te != tr {
-		log.Panicf("Element type %s does not equals to type %s", te.Name(), tr.Name())
+	tpE := tpT.Elem()
+	if tpE != tpR {
+		log.Panicf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
 	}
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
