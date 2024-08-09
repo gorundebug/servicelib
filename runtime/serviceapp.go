@@ -34,6 +34,7 @@ type ServiceApp struct {
 	streams       map[int]StreamBase
 	dataSources   map[int]DataSource
 	dataSinks     map[int]DataSink
+	serdes        map[reflect.Type]StreamSerializer
 	server        http.Server
 	mux           *http.ServeMux
 	quit          chan struct{}
@@ -55,6 +56,14 @@ func (app *ServiceApp) registerStream(stream StreamBase) {
 	app.streams[stream.GetId()] = stream
 }
 
+func (app *ServiceApp) registerSerde(tp reflect.Type, serializer StreamSerializer) {
+	app.serdes[tp] = serializer
+}
+
+func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
+	return app.serdes[tp]
+}
+
 func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, config Config) {
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
@@ -65,6 +74,7 @@ func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, 
 	app.streams = make(map[int]StreamBase)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
+	app.serdes = make(map[reflect.Type]StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.quit = make(chan struct{})
 	app.server = http.Server{

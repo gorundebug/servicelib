@@ -33,6 +33,8 @@ type StreamExecutionRuntime interface {
 	streamsInit(name string, runtime StreamExecutionRuntime, config Config)
 	getSerde(valueType reflect.Type) (Serializer, error)
 	registerStream(stream StreamBase)
+	registerSerde(tp reflect.Type, serializer StreamSerializer)
+	getRegisteredSerde(tp reflect.Type) StreamSerializer
 }
 
 func getPath(argPath *string) string {
@@ -222,7 +224,21 @@ func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (Serializer, error
 	return MakeMapSerde[T](serKey, serValue), nil
 }
 
+func registerSerde[T any](runtime StreamExecutionRuntime, serde StreamSerde[T]) {
+	runtime.registerSerde(GetSerdeType[T](), serde)
+}
+
+func getRegisteredSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
+	if serde := runtime.getRegisteredSerde(GetSerdeType[T]()); serde != nil {
+		return serde.(StreamSerde[T])
+	}
+	return nil
+}
+
 func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
+	if serde := getRegisteredSerde[T](runtime); serde != nil {
+		return serde
+	}
 	tp := GetSerdeType[T]()
 	var err error
 	var ser Serializer
@@ -240,10 +256,15 @@ func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
 	if !ok {
 		log.Panicf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
-	return makeStreamSerde(serT)
+	serde := makeStreamSerde(serT)
+	registerSerde[T](runtime, serde)
+	return serde
 }
 
 func makeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) StreamKeyValueSerde[KeyValue[K, V]] {
+	if serde := getRegisteredSerde[KeyValue[K, V]](runtime); serde != nil {
+		return serde.(StreamKeyValueSerde[KeyValue[K, V]])
+	}
 	tp := GetSerdeType[K]()
 	ser, err := runtime.getSerde(tp)
 	if err != nil {
@@ -263,7 +284,9 @@ func makeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) Stre
 	if !ok {
 		log.Panicf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
-	return makeStreamKeyValueSerde[K, V](serdeK, serdeV)
+	serde := makeStreamKeyValueSerde[K, V](serdeK, serdeV)
+	registerSerde[KeyValue[K, V]](runtime, serde)
+	return serde
 }
 
 func makeCaller[T any](runtime StreamExecutionRuntime,
