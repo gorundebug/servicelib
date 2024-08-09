@@ -27,7 +27,7 @@ func FlatMap[T, R any](name string, stream runtime.TypedStream[T], f runtime.Fla
 	return runtime.MakeFlatMapStream[T, R](name, stream, f)
 }
 
-func FlatMapIterable[T []any | string, R any](name string, stream runtime.TypedStream[T]) runtime.TypedStream[R] {
+func FlatMapIterable[T, R any](name string, stream runtime.TypedStream[T]) runtime.TypedStream[R] {
 	return runtime.MakeFlatMapIterableStream[T, R](name, stream)
 }
 

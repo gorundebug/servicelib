@@ -12,11 +12,20 @@ import (
 	"reflect"
 )
 
-type FlatMapIterableStream[T []any | string, R any] struct {
+type FlatMapIterableStream[T, R any] struct {
 	ConsumedStream[R]
 }
 
-func MakeFlatMapIterableStream[T []any | string, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
+func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
+	tp := GetSerdeType[T]()
+	tr := GetSerdeType[R]()
+	if tp.Kind() != reflect.Array && tp.Kind() != reflect.Slice {
+		log.Panicf("Type %s is not an array or slice", tp.Name())
+	}
+	te := tp.Elem()
+	if te != tr {
+		log.Panicf("Element type %s does not equals to type %s", te.Name(), tr.Name())
+	}
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
