@@ -85,7 +85,7 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetConfig() *StreamConfig {
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) getConsumers() []StreamBase {
-	return []StreamBase{s.multiJoinStream}
+	return s.multiJoinStream.getConsumers()
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTransformationName() string {

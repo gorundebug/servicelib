@@ -49,7 +49,7 @@ func (s *SplitLink[T]) GetTypeName() string {
 }
 
 func (s *SplitLink[T]) getConsumers() []StreamBase {
-	return []StreamBase{s.splitStream}
+	return s.splitStream.getConsumers()
 }
 
 func (s *SplitLink[T]) Consume(value T) {
@@ -113,4 +113,12 @@ func (s *SplitStream[T]) Consume(value T) {
 			s.links[i].Consume(value)
 		}
 	}
+}
+
+func (s *SplitStream[T]) getConsumers() []StreamBase {
+	var consumers = make([]StreamBase, len(s.links))
+	for i := 0; i < len(s.links); i++ {
+		consumers[i] = s.links[i].GetConsumer()
+	}
+	return consumers
 }

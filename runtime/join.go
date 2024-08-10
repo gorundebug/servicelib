@@ -59,7 +59,7 @@ func (s *JoinLink[K, T1, T2, R]) GetConfig() *StreamConfig {
 }
 
 func (s *JoinLink[K, T1, T2, R]) getConsumers() []StreamBase {
-	return []StreamBase{s.joinStream}
+	return s.joinStream.getConsumers()
 }
 
 func (s *JoinLink[K, T1, T2, R]) GetTransformationName() string {

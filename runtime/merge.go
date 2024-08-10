@@ -49,7 +49,7 @@ func (s *MergeLink[T]) GetConfig() *StreamConfig {
 }
 
 func (s *MergeLink[T]) getConsumers() []StreamBase {
-	return []StreamBase{s.mergeStream}
+	return s.mergeStream.getConsumers()
 }
 
 func (s *MergeLink[T]) GetTransformationName() string {
