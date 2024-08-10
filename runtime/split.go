@@ -101,7 +101,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *Spli
 }
 
 func (s *SplitStream[T]) Get(index int) TypedStream[T] {
-	if index < 0 || len(s.links) >= index {
+	if index < 0 || index >= len(s.links) {
 		log.Panicf("Get index=%d for the split stream %d is invaid", index, s.config.Id)
 	}
 	return s.links[index]
