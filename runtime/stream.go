@@ -7,7 +7,10 @@
 
 package runtime
 
-import "reflect"
+import (
+	log "github.com/sirupsen/logrus"
+	"reflect"
+)
 
 type StreamBase interface {
 	GetName() string
@@ -48,7 +51,7 @@ type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
 type TypedLinkStream[T any] interface {
 	TypedStream[T]
 	Consumer[T]
-	SetConsumer(TypedStreamConsumer[T])
+	SetConsumer(TypedConsumedStream[T])
 }
 
 type TypedSplitStream[T any] interface {
@@ -127,6 +130,9 @@ func (s *ConsumedStream[T]) getConsumers() []StreamBase {
 }
 
 func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
+	if s.consumer != nil {
+		log.Panicf("consumer already assigned to the link stream %d", s.Stream.config.Id)
+	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.runtime, s, makeSerde[T](s.runtime))
 }

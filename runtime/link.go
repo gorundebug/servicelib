@@ -38,9 +38,6 @@ func (s *LinkStream[T]) Consume(value T) {
 	s.consumer.Consume(value)
 }
 
-func (s *LinkStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
-	if s.consumer != nil {
-		log.Panicf("consumer already assigned to the link stream %d", s.Stream.config.Id)
-	}
-	s.setConsumer(consumer)
+func (s *LinkStream[T]) SetConsumer(consumer TypedConsumedStream[T]) {
+	consumer.setConsumer(s)
 }
