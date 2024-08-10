@@ -23,7 +23,45 @@
 <body>
 <div id="graph"></div>
 <script>
-    const options = {};
+    const options = {
+        layout: {
+            hierarchical: {
+                enabled: false,
+                edgeMinimization: false
+            }
+        },
+        physics: {
+            enabled: false
+        },
+        nodes: {
+            font: {
+                face: 'arial',
+                size: 10
+            },
+            color: {
+                highlight:{
+                    background: '#FFFFFF'
+                }
+            }
+        },
+        edges:{
+            scaling:{
+                label: true,
+            },
+            shadow: false,
+            smooth: false,
+            font: {
+                face: 'arial',
+                size: 10,
+                color: '#ffffff',
+                strokeWidth: 0
+            },
+            color: {
+                highlight: '#00FF80'
+            }
+        },
+        autoResize: false,
+    };
     const nodes = new vis.DataSet([
     ]);
     const edges = new vis.DataSet([
