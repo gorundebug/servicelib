@@ -41,7 +41,7 @@ func Input[T any](name string, streamExecutionRuntime runtime.StreamExecutionRun
 
 func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[runtime.KeyValue[K, T1]],
 	streamRight runtime.TypedStream[runtime.KeyValue[K, T2]],
-	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedTransformConsumedStream[runtime.KeyValue[K, T1], R] {
+	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedJoinConsumedStream[K, T1, T2, R] {
 	return runtime.MakeJoinStream(name, stream, streamRight, f)
 }
 
@@ -59,7 +59,7 @@ func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedS
 
 func MultiJoin[K comparable, T, R any](
 	name string, leftStream runtime.TypedStream[runtime.KeyValue[K, T]],
-	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedTransformConsumedStream[runtime.KeyValue[K, T], R] {
+	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedMultiJoinConsumedStream[K, T, R] {
 	return runtime.MakeMultiJoinStream[K, T, R](name, leftStream, f)
 }
 

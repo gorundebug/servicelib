@@ -35,6 +35,16 @@ type TypedTransformConsumedStream[T any, R any] interface {
 	Consumer[T]
 }
 
+type TypedJoinConsumedStream[K comparable, T1, T2, R any] interface {
+	TypedTransformConsumedStream[KeyValue[K, T1], R]
+	ConsumeRight(KeyValue[K, T2])
+}
+
+type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
+	TypedTransformConsumedStream[KeyValue[K, T], R]
+	ConsumeRight(int, KeyValue[K, interface{}])
+}
+
 type TypedLinkStream[T any] interface {
 	TypedStream[T]
 	Consumer[T]
