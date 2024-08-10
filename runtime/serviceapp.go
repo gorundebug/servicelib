@@ -111,7 +111,7 @@ type Node struct {
 type Edge struct {
 	From   int    `json:"from"`
 	To     int    `json:"to"`
-	Arrow  string `json:"arrow"`
+	Arrows string `json:"arrows"`
 	Length int    `json:"length"`
 	Label  string `json:"label"`
 	Color  struct {
@@ -163,7 +163,7 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 		edges = append(edges, &Edge{
 			From:   stream.GetId(),
 			To:     consumer.GetId(),
-			Arrow:  "to",
+			Arrows: "to",
 			Length: 200,
 			Label:  label,
 			Color: struct {
