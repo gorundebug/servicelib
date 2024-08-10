@@ -11,27 +11,27 @@ import (
 	"gitlab.com/gorundebug/servicelib/runtime"
 )
 
-func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunction[T, R]) runtime.TypedStream[R] {
+func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
 	return runtime.MakeMapStream[T, R](name, stream, f)
 }
 
-func AppSink[T any](name string, stream runtime.TypedStream[T], consumer runtime.Consumer[T]) runtime.Consumer[T] {
+func AppSink[T any](name string, stream runtime.TypedStream[T], consumer runtime.Consumer[T]) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeAppSinkStream[T](name, stream, consumer)
 }
 
-func Filter[T any](name string, stream runtime.TypedStream[T], f runtime.FilterFunction[T]) runtime.TypedStream[T] {
+func Filter[T any](name string, stream runtime.TypedStream[T], f runtime.FilterFunction[T]) runtime.TypedConsumedStream[T] {
 	return runtime.MakeFilterStream[T](name, stream, f)
 }
 
-func FlatMap[T, R any](name string, stream runtime.TypedStream[T], f runtime.FlatMapFunction[T, R]) runtime.TypedStream[R] {
+func FlatMap[T, R any](name string, stream runtime.TypedStream[T], f runtime.FlatMapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
 	return runtime.MakeFlatMapStream[T, R](name, stream, f)
 }
 
-func FlatMapIterable[T, R any](name string, stream runtime.TypedStream[T]) runtime.TypedStream[R] {
+func FlatMapIterable[T, R any](name string, stream runtime.TypedStream[T]) runtime.TypedTransformConsumedStream[T, R] {
 	return runtime.MakeFlatMapIterableStream[T, R](name, stream)
 }
 
-func ForEach[T any](name string, stream runtime.TypedStream[T], f runtime.ForEachFunction[T]) runtime.TypedStream[T] {
+func ForEach[T any](name string, stream runtime.TypedStream[T], f runtime.ForEachFunction[T]) runtime.TypedConsumedStream[T] {
 	return runtime.MakeForEachStream[T](name, stream, f)
 }
 
@@ -41,16 +41,16 @@ func Input[T any](name string, streamExecutionRuntime runtime.StreamExecutionRun
 
 func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[runtime.KeyValue[K, T1]],
 	streamRight runtime.TypedStream[runtime.KeyValue[K, T2]],
-	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedStream[R] {
+	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedTransformConsumedStream[runtime.KeyValue[K, T1], R] {
 	return runtime.MakeJoinStream(name, stream, streamRight, f)
 }
 
-func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T], f runtime.KeyByFunction[T, K, V]) runtime.TypedStream[runtime.KeyValue[K, V]] {
+func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T], f runtime.KeyByFunction[T, K, V]) runtime.TypedTransformConsumedStream[T, runtime.KeyValue[K, V]] {
 	return runtime.MakeKeyByStream[T, K, V](name, stream, f)
 }
 
-func Link[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) {
-	runtime.MakeLinkStream[T](name, streamExecutionRuntime)
+func Link[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedLinkStream[T] {
+	return runtime.MakeLinkStream[T](name, streamExecutionRuntime)
 }
 
 func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedStream[T] {
@@ -59,7 +59,7 @@ func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedS
 
 func MultiJoin[K comparable, T, R any](
 	name string, leftStream runtime.TypedStream[runtime.KeyValue[K, T]],
-	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedStream[R] {
+	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedTransformConsumedStream[runtime.KeyValue[K, T], R] {
 	return runtime.MakeMultiJoinStream[K, T, R](name, leftStream, f)
 }
 
@@ -69,7 +69,7 @@ func MultiJoinLink[K comparable, T1, T2, R any](
 	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoin, stream)
 }
 
-func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.ParallelsFunction[T, R]) runtime.TypedStream[R] {
+func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.ParallelsFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
 	return runtime.MakeParallelsStream[T, R](name, stream, f)
 }
 
@@ -81,10 +81,10 @@ func Split[T any](name string, stream runtime.TypedStream[T], count int) runtime
 	return runtime.MakeSplitStream[T](name, stream, count)
 }
 
-func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedStream[T] {
+func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedConsumedStream[T] {
 	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
 }
 
-func OutStub[T any](name string, stream runtime.TypedStream[T]) runtime.TypedStream[T] {
+func OutStub[T any](name string, stream runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
 	return runtime.MakeOutStubStream[T](name, stream)
 }

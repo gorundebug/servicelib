@@ -12,33 +12,35 @@ import (
 )
 
 type LinkStream[T any] struct {
-	Stream[T]
-	consumer StreamConsumer[T]
+	ConsumedStream[T]
+	consumer TypedStreamConsumer[T]
 }
 
-func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) {
+func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStream[T] {
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Panicf("Config for the stream with name=%s does not exists", name)
 	}
 	linkStream := &LinkStream[T]{
-		Stream: Stream[T]{
-			runtime: runtime,
-			config:  *streamConfig,
+		ConsumedStream: ConsumedStream[T]{
+			Stream: Stream[T]{
+				runtime: runtime,
+				config:  *streamConfig,
+			},
 		},
 	}
 	runtime.registerStream(linkStream)
+	return linkStream
 }
 
 func (s *LinkStream[T]) Consume(value T) {
 	s.consumer.Consume(value)
 }
 
-func (s *LinkStream[T]) AssignConsumer(consumer StreamConsumer[T]) {
-	s.consumer = consumer
-}
-
-func (s *LinkStream[T]) getConsumers() []StreamBase {
-	return []StreamBase{s.consumer}
+func (s *LinkStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
+	if s.consumer != nil {
+		log.Panicf("consumer already assigned to the link stream %d", s.Stream.config.Id)
+	}
+	s.setConsumer(consumer)
 }

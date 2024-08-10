@@ -334,7 +334,7 @@ func makeCaller[T any](runtime StreamExecutionRuntime,
 type caller[T any] struct {
 	runtime  StreamExecutionRuntime
 	source   TypedStream[T]
-	consumer StreamConsumer[T]
+	consumer TypedStreamConsumer[T]
 }
 
 type directCaller[T any] struct {

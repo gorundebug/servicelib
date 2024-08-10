@@ -16,7 +16,7 @@ type SplitLink[T any] struct {
 	splitStream *SplitStream[T]
 	index       int
 	caller      Caller[T]
-	consumer    StreamConsumer[T]
+	consumer    TypedStreamConsumer[T]
 }
 
 func (s *SplitLink[T]) GetId() int {
@@ -35,7 +35,7 @@ func (s *SplitLink[T]) GetConfig() *StreamConfig {
 	return s.splitStream.GetConfig()
 }
 
-func (s *SplitLink[T]) setConsumer(consumer StreamConsumer[T]) {
+func (s *SplitLink[T]) setConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.splitStream.runtime, s, makeSerde[T](s.splitStream.runtime))
 }
@@ -58,7 +58,7 @@ func (s *SplitLink[T]) Consume(value T) {
 	}
 }
 
-func (s *SplitLink[T]) GetConsumer() StreamConsumer[T] {
+func (s *SplitLink[T]) GetConsumer() TypedStreamConsumer[T] {
 	return s.consumer
 }
 

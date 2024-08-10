@@ -57,7 +57,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 	return keyByStream
 }
 
-func (s *KeyByStream[T, K, V]) setConsumer(consumer StreamConsumer[KeyValue[K, V]]) {
+func (s *KeyByStream[T, K, V]) setConsumer(consumer TypedStreamConsumer[KeyValue[K, V]]) {
 	s.consumer = consumer
 	s.caller = makeCaller[KeyValue[K, V]](s.runtime, s, makeKeyValueSerde[K, V](s.runtime))
 }

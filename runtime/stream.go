@@ -21,12 +21,28 @@ type StreamBase interface {
 
 type TypedStream[T any] interface {
 	StreamBase
-	GetConsumer() StreamConsumer[T]
-	setConsumer(StreamConsumer[T])
+	GetConsumer() TypedStreamConsumer[T]
+	setConsumer(TypedStreamConsumer[T])
+}
+
+type TypedConsumedStream[T any] interface {
+	TypedStream[T]
+	Consumer[T]
+}
+
+type TypedTransformConsumedStream[T any, R any] interface {
+	TypedStream[R]
+	Consumer[T]
+}
+
+type TypedLinkStream[T any] interface {
+	TypedStream[T]
+	Consumer[T]
+	SetConsumer(TypedStreamConsumer[T])
 }
 
 type TypedSplitStream[T any] interface {
-	StreamBase
+	TypedConsumedStream[T]
 	Get(index int) TypedStream[T]
 }
 
@@ -37,7 +53,7 @@ type TypedInputStream[T any] interface {
 }
 
 type TypedSinkStream[T any] interface {
-	StreamConsumer[T]
+	TypedStreamConsumer[T]
 	GetEndpointId() int
 	SetConsumer(Consumer[T])
 }
@@ -52,7 +68,7 @@ func (f ConsumerFunc[T]) Consume(value T) {
 	f(value)
 }
 
-type StreamConsumer[T any] interface {
+type TypedStreamConsumer[T any] interface {
 	StreamBase
 	Consumer[T]
 }
@@ -90,14 +106,14 @@ func (s *Stream[T]) GetTransformationName() string {
 type ConsumedStream[T any] struct {
 	Stream[T]
 	caller   Caller[T]
-	consumer StreamConsumer[T]
+	consumer TypedStreamConsumer[T]
 }
 
 func (s *ConsumedStream[T]) getConsumers() []StreamBase {
 	return []StreamBase{s.consumer}
 }
 
-func (s *ConsumedStream[T]) setConsumer(consumer StreamConsumer[T]) {
+func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.runtime, s, makeSerde[T](s.runtime))
 }
@@ -108,6 +124,6 @@ func (s *ConsumedStream[T]) Consume(value T) {
 	}
 }
 
-func (s *ConsumedStream[T]) GetConsumer() StreamConsumer[T] {
+func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {
 	return s.consumer
 }
