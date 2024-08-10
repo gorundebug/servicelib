@@ -120,7 +120,10 @@ type ConsumedStream[T any] struct {
 }
 
 func (s *ConsumedStream[T]) getConsumers() []StreamBase {
-	return []StreamBase{s.consumer}
+	if s.consumer != nil {
+		return []StreamBase{s.consumer}
+	}
+	return []StreamBase{}
 }
 
 func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
