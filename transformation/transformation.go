@@ -53,7 +53,7 @@ func Link[T any](name string, streamExecutionRuntime runtime.StreamExecutionRunt
 	return runtime.MakeLinkStream[T](name, streamExecutionRuntime)
 }
 
-func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedStream[T] {
+func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
 	return runtime.MakeMergeStream[T](name, streams...)
 }
 
