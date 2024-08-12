@@ -63,13 +63,9 @@
         autoResize: false,
     };
 
-    const nodes = new vis.DataView(new vis.DataSet([
-    ]));
-    const edges = new vis.DataView(new vis.DataSet([
-    ]));
     const data = {
-        nodes: nodes,
-        edges: edges
+        nodes: new vis.DataSet([]),
+        edges: new vis.DataSet([])
     };
     const graphContainer = document.getElementById('graph');
     const network = new vis.Network(graphContainer, data, options);
@@ -84,10 +80,7 @@
                 return response.json();
             })
             .then(result => {
-                data.nodes.getDataSet().clear();
-                data.edges.getDataSet().clear();
-                data.nodes.getDataSet().add(result.nodes);
-                data.edges.getDataSet().add(result.edges);
+                network.setData(new vis.DataSet(result.nodes), new vis.DataSet(result.edges));
                 network.redraw();
                 network.focus(result.nodes[0].id);
             })
