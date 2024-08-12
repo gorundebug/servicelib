@@ -75,8 +75,13 @@ type SplitStream[T any] struct {
 	links []*SplitLink[T]
 }
 
-func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *SplitStream[T] {
-	runtime := stream.GetRuntime()
+func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
+	splitStream := MakeInputSplitStream[T](name, stream.GetRuntime())
+	stream.setConsumer(splitStream)
+	return splitStream
+}
+
+func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *SplitStream[T] {
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
@@ -90,20 +95,16 @@ func MakeSplitStream[T any](name string, stream TypedStream[T], count int) *Spli
 				config:  *streamConfig,
 			},
 		},
-		links: make([]*SplitLink[T], count),
+		links: make([]*SplitLink[T], 0),
 	}
-	for i := 0; i < count; i++ {
-		splitStream.links[i] = splitLink[T](i, splitStream)
-	}
-	stream.setConsumer(splitStream)
 	runtime.registerStream(splitStream)
 	return splitStream
 }
 
-func (s *SplitStream[T]) Get(index int) TypedStream[T] {
-	if index < 0 || index >= len(s.links) {
-		log.Panicf("Get index=%d for the split stream %d is invaid", index, s.config.Id)
-	}
+func (s *SplitStream[T]) AddConsumer() TypedConsumedStream[T] {
+	index := len(s.links)
+	link := splitLink[T](index, s)
+	s.links = append(s.links, link)
 	return s.links[index]
 }
 

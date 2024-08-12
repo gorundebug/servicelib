@@ -56,7 +56,7 @@ type TypedLinkStream[T any] interface {
 
 type TypedSplitStream[T any] interface {
 	TypedConsumedStream[T]
-	Get(index int) TypedStream[T]
+	AddConsumer() TypedConsumedStream[T]
 }
 
 type TypedInputStream[T any] interface {

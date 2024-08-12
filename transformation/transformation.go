@@ -77,14 +77,18 @@ func Sink[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSinkSt
 	return runtime.MakeSinkStream[T](name, stream)
 }
 
-func Split[T any](name string, stream runtime.TypedStream[T], count int) runtime.TypedSplitStream[T] {
-	return runtime.MakeSplitStream[T](name, stream, count)
+func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplitStream[T] {
+	return runtime.MakeSplitStream[T](name, stream)
+}
+
+func SplitStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedSplitStream[T] {
+	return runtime.MakeInputSplitStream[T](name, streamExecutionRuntime)
 }
 
 func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedConsumedStream[T] {
 	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
 }
 
-func OutStub[T any](name string, stream runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
+func OutStub[T any](name string, stream runtime.TypedStream[T]) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeOutStubStream[T](name, stream)
 }
