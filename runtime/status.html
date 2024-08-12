@@ -62,10 +62,11 @@
         },
         autoResize: false,
     };
-    const nodes = new vis.DataSet([
-    ]);
-    const edges = new vis.DataSet([
-    ]);
+
+    const nodes = new vis.DataView(new vis.DataSet([
+    ]));
+    const edges = new vis.DataView(vis.DataSet([
+    ]));
     const data = {
         nodes: nodes,
         edges: edges
@@ -83,10 +84,12 @@
                 return response.json();
             })
             .then(result => {
-                data.nodes.clear();
-                data.edges.clear();
-                data.nodes.add(result.nodes);
-                data.edges.add(result.edges);
+                data.nodes.getDataSet().clear();
+                data.edges.getDataSet().clear();
+                data.nodes.getDataSet().add(result.nodes);
+                data.edges.getDataSet().add(result.edges);
+                network.redraw();
+                network.focus(result.nodes[0].id);
             })
             .catch(error => {
                 console.error('There was a problem with the fetch operation:', error);
