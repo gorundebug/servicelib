@@ -122,15 +122,20 @@ type Edge struct {
 
 func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	config := stream.GetConfig()
-	var opacity float32
-	if config.IdService == app.serviceConfig.Id {
-		opacity = 1.0
-	} else {
+	opacity := float32(1.0)
+	serviceName := app.serviceConfig.Name
+	if config.IdService != app.serviceConfig.Id {
 		opacity = 0.3
+		for i := range app.config.Services {
+			if app.config.Services[i].Id == config.IdService {
+				serviceName = app.config.Services[i].Name
+				break
+			}
+		}
 	}
 
 	label := fmt.Sprintf("%s(%s)\n[%s]", stream.GetName(),
-		englishUpperCaser.String(stream.GetTransformationName()), app.serviceConfig.Name)
+		englishUpperCaser.String(stream.GetTransformationName()), serviceName)
 
 	return &Node{
 		Id: stream.GetId(),
@@ -160,6 +165,12 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 				label = label + " (R)"
 			}
 		}
+		opacity := float32(1.0)
+		if stream.GetConfig().IdService != app.serviceConfig.Id ||
+			config.IdService != app.serviceConfig.Id {
+			opacity = 0.3
+		}
+
 		edges = append(edges, &Edge{
 			From:   stream.GetId(),
 			To:     consumer.GetId(),
@@ -169,7 +180,7 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 			Color: struct {
 				Opacity float32 `json:"opacity"`
 				Color   string  `json:"color"`
-			}{Opacity: 1.0, Color: "#0050FF"},
+			}{Opacity: opacity, Color: "#0050FF"},
 		})
 	}
 
