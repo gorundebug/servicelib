@@ -100,7 +100,8 @@ func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
 type Node struct {
 	Id    int `json:"id"`
 	Color struct {
-		Background string `json:"background"`
+		Background string  `json:"background"`
+		Opacity    float32 `json:"opacity"`
 	} `json:"color"`
 	Opacity float32 `json:"opacity"`
 	Label   string  `json:"label"`
@@ -123,9 +124,11 @@ type Edge struct {
 func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	config := stream.GetConfig()
 	opacity := float32(1.0)
+	background := app.serviceConfig.Color
 	serviceName := app.serviceConfig.Name
 	if config.IdService != app.serviceConfig.Id {
 		opacity = 0.3
+		background = "gray"
 		for i := range app.config.Services {
 			if app.config.Services[i].Id == config.IdService {
 				serviceName = app.config.Services[i].Name
@@ -140,8 +143,9 @@ func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	return &Node{
 		Id: stream.GetId(),
 		Color: struct {
-			Background string `json:"background"`
-		}{Background: app.serviceConfig.Color},
+			Background string  `json:"background"`
+			Opacity    float32 `json:"opacity"`
+		}{Background: background, Opacity: opacity},
 		X:       config.XPos,
 		Y:       config.YPos,
 		Opacity: opacity,
