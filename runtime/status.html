@@ -62,13 +62,11 @@
         },
         autoResize: false,
     };
-
-    const data = {
-        nodes: new vis.DataSet([]),
-        edges: new vis.DataSet([])
-    };
     const graphContainer = document.getElementById('graph');
-    const network = new vis.Network(graphContainer, data, options);
+    const network = new vis.Network(graphContainer, {
+        nodes: [],
+        edges: []
+    }, options);
     const url = window.location.origin + '/data';
 
     function fetchData() {
@@ -80,7 +78,7 @@
                 return response.json();
             })
             .then(result => {
-                network.setData(new vis.DataSet(result.nodes), new vis.DataSet(result.edges));
+                network.setData({nodes: result.nodes, edges: result.edges});
                 network.redraw();
                 network.focus(result.nodes[0].id);
             })
