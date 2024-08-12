@@ -101,7 +101,7 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *S
 	return splitStream
 }
 
-func (s *SplitStream[T]) AddConsumer() TypedConsumedStream[T] {
+func (s *SplitStream[T]) AddStream() TypedConsumedStream[T] {
 	index := len(s.links)
 	link := splitLink[T](index, s)
 	s.links = append(s.links, link)
