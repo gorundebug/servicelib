@@ -123,19 +123,16 @@ type Edge struct {
 }
 
 const (
-	externalServiceOpacity = float32(0.3)
-	serviceOpacity         = float32(1.0)
-	edgeColor              = "#0050FF"
-	edgeLength             = 200
+	opacity    = float32(1.0)
+	edgeColor  = "#0050FF"
+	edgeLength = 200
 )
 
 func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	config := stream.GetConfig()
-	opacity := serviceOpacity
 	background := app.serviceConfig.Color
 	serviceName := app.serviceConfig.Name
 	if config.IdService != app.serviceConfig.Id {
-		opacity = externalServiceOpacity
 		for i := range app.config.Services {
 			if app.config.Services[i].Id == config.IdService {
 				serviceName = app.config.Services[i].Name
@@ -176,10 +173,8 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 				label = label + " (R)"
 			}
 		}
-		opacity := serviceOpacity
 		if stream.GetConfig().IdService != app.serviceConfig.Id ||
 			config.IdService != app.serviceConfig.Id {
-			opacity = externalServiceOpacity
 		}
 
 		edges = append(edges, &Edge{
