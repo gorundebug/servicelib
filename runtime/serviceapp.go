@@ -25,7 +25,9 @@ import (
 
 var englishUpperCaser = cases.Upper(language.English)
 
-const defaultShutdownTimeout = 30 * time.Second
+const (
+	defaultShutdownTimeout = 30 * time.Second
+)
 
 type ServiceApp struct {
 	config        *ServiceAppConfig
@@ -100,8 +102,7 @@ func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
 type Node struct {
 	Id    int `json:"id"`
 	Color struct {
-		Background string  `json:"background"`
-		Opacity    float32 `json:"opacity"`
+		Background string `json:"background"`
 	} `json:"color"`
 	Opacity float32 `json:"opacity"`
 	Label   string  `json:"label"`
@@ -121,17 +122,24 @@ type Edge struct {
 	} `json:"color"`
 }
 
+const (
+	externalServiceOpacity = float32(0.3)
+	serviceOpacity         = float32(1.0)
+	edgeColor              = "#0050FF"
+	edgeLength             = 200
+)
+
 func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	config := stream.GetConfig()
-	opacity := float32(1.0)
+	opacity := serviceOpacity
 	background := app.serviceConfig.Color
 	serviceName := app.serviceConfig.Name
 	if config.IdService != app.serviceConfig.Id {
-		opacity = 0.3
-		background = "gray"
+		opacity = externalServiceOpacity
 		for i := range app.config.Services {
 			if app.config.Services[i].Id == config.IdService {
 				serviceName = app.config.Services[i].Name
+				background = app.config.Services[i].Color
 				break
 			}
 		}
@@ -143,9 +151,8 @@ func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 	return &Node{
 		Id: stream.GetId(),
 		Color: struct {
-			Background string  `json:"background"`
-			Opacity    float32 `json:"opacity"`
-		}{Background: background, Opacity: opacity},
+			Background string `json:"background"`
+		}{Background: background},
 		X:       config.XPos,
 		Y:       config.YPos,
 		Opacity: opacity,
@@ -169,22 +176,22 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 				label = label + " (R)"
 			}
 		}
-		opacity := float32(1.0)
+		opacity := serviceOpacity
 		if stream.GetConfig().IdService != app.serviceConfig.Id ||
 			config.IdService != app.serviceConfig.Id {
-			opacity = 0.3
+			opacity = externalServiceOpacity
 		}
 
 		edges = append(edges, &Edge{
 			From:   stream.GetId(),
 			To:     consumer.GetId(),
 			Arrows: "to",
-			Length: 200,
+			Length: edgeLength,
 			Label:  label,
 			Color: struct {
 				Opacity float32 `json:"opacity"`
 				Color   string  `json:"color"`
-			}{Opacity: opacity, Color: "#0050FF"},
+			}{Opacity: opacity, Color: edgeColor},
 		})
 	}
 
