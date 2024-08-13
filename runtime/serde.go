@@ -14,6 +14,7 @@ import (
 	"math"
 	"math/bits"
 	"reflect"
+	"regexp"
 )
 
 const uintSize = bits.UintSize / 8
@@ -981,4 +982,19 @@ func MakeMapSerde[T any](keySerde Serializer, valueSerde Serializer) *MapSerde[T
 		log.Panicf("expected map, got %d", v.Kind())
 	}
 	return &MapSerde[T]{mapSerde: mapSerde{keySerde: keySerde, valueSerde: valueSerde, mapType: GetSerdeType[T]()}}
+}
+
+func RegisterSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
+	return makeSerde[T](runtime)
+}
+
+func RegisterKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) StreamKeyValueSerde[KeyValue[K, V]] {
+	return makeKeyValueSerde[K, V](runtime)
+}
+
+var keyValuePattern = regexp.MustCompile(`^KeyValue\[\w+,\w+]$`)
+
+func IsKeyValueType[T any]() bool {
+	tp := GetSerdeType[T]()
+	return tp.PkgPath() == "gitlab.com/gorundebug/servicelib/runtime" && keyValuePattern.MatchString(tp.Name())
 }

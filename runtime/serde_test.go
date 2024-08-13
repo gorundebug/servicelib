@@ -46,6 +46,11 @@ func mockService() *MockService {
 	return &service
 }
 
+func TestIsKeyValueType(t *testing.T) {
+	assert.Equal(t, true, IsKeyValueType[KeyValue[int, int]]())
+	assert.Equal(t, false, IsKeyValueType[int]())
+}
+
 func TestArraySerde(t *testing.T) {
 	arraySerde := makeSerde[[]int](mockService())
 	arr := []int{1, 2, 3}
