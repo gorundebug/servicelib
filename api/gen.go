@@ -175,6 +175,7 @@ type Link struct {
 	CommunicationProtocol  *CommunicationProtocol `json:"communicationProtocol,omitempty"`
 	From                   int                    `json:"from"`
 	InheritedCallSemantics bool                   `json:"inheritedCallSemantics"`
+	MethodName             *string                `json:"methodName,omitempty"`
 	PoolName               *string                `json:"poolName,omitempty"`
 	Priority               *int                   `json:"priority,omitempty"`
 	To                     int                    `json:"to"`

@@ -281,6 +281,8 @@ components:
           example: default
         priority:
           type: integer
+        methodName:
+          type: string
         communicationProtocol:
           $ref: '#/components/schemas/CommunicationProtocol'
       required:
