@@ -18,7 +18,22 @@ type StreamExecutionEnvironment interface {
 	ConfigReload(config Config)
 	Start() error
 	Stop()
+	AddDataSource(dataSource DataSource)
+	GetDataSource(id int) DataSource
+	AddDataSink(dataSink DataSink)
+	GetDataSink(id int) DataSink
 }
+
 type Caller[T any] interface {
 	Consume(value T)
+}
+
+type StreamExecutionRuntime interface {
+	StreamExecutionEnvironment
+	configReload(Config)
+	streamsInit(name string, runtime StreamExecutionRuntime, config Config)
+	getSerde(valueType reflect.Type) (Serializer, error)
+	registerStream(stream StreamBase)
+	registerSerde(tp reflect.Type, serializer StreamSerializer)
+	getRegisteredSerde(tp reflect.Type) StreamSerializer
 }

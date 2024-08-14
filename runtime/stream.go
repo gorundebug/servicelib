@@ -75,15 +75,15 @@ type Consumer[T any] interface {
 	Consume(T)
 }
 
+type TypedStreamConsumer[T any] interface {
+	StreamBase
+	Consumer[T]
+}
+
 type ConsumerFunc[T any] func(T)
 
 func (f ConsumerFunc[T]) Consume(value T) {
 	f(value)
-}
-
-type TypedStreamConsumer[T any] interface {
-	StreamBase
-	Consumer[T]
 }
 
 type Stream[T any] struct {
