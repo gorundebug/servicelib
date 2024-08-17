@@ -20,21 +20,22 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 var englishUpperCaser = cases.Upper(language.English)
 
 type ServiceApp struct {
-	config        *ServiceAppConfig
-	serviceConfig *ServiceConfig
-	runtime       StreamExecutionRuntime
-	streams       map[int]StreamBase
-	dataSources   map[int]DataSource
-	dataSinks     map[int]DataSink
-	serdes        map[reflect.Type]StreamSerializer
-	httpServer    http.Server
-	mux           *http.ServeMux
-	quit          chan struct{}
+	config         *ServiceAppConfig
+	serviceConfig  *ServiceConfig
+	runtime        StreamExecutionRuntime
+	streams        map[int]StreamBase
+	dataSources    map[int]DataSource
+	dataSinks      map[int]DataSink
+	serdes         map[reflect.Type]StreamSerializer
+	httpServer     http.Server
+	mux            *http.ServeMux
+	httpServerDone chan struct{}
 }
 
 func (app *ServiceApp) configReload(config Config) {
@@ -77,7 +78,7 @@ func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, 
 	app.dataSinks = make(map[int]DataSink)
 	app.serdes = make(map[reflect.Type]StreamSerializer)
 	app.mux = http.NewServeMux()
-	app.quit = make(chan struct{})
+	app.httpServerDone = make(chan struct{})
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringIp, app.serviceConfig.MonitoringPort),
@@ -258,7 +259,7 @@ func (app *ServiceApp) Start() error {
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Panicln(err)
 		}
-		app.quit <- struct{}{}
+		app.httpServerDone <- struct{}{}
 	}()
 
 	for _, v := range app.dataSources {
@@ -270,20 +271,45 @@ func (app *ServiceApp) Start() error {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
+	wg := sync.WaitGroup{}
 	for _, v := range app.dataSources {
-		v.Stop(ctx)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
 	}
 	for _, v := range app.dataSinks {
-		v.Stop(ctx)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
 	}
+	wg.Add(1)
 	go func() {
-		if err := app.httpServer.Shutdown(ctx); err != nil {
-			log.Warnf("server shutdown: %s", err.Error())
+		defer wg.Done()
+		go func() {
+			if err := app.httpServer.Shutdown(ctx); err != nil {
+				log.Warnf("server shutdown: %s", err.Error())
+			}
+		}()
+		select {
+		case <-app.httpServerDone:
+		case <-ctx.Done():
+			log.Warnf("Monitoring server stop timeout for service '%s'. %s", app.serviceConfig.Name, ctx.Err().Error())
 		}
 	}()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
 	select {
-	case <-app.quit:
+	case <-done:
 	case <-ctx.Done():
-		log.Warnf("Monitoring server stop timeout for service '%s'. %s", app.serviceConfig.Name, ctx.Err().Error())
+		log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
 	}
 }
