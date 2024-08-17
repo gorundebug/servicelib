@@ -255,6 +255,7 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (Serializer, error) {
 
 func (app *ServiceApp) Start() error {
 	go func() {
+		log.Infof("Monitoring for service '%s' listening at %v", app.serviceConfig.Name, app.httpServer.Addr)
 		err := app.httpServer.ListenAndServe()
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalln(err)
