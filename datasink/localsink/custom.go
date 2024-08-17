@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const defaultShutdownTimeout = 30 * time.Second
-
 type DataConsumer[T any] interface {
 	runtime.Consumer[T]
 	Start() error
@@ -69,7 +67,7 @@ func (ds *CustomDataSink) Stop() {
 	}()
 	select {
 	case <-c:
-	case <-time.After(defaultShutdownTimeout):
+	case <-time.After(time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout) * time.Millisecond):
 		log.Warnf("Stop custom datasink '%s' after timeout.", ds.GetName())
 	}
 }

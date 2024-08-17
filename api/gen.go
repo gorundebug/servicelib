@@ -202,6 +202,7 @@ type Service struct {
 	MonitoringPort       int                 `json:"monitoringPort"`
 	Name                 string              `json:"name"`
 	ProgrammingLanguage  ProgrammingLanguage `json:"programmingLanguage"`
+	ShutdownTimeout      int                 `json:"shutdownTimeout"`
 }
 
 // Stream defines model for Stream.

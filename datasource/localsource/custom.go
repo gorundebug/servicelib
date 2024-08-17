@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const defaultShutdownTimeout = 30 * time.Second
-
 type DataProducer[T any] interface {
 	Start(consumer runtime.Consumer[T]) error
 	Stop()
@@ -130,7 +128,7 @@ func (ds *CustomDataSource) Stop() {
 	}()
 	select {
 	case <-c:
-	case <-time.After(defaultShutdownTimeout):
+	case <-time.After(time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout) * time.Millisecond):
 		log.Warnf("Stop custom datasource '%s' after timeout.", ds.GetName())
 	}
 }

@@ -22,8 +22,6 @@ import (
 	"time"
 )
 
-const defaultShutdownTimeout = 30 * time.Second
-
 type NetHTTPEndpointRequestData interface {
 	ResponseWriter() http.ResponseWriter
 	GetBody() (io.ReadCloser, error)
@@ -171,7 +169,7 @@ func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
 }
 
 func (ds *NetHTTPDataSource) Stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout)&time.Millisecond)
 	defer cancel()
 	if err := ds.server.Shutdown(ctx); err != nil {
 		log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())

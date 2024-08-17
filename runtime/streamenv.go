@@ -14,6 +14,7 @@ import (
 type StreamExecutionEnvironment interface {
 	GetSerde(valueType reflect.Type) (Serializer, error)
 	GetConfig() *ServiceAppConfig
+	GetServiceConfig() *ServiceConfig
 	ServiceInit(config Config)
 	ConfigReload(config Config)
 	Start() error

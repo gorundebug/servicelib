@@ -25,10 +25,6 @@ import (
 
 var englishUpperCaser = cases.Upper(language.English)
 
-const (
-	defaultShutdownTimeout = 30 * time.Second
-)
-
 type ServiceApp struct {
 	config        *ServiceAppConfig
 	serviceConfig *ServiceConfig
@@ -49,6 +45,10 @@ func (app *ServiceApp) configReload(config Config) {
 
 func (app *ServiceApp) GetConfig() *ServiceAppConfig {
 	return app.config
+}
+
+func (app *ServiceApp) GetServiceConfig() *ServiceConfig {
+	return app.serviceConfig
 }
 
 func (app *ServiceApp) ConfigReload(config Config) {
@@ -274,7 +274,7 @@ func (app *ServiceApp) Stop() {
 	for _, v := range app.dataSources {
 		v.Stop()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(app.serviceConfig.ShutdownTimeout)*time.Millisecond)
 	defer cancel()
 	if err := app.server.Shutdown(ctx); err != nil {
 		log.Warnf("server shutdown: %s", err.Error())
