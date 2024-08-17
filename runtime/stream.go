@@ -131,7 +131,7 @@ func (s *ConsumedStream[T]) getConsumers() []StreamBase {
 
 func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
-		log.Panicf("consumer already assigned to the link stream %d", s.Stream.config.Id)
+		log.Fatalf("consumer already assigned to the link stream %d", s.Stream.config.Id)
 	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.runtime, s, makeSerde[T](s.runtime))

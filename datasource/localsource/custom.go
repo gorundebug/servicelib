@@ -89,7 +89,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Start() error {
 	go func() {
 		defer dataSource.WaitGroup().Done()
 		if err := ep.dataProducer.Start(ep); err != nil {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 	}()
 	return nil

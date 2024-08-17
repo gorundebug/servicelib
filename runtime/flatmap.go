@@ -37,7 +37,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	flatMapStream := &FlatMapStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{

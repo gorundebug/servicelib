@@ -69,7 +69,7 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
 func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, config Config) {
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
-		log.Panicf("Cannot find service config for %s", name)
+		log.Fatalf("Cannot find service config for %s", name)
 	}
 	app.config = config.GetServiceConfig()
 	app.runtime = runtime
@@ -257,14 +257,14 @@ func (app *ServiceApp) Start() error {
 	go func() {
 		err := app.httpServer.ListenAndServe()
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 		app.httpServerDone <- struct{}{}
 	}()
 
 	for _, v := range app.dataSources {
 		if err := v.Start(); err != nil {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 	}
 	return nil

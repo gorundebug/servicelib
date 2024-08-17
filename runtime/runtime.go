@@ -236,11 +236,11 @@ func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
 		ser, err = makeSerdeForType(tp, runtime)
 	}
 	if err != nil {
-		log.Panicln(err)
+		log.Fatalln(err)
 	}
 	serT, ok := ser.(Serde[T])
 	if !ok {
-		log.Panicf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 	serde := makeStreamSerde(serT)
 	registerSerde[T](runtime, serde)
@@ -254,21 +254,21 @@ func makeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) Stre
 	tp := GetSerdeType[K]()
 	ser, err := runtime.getSerde(tp)
 	if err != nil {
-		log.Panicf("Serializer for type %s not found. %s", tp.Name(), err)
+		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
 	}
 	serdeK, ok := ser.(Serde[K])
 	if !ok {
-		log.Panicf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 
 	tp = GetSerdeType[V]()
 	ser, err = runtime.getSerde(tp)
 	if err != nil {
-		log.Panicf("Serializer for type %s not found. %s", tp.Name(), err)
+		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
 	}
 	serdeV, ok := ser.(Serde[V])
 	if !ok {
-		log.Panicf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 	serde := makeStreamKeyValueSerde[K, V](serdeK, serdeV)
 	registerSerde[KeyValue[K, V]](runtime, serde)
@@ -313,7 +313,7 @@ func makeCaller[T any](runtime StreamExecutionRuntime,
 		}
 	}
 
-	log.Panicf("undefined CommunicationType [%d] ", communicationType)
+	log.Fatalf("undefined CommunicationType [%d] ", communicationType)
 	return nil
 }
 

@@ -21,7 +21,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	appSink := &AppSinkStream[T]{
 		Stream: Stream[T]{

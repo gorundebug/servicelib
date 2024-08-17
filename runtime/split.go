@@ -85,7 +85,7 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *S
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 
 	splitStream := &SplitStream[T]{

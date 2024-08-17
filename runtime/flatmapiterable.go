@@ -20,17 +20,17 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 	tpT := reflect.TypeOf((*T)(nil)).Elem()
 	tpR := reflect.TypeOf((*R)(nil)).Elem()
 	if tpT.Kind() != reflect.Array && tpT.Kind() != reflect.Slice {
-		log.Panicf("Type %s is not an array or slice", tpR.Name())
+		log.Fatalf("Type %s is not an array or slice", tpR.Name())
 	}
 	tpE := tpT.Elem()
 	if tpE != tpR {
-		log.Panicf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
+		log.Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
 	}
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{

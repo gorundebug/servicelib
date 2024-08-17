@@ -19,7 +19,7 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	inStubStream := &InStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
@@ -42,7 +42,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	outStubStream := &OutStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{

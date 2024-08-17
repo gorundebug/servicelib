@@ -827,7 +827,7 @@ func MakeArraySerde[T any](valueSerde Serializer) *ArraySerde[T] {
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Array && v.Kind() != reflect.Slice {
-		log.Panicf("expected array or slice, got %d", v.Kind())
+		log.Fatalf("expected array or slice, got %d", v.Kind())
 	}
 	return &ArraySerde[T]{arraySerde: arraySerde{valueSerde: valueSerde, arrayType: GetSerdeType[T]()}}
 }
@@ -979,7 +979,7 @@ func MakeMapSerde[T any](keySerde Serializer, valueSerde Serializer) *MapSerde[T
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Map {
-		log.Panicf("expected map, got %d", v.Kind())
+		log.Fatalf("expected map, got %d", v.Kind())
 	}
 	return &MapSerde[T]{mapSerde: mapSerde{keySerde: keySerde, valueSerde: valueSerde, mapType: GetSerdeType[T]()}}
 }

@@ -111,7 +111,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: ConsumedStream[R]{

@@ -65,7 +65,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: ConsumedStream[T]{

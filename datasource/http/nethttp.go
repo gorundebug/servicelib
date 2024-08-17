@@ -156,7 +156,7 @@ func (ds *NetHTTPDataSource) Start() error {
 	go func() {
 		err := ds.server.ListenAndServe()
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 		ds.done <- struct{}{}
 	}()
@@ -326,7 +326,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		netHTTPEndpointConsumer = endpointConsumer
 
 	default:
-		log.Panicf("Unknown endpoint format '%s' for endpoint '%s'.",
+		log.Fatalf("Unknown endpoint format '%s' for endpoint '%s'.",
 			cfg.Properties["format"].(string), endpoint.GetName())
 	}
 

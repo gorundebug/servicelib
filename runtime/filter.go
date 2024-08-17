@@ -38,7 +38,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	filterStream := &FilterStream[T]{
 		ConsumedStream: ConsumedStream[T]{

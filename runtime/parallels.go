@@ -37,7 +37,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Panicf("Config for the stream with name=%s does not exists", name)
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 
 	parallelsStream := &ParallelsStream[T, R]{
