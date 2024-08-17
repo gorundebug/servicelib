@@ -195,6 +195,8 @@ type ProjectSettings struct {
 type Service struct {
 	Color                *string             `json:"color,omitempty"`
 	DefaultCallSemantics CallSemantics       `json:"defaultCallSemantics"`
+	GrpcIp               string              `json:"grpcIp"`
+	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`
 	MonitoringIp         string              `json:"monitoringIp"`
 	MonitoringPort       int                 `json:"monitoringPort"`

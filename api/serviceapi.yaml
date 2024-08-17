@@ -138,6 +138,12 @@ components:
           maximum: 65535
         monitoringIp:
           type: string
+        grpcPort:
+          type: integer
+          minimum: 80
+          maximum: 65535
+        grpcIp:
+          type: string
         color:
           type: string
       required:
@@ -147,6 +153,8 @@ components:
         - defaultCallSemantics
         - monitoringIp
         - monitoringPort
+        - grpcIp
+        - grpcPort
 
     JoinStorageType:
       type: integer
