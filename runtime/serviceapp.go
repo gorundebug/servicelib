@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
-	"time"
 )
 
 var englishUpperCaser = cases.Upper(language.English)
@@ -33,7 +32,7 @@ type ServiceApp struct {
 	dataSources   map[int]DataSource
 	dataSinks     map[int]DataSink
 	serdes        map[reflect.Type]StreamSerializer
-	server        http.Server
+	httpServer    http.Server
 	mux           *http.ServeMux
 	quit          chan struct{}
 }
@@ -79,7 +78,7 @@ func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.quit = make(chan struct{})
-	app.server = http.Server{
+	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringIp, app.serviceConfig.MonitoringPort),
 	}
@@ -255,7 +254,7 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (Serializer, error) {
 
 func (app *ServiceApp) Start() error {
 	go func() {
-		err := app.server.ListenAndServe()
+		err := app.httpServer.ListenAndServe()
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Panicln(err)
 		}
@@ -270,15 +269,18 @@ func (app *ServiceApp) Start() error {
 	return nil
 }
 
-func (app *ServiceApp) Stop() {
+func (app *ServiceApp) Stop(ctx context.Context) {
 	for _, v := range app.dataSources {
-		v.Stop()
+		v.Stop(ctx)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(app.serviceConfig.ShutdownTimeout)*time.Millisecond)
-	defer cancel()
-	if err := app.server.Shutdown(ctx); err != nil {
-		log.Warnf("server shutdown: %s", err.Error())
+	for _, v := range app.dataSinks {
+		v.Stop(ctx)
 	}
+	go func() {
+		if err := app.httpServer.Shutdown(ctx); err != nil {
+			log.Warnf("server shutdown: %s", err.Error())
+		}
+	}()
 	select {
 	case <-app.quit:
 	case <-ctx.Done():

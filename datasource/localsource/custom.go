@@ -8,6 +8,7 @@
 package localsource
 
 import (
+	"context"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/runtime"
 	"sync"
@@ -16,7 +17,7 @@ import (
 
 type DataProducer[T any] interface {
 	Start(consumer runtime.Consumer[T]) error
-	Stop()
+	Stop(context.Context)
 }
 
 type CustomInputDataSource interface {
@@ -27,14 +28,14 @@ type CustomInputDataSource interface {
 type CustomInputEndpoint interface {
 	runtime.InputEndpoint
 	Start() error
-	Stop()
+	Stop(context.Context)
 	NextMessage()
 }
 
 type CustomEndpointConsumer interface {
 	runtime.InputEndpointConsumer
 	Start() error
-	Stop()
+	Stop(context.Context)
 }
 
 type CustomDataSource struct {
@@ -58,10 +59,10 @@ func (ep *CustomEndpoint) Start() error {
 	return nil
 }
 
-func (ep *CustomEndpoint) Stop() {
+func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	endpointConsumers := ep.GetEndpointConsumers()
 	for _, endpointConsumer := range endpointConsumers {
-		endpointConsumer.(CustomEndpointConsumer).Stop()
+		endpointConsumer.(CustomEndpointConsumer).Stop(ctx)
 	}
 }
 
@@ -94,8 +95,8 @@ func (ep *TypedCustomEndpointConsumer[T]) Start() error {
 	return nil
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Stop() {
-	ep.dataProducer.Stop()
+func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
+	ep.dataProducer.Stop(ctx)
 }
 
 func (ds *CustomDataSource) Start() error {
@@ -112,13 +113,13 @@ func (ds *CustomDataSource) WaitGroup() *sync.WaitGroup {
 	return &ds.wg
 }
 
-func (ds *CustomDataSource) Stop() {
+func (ds *CustomDataSource) Stop(ctx context.Context) {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
 		ds.wg.Add(1)
 		go func(endpoint CustomInputEndpoint) {
 			defer ds.wg.Done()
-			endpoint.Stop()
+			endpoint.Stop(ctx)
 		}(endpoint.(CustomInputEndpoint))
 	}
 	c := make(chan struct{})
@@ -128,7 +129,7 @@ func (ds *CustomDataSource) Stop() {
 	}()
 	select {
 	case <-c:
-	case <-time.After(time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout) * time.Millisecond):
+	case <-ctx.Done():
 		log.Warnf("Stop custom datasource '%s' after timeout.", ds.GetName())
 	}
 }

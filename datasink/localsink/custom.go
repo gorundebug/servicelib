@@ -8,28 +8,28 @@
 package localsink
 
 import (
+	"context"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/runtime"
 	"sync"
-	"time"
 )
 
 type DataConsumer[T any] interface {
 	runtime.Consumer[T]
 	Start() error
-	Stop()
+	Stop(context.Context)
 }
 
 type CustomEndpointConsumer interface {
 	runtime.OutputEndpointConsumer
 	Start() error
-	Stop()
+	Stop(context.Context)
 }
 
 type CustomSinkEndpoint interface {
 	runtime.SinkEndpoint
 	Start() error
-	Stop()
+	Stop(context.Context)
 }
 
 type CustomDataSink struct {
@@ -50,14 +50,14 @@ func (ds *CustomDataSink) Start() error {
 	return nil
 }
 
-func (ds *CustomDataSink) Stop() {
+func (ds *CustomDataSink) Stop(ctx context.Context) {
 	endpoints := ds.OutputDataSink.GetEndpoints()
 	var wg sync.WaitGroup
 	for _, endpoint := range endpoints {
 		wg.Add(1)
 		go func(endpoint CustomSinkEndpoint) {
 			defer wg.Done()
-			endpoint.Stop()
+			endpoint.Stop(ctx)
 		}(endpoint.(CustomSinkEndpoint))
 	}
 	c := make(chan struct{})
@@ -67,7 +67,7 @@ func (ds *CustomDataSink) Stop() {
 	}()
 	select {
 	case <-c:
-	case <-time.After(time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout) * time.Millisecond):
+	case <-ctx.Done():
 		log.Warnf("Stop custom datasink '%s' after timeout.", ds.GetName())
 	}
 }
@@ -82,10 +82,10 @@ func (ep *CustomEndpoint) Start() error {
 	return nil
 }
 
-func (ep *CustomEndpoint) Stop() {
+func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	endpointConsumers := ep.GetEndpointConsumers()
 	for _, endpointConsumer := range endpointConsumers {
-		endpointConsumer.(CustomEndpointConsumer).Stop()
+		endpointConsumer.(CustomEndpointConsumer).Stop(ctx)
 	}
 }
 
@@ -105,8 +105,8 @@ func (ep *TypedCustomEndpointConsumer[T]) Start() error {
 	return nil
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Stop() {
-	ep.dataConsumer.Stop()
+func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
+	ep.dataConsumer.Stop(ctx)
 }
 
 func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSink {

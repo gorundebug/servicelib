@@ -19,7 +19,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 )
 
 type NetHTTPEndpointRequestData interface {
@@ -168,12 +167,12 @@ func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
 	ds.mux.Handle(pattern, handler)
 }
 
-func (ds *NetHTTPDataSource) Stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ds.GetRuntime().GetServiceConfig().ShutdownTimeout)&time.Millisecond)
-	defer cancel()
-	if err := ds.server.Shutdown(ctx); err != nil {
-		log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
-	}
+func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
+	go func() {
+		if err := ds.server.Shutdown(ctx); err != nil {
+			log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
+		}
+	}()
 	select {
 	case <-ds.done:
 	case <-ctx.Done():

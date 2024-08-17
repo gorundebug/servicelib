@@ -8,6 +8,7 @@
 package runtime
 
 import (
+	"context"
 	"reflect"
 )
 
@@ -18,7 +19,7 @@ type StreamExecutionEnvironment interface {
 	ServiceInit(config Config)
 	ConfigReload(config Config)
 	Start() error
-	Stop()
+	Stop(context.Context)
 	AddDataSource(dataSource DataSource)
 	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)

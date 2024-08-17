@@ -7,11 +7,14 @@
 
 package runtime
 
-import "golang.org/x/exp/maps"
+import (
+	"context"
+	"golang.org/x/exp/maps"
+)
 
 type DataSource interface {
 	Start() error
-	Stop()
+	Stop(context.Context)
 	GetDataConnector() *DataConnector
 	GetName() string
 	GetId() int
