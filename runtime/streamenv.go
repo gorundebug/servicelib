@@ -28,6 +28,7 @@ type StreamExecutionEnvironment interface {
 
 type Caller[T any] interface {
 	Consume(value T)
+	GetSerde() StreamSerde[T]
 }
 
 type StreamExecutionRuntime interface {

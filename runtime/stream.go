@@ -85,22 +85,22 @@ type Consumer[T any] interface {
 	Consume(T)
 }
 
-type BinaryConsumer[T any] interface {
+type BinaryConsumer interface {
 	ConsumeBinary([]byte)
 }
 
-type BinaryKVConsumer[T any] interface {
+type BinaryKVConsumer interface {
 	ConsumeBinary([]byte, []byte)
 }
 
 type TypedBinaryConsumedStream[T any] interface {
 	TypedConsumedStream[T]
-	BinaryConsumer[T]
+	BinaryConsumer
 }
 
 type TypedBinaryKVConsumedStream[T any] interface {
 	TypedConsumedStream[T]
-	BinaryKVConsumer[T]
+	BinaryKVConsumer
 }
 
 type TypedStreamConsumer[T any] interface {
@@ -112,6 +112,10 @@ type ConsumerFunc[T any] func(T)
 
 func (f ConsumerFunc[T]) Consume(value T) {
 	f(value)
+}
+
+type ExternalConsumer[T any] interface {
+	Consumer[T]
 }
 
 type Stream[T any] struct {

@@ -332,6 +332,10 @@ func (c *directCaller[T]) Consume(value T) {
 	c.consumer.Consume(value)
 }
 
+func (c *directCaller[T]) GetSerde() StreamSerde[T] {
+	return c.serde
+}
+
 type taskPoolCaller[T any] struct {
 	caller[T]
 	serde StreamSerde[T]
@@ -340,16 +344,18 @@ type taskPoolCaller[T any] struct {
 func (c *taskPoolCaller[T]) Consume(value T) {
 }
 
+func (c *taskPoolCaller[T]) GetSerde() StreamSerde[T] {
+	return c.serde
+}
+
 type priorityTaskPoolCaller[T any] struct {
 	caller[T]
 	serde StreamSerde[T]
 }
 
 func (c *priorityTaskPoolCaller[T]) Consume(value T) {
-	if c.serde.IsKeyValue() {
-		serdeKV := c.serde.(StreamKeyValueSerde[T])
-		_, _ = serdeKV.SerializeKey(value)
-	} else {
-		_, _ = c.serde.Serialize(value)
-	}
+}
+
+func (c *priorityTaskPoolCaller[T]) GetSerde() StreamSerde[T] {
+	return c.serde
 }

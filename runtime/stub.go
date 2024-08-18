@@ -69,9 +69,29 @@ func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 
 type OutStubStream[T any] struct {
 	*ConsumedStream[T]
+	consumer Consumer[T]
 }
 
-func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream[T] {
+func (s *OutStubStream[T]) Consume(T) {
+}
+
+type OutStubBinaryStream[T any] struct {
+	*ConsumedStream[T]
+	consumer BinaryConsumer
+}
+
+func (s *OutStubBinaryStream[T]) Consume(T) {
+}
+
+type OutStubBinaryKVStream[T any] struct {
+	*ConsumedStream[T]
+	consumer BinaryKVConsumer
+}
+
+func (s *OutStubBinaryKVStream[T]) Consume(T) {
+}
+
+func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consumer[T]) *OutStubStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -85,10 +105,51 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream
 				config:  *streamConfig,
 			},
 		},
+		consumer: consumer,
 	}
 	stream.setConsumer(outStubStream)
 	runtime.registerStream(outStubStream)
 	return outStubStream
 }
 
-func (s *OutStubStream[T]) Consume(T) {}
+func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer BinaryConsumer) *OutStubBinaryStream[T] {
+	runtime := stream.GetRuntime()
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+	}
+	outStubBinaryStream := &OutStubBinaryStream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
+				runtime: runtime,
+				config:  *streamConfig,
+			},
+		},
+		consumer: consumer,
+	}
+	stream.setConsumer(outStubBinaryStream)
+	runtime.registerStream(outStubBinaryStream)
+	return outStubBinaryStream
+}
+
+func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consumer BinaryKVConsumer) *OutStubBinaryKVStream[T] {
+	runtime := stream.GetRuntime()
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+	}
+	outStubBinaryKVStream := &OutStubBinaryKVStream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
+				runtime: runtime,
+				config:  *streamConfig,
+			},
+		},
+		consumer: consumer,
+	}
+	stream.setConsumer(outStubBinaryKVStream)
+	runtime.registerStream(outStubBinaryKVStream)
+	return outStubBinaryKVStream
+}
