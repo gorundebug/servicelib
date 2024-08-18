@@ -71,26 +71,27 @@ func splitLink[T any](index int, splitStream *SplitStream[T]) *SplitLink[T] {
 }
 
 type SplitStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 	links []*SplitLink[T]
 }
 
-func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
-	splitStream := MakeInputSplitStream[T](name, stream.GetRuntime())
-	stream.setConsumer(splitStream)
-	return splitStream
+type InputSplitStream[T any] struct {
+	*SplitStream[T]
 }
 
-func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *SplitStream[T] {
+func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
+}
+
+func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
+	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
-
 	splitStream := &SplitStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
@@ -98,7 +99,29 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *S
 		links: make([]*SplitLink[T], 0),
 	}
 	runtime.registerStream(splitStream)
+	stream.setConsumer(splitStream)
 	return splitStream
+}
+
+func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputSplitStream[T] {
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+	}
+	inputSplitStream := &InputSplitStream[T]{
+		SplitStream: &SplitStream[T]{
+			ConsumedStream: &ConsumedStream[T]{
+				Stream: &Stream[T]{
+					runtime: runtime,
+					config:  *streamConfig,
+				},
+			},
+			links: make([]*SplitLink[T], 0),
+		},
+	}
+	runtime.registerStream(inputSplitStream)
+	return inputSplitStream
 }
 
 func (s *SplitStream[T]) AddStream() TypedConsumedStream[T] {

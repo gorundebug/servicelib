@@ -12,7 +12,7 @@ import (
 )
 
 type AppSinkStream[T any] struct {
-	Stream[T]
+	*Stream[T]
 	consumer Consumer[T]
 }
 
@@ -24,7 +24,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	appSink := &AppSinkStream[T]{
-		Stream: Stream[T]{
+		Stream: &Stream[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},

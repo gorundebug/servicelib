@@ -12,7 +12,7 @@ import (
 )
 
 type InStubStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 }
 
 func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStubStream[T] {
@@ -22,8 +22,8 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	inStubStream := &InStubStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
@@ -33,8 +33,14 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 	return inStubStream
 }
 
+func (s *InStubStream[T]) Consume(value T) {
+}
+
+func (s *InStubStream[T]) ConsumeBinary(data []byte) {
+}
+
 type OutStubStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 }
 
 func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream[T] {
@@ -45,8 +51,8 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T]) *OutStubStream
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	outStubStream := &OutStubStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

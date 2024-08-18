@@ -59,6 +59,11 @@ type TypedSplitStream[T any] interface {
 	AddStream() TypedConsumedStream[T]
 }
 
+type TypedBinarySplitStream[T any] interface {
+	TypedBinaryConsumedStream[T]
+	AddStream() TypedConsumedStream[T]
+}
+
 type TypedInputStream[T any] interface {
 	TypedStream[T]
 	Consumer[T]
@@ -73,6 +78,15 @@ type TypedSinkStream[T any] interface {
 
 type Consumer[T any] interface {
 	Consume(T)
+}
+
+type BinaryConsumer[T any] interface {
+	ConsumeBinary([]byte)
+}
+
+type TypedBinaryConsumedStream[T any] interface {
+	TypedConsumedStream[T]
+	BinaryConsumer[T]
 }
 
 type TypedStreamConsumer[T any] interface {
@@ -117,7 +131,7 @@ func (s *Stream[T]) GetTransformationName() string {
 }
 
 type ConsumedStream[T any] struct {
-	Stream[T]
+	*Stream[T]
 	caller   Caller[T]
 	consumer TypedStreamConsumer[T]
 }

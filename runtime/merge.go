@@ -12,7 +12,7 @@ import (
 )
 
 type MergeStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 }
 
 type MergeLink[T any] struct {
@@ -68,8 +68,8 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	mergeStream := &MergeStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

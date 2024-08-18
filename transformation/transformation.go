@@ -85,16 +85,16 @@ func SplitStub[T any](name string, streamExecutionRuntime runtime.StreamExecutio
 	return runtime.MakeInputSplitStream[T](name, streamExecutionRuntime)
 }
 
-func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedConsumedStream[T] {
+func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[T] {
 	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
 }
 
-func SplitStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedSplitStream[runtime.KeyValue[K, V]] {
+func SplitStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinarySplitStream[runtime.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
 	return runtime.MakeInputSplitStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
-func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedConsumedStream[runtime.KeyValue[K, V]] {
+func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[runtime.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
 	return runtime.MakeInStubStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
 }

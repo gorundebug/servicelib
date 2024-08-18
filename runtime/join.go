@@ -71,7 +71,7 @@ func (s *JoinLink[K, T1, T2, R]) GetTypeName() string {
 }
 
 type JoinStream[K comparable, T1, T2, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 	f               JoinFunctionContext[K, T1, T2, R]
 	serdeKey        StreamSerde[K]
 	serdeLeftValue  StreamSerde[T1]
@@ -102,8 +102,8 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 
 	joinStream := &JoinStream[K, T1, T2, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

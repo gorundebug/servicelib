@@ -29,7 +29,7 @@ func (f *FilterFunctionContext[T]) call(value T) bool {
 }
 
 type FilterStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 	f FilterFunctionContext[T]
 }
 
@@ -41,8 +41,8 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	filterStream := &FilterStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

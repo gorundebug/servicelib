@@ -28,7 +28,7 @@ func (f *ParallelsFunctionContext[T, R]) call(value T, out Collect[R]) {
 }
 
 type ParallelsStream[T, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 	f ParallelsFunctionContext[T, R]
 }
 
@@ -41,8 +41,8 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 	}
 
 	parallelsStream := &ParallelsStream[T, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

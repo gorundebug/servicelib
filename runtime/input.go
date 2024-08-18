@@ -12,7 +12,7 @@ import (
 )
 
 type InputStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 }
 
 func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionRuntime) *InputStream[T] {
@@ -22,8 +22,8 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	inputStream := &InputStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: streamExecutionRuntime,
 				config:  *streamConfig,
 			},

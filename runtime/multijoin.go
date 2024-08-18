@@ -97,7 +97,7 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTypeName() string {
 }
 
 type MultiJoinStream[K comparable, T, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 	f        MultiJoinFunctionContext[K, T, R]
 	links    []multiJoinLinkStream
 	serdeKey StreamSerde[K]
@@ -114,8 +114,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

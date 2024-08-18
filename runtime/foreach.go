@@ -28,7 +28,7 @@ func (f *ForEachFunctionContext[T]) call(value T) {
 }
 
 type ForEachStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 	f ForEachFunctionContext[T]
 }
 
@@ -40,8 +40,8 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	forEachStream := &ForEachStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

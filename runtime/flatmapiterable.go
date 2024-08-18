@@ -13,7 +13,7 @@ import (
 )
 
 type FlatMapIterableStream[T, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 }
 
 func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
@@ -33,8 +33,8 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

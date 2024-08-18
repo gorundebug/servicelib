@@ -29,7 +29,7 @@ func (f *MapFunctionContext[T, R]) call(value T) R {
 }
 
 type MapStream[T, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 	f MapFunctionContext[T, R]
 }
 
@@ -41,8 +41,8 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	mapStream := &MapStream[T, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

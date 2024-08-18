@@ -29,7 +29,7 @@ func (f *KeyByFunctionContext[T, K, V]) call(value T) KeyValue[K, V] {
 }
 
 type KeyByStream[T any, K comparable, V any] struct {
-	ConsumedStream[KeyValue[K, V]]
+	*ConsumedStream[KeyValue[K, V]]
 	f KeyByFunctionContext[T, K, V]
 }
 
@@ -41,8 +41,8 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	keyByStream := &KeyByStream[T, K, V]{
-		ConsumedStream: ConsumedStream[KeyValue[K, V]]{
-			Stream: Stream[KeyValue[K, V]]{
+		ConsumedStream: &ConsumedStream[KeyValue[K, V]]{
+			Stream: &Stream[KeyValue[K, V]]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

@@ -12,7 +12,7 @@ import (
 )
 
 type LinkStream[T any] struct {
-	ConsumedStream[T]
+	*ConsumedStream[T]
 	consumer TypedStreamConsumer[T]
 }
 
@@ -23,8 +23,8 @@ func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStr
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	linkStream := &LinkStream[T]{
-		ConsumedStream: ConsumedStream[T]{
-			Stream: Stream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

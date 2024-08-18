@@ -28,7 +28,7 @@ func (f FlatMapFunctionContext[T, R]) call(value T, out Collect[R]) {
 }
 
 type FlatMapStream[T, R any] struct {
-	ConsumedStream[R]
+	*ConsumedStream[R]
 	f FlatMapFunctionContext[T, R]
 }
 
@@ -40,8 +40,8 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 	}
 	flatMapStream := &FlatMapStream[T, R]{
-		ConsumedStream: ConsumedStream[R]{
-			Stream: Stream[R]{
+		ConsumedStream: &ConsumedStream[R]{
+			Stream: &Stream[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
