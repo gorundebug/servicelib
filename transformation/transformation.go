@@ -99,14 +99,14 @@ func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.S
 	return runtime.MakeInStubKVStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
-func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.Consumer[T]) runtime.TypedStreamConsumer[T] {
+func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeOutStubStream[T](name, stream, consumer)
 }
 
-func OutStubBinary[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryConsumer) runtime.TypedStreamConsumer[T] {
+func OutStubBinary[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryConsumerFunc) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeOutStubBinaryStream[T](name, stream, consumer)
 }
 
-func OutStubBinaryKV[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryKVConsumer) runtime.TypedStreamConsumer[T] {
+func OutStubBinaryKV[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryKVConsumerFunc) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeOutStubBinaryKVStream[T](name, stream, consumer)
 }

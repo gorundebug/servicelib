@@ -69,7 +69,7 @@ func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 
 type OutStubStream[T any] struct {
 	*ConsumedStream[T]
-	consumer Consumer[T]
+	consumer ConsumerFunc[T]
 }
 
 func (s *OutStubStream[T]) Consume(T) {
@@ -77,7 +77,7 @@ func (s *OutStubStream[T]) Consume(T) {
 
 type OutStubBinaryStream[T any] struct {
 	*ConsumedStream[T]
-	consumer BinaryConsumer
+	consumer BinaryConsumerFunc
 }
 
 func (s *OutStubBinaryStream[T]) Consume(T) {
@@ -85,13 +85,13 @@ func (s *OutStubBinaryStream[T]) Consume(T) {
 
 type OutStubBinaryKVStream[T any] struct {
 	*ConsumedStream[T]
-	consumer BinaryKVConsumer
+	consumer BinaryKVConsumerFunc
 }
 
 func (s *OutStubBinaryKVStream[T]) Consume(T) {
 }
 
-func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consumer[T]) *OutStubStream[T] {
+func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer ConsumerFunc[T]) *OutStubStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -112,7 +112,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 	return outStubStream
 }
 
-func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer BinaryConsumer) *OutStubBinaryStream[T] {
+func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer BinaryConsumerFunc) *OutStubBinaryStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -133,7 +133,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 	return outStubBinaryStream
 }
 
-func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consumer BinaryKVConsumer) *OutStubBinaryKVStream[T] {
+func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consumer BinaryKVConsumerFunc) *OutStubBinaryKVStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)

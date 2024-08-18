@@ -114,8 +114,16 @@ func (f ConsumerFunc[T]) Consume(value T) {
 	f(value)
 }
 
-type ExternalConsumer[T any] interface {
-	Consumer[T]
+type BinaryConsumerFunc func([]byte)
+
+func (f BinaryConsumerFunc) Consume(data []byte) {
+	f(data)
+}
+
+type BinaryKVConsumerFunc func([]byte, []byte)
+
+func (f BinaryKVConsumerFunc) Consume(key []byte, value []byte) {
+	f(key, value)
 }
 
 type Stream[T any] struct {
