@@ -81,7 +81,7 @@ func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplit
 	return runtime.MakeSplitStream[T](name, stream)
 }
 
-func SplitStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedSplitStream[T] {
+func SplitInStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[T] {
 	return runtime.MakeInputSplitStream[T](name, streamExecutionRuntime)
 }
 
@@ -89,14 +89,14 @@ func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRu
 	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
 }
 
-func SplitStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinarySplitStream[runtime.KeyValue[K, V]] {
+func SplitInStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVSplitStream[runtime.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInputSplitStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
+	return runtime.MakeInputKVSplitStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
-func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[runtime.KeyValue[K, V]] {
+func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVConsumedStream[runtime.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInStubStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
+	return runtime.MakeInStubKVStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
 func OutStub[T any](name string, stream runtime.TypedStream[T]) runtime.TypedStreamConsumer[T] {

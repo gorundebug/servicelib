@@ -64,6 +64,11 @@ type TypedBinarySplitStream[T any] interface {
 	AddStream() TypedConsumedStream[T]
 }
 
+type TypedBinaryKVSplitStream[T any] interface {
+	TypedBinaryKVConsumedStream[T]
+	AddStream() TypedConsumedStream[T]
+}
+
 type TypedInputStream[T any] interface {
 	TypedStream[T]
 	Consumer[T]
@@ -84,9 +89,18 @@ type BinaryConsumer[T any] interface {
 	ConsumeBinary([]byte)
 }
 
+type BinaryKVConsumer[T any] interface {
+	ConsumeBinary([]byte, []byte)
+}
+
 type TypedBinaryConsumedStream[T any] interface {
 	TypedConsumedStream[T]
 	BinaryConsumer[T]
+}
+
+type TypedBinaryKVConsumedStream[T any] interface {
+	TypedConsumedStream[T]
+	BinaryKVConsumer[T]
 }
 
 type TypedStreamConsumer[T any] interface {

@@ -15,6 +15,10 @@ type InStubStream[T any] struct {
 	*ConsumedStream[T]
 }
 
+type InStubKVStream[T any] struct {
+	*ConsumedStream[T]
+}
+
 func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStubStream[T] {
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -33,10 +37,34 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 	return inStubStream
 }
 
+func MakeInStubKVStream[T any](name string, runtime StreamExecutionRuntime) *InStubKVStream[T] {
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+	}
+	inStubStream := &InStubKVStream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
+				runtime: runtime,
+				config:  *streamConfig,
+			},
+		},
+	}
+	runtime.registerStream(inStubStream)
+	return inStubStream
+}
+
 func (s *InStubStream[T]) Consume(value T) {
 }
 
 func (s *InStubStream[T]) ConsumeBinary(data []byte) {
+}
+
+func (s *InStubKVStream[T]) Consume(value T) {
+}
+
+func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 }
 
 type OutStubStream[T any] struct {

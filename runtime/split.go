@@ -82,6 +82,13 @@ type InputSplitStream[T any] struct {
 func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 }
 
+type InputKVSplitStream[T any] struct {
+	*SplitStream[T]
+}
+
+func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
+}
+
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
@@ -122,6 +129,27 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 	}
 	runtime.registerStream(inputSplitStream)
 	return inputSplitStream
+}
+
+func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputKVSplitStream[T] {
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+	}
+	inputKVSplitStream := &InputKVSplitStream[T]{
+		SplitStream: &SplitStream[T]{
+			ConsumedStream: &ConsumedStream[T]{
+				Stream: &Stream[T]{
+					runtime: runtime,
+					config:  *streamConfig,
+				},
+			},
+			links: make([]*SplitLink[T], 0),
+		},
+	}
+	runtime.registerStream(inputKVSplitStream)
+	return inputKVSplitStream
 }
 
 func (s *SplitStream[T]) AddStream() TypedConsumedStream[T] {
