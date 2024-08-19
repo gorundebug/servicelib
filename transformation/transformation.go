@@ -15,7 +15,7 @@ func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunc
 	return runtime.MakeMapStream[T, R](name, stream, f)
 }
 
-func AppSink[T any](name string, stream runtime.TypedStream[T], consumer runtime.Consumer[T]) runtime.TypedStreamConsumer[T] {
+func AppSink[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
 	return runtime.MakeAppSinkStream[T](name, stream, consumer)
 }
 

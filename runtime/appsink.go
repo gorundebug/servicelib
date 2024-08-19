@@ -13,10 +13,10 @@ import (
 
 type AppSinkStream[T any] struct {
 	*Stream[T]
-	consumer Consumer[T]
+	consumer ConsumerFunc[T]
 }
 
-func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consumer[T]) *AppSinkStream[T] {
+func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer ConsumerFunc[T]) *AppSinkStream[T] {
 	runtime := stream.GetRuntime()
 	config := runtime.GetConfig()
 	streamConfig := config.GetStreamConfigByName(name)
@@ -36,7 +36,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 }
 
 func (s *AppSinkStream[T]) Consume(value T) {
-	s.consumer.Consume(value)
+	_ = s.consumer(value)
 }
 
 func (s *AppSinkStream[T]) getConsumers() []StreamBase {
