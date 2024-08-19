@@ -171,7 +171,7 @@ func (cfg *ServiceAppConfig) initRuntimeConfig() {
 		cfg.runtimeConfig.EndpointsByName[cfg.Endpoints[idx].Name] = &cfg.Endpoints[idx]
 		cfg.runtimeConfig.EndpointsById[cfg.Endpoints[idx].Id] = &cfg.Endpoints[idx]
 	}
-	for idx := range cfg.Endpoints {
+	for idx := range cfg.DataConnectors {
 		cfg.runtimeConfig.DataConnectorsById[cfg.DataConnectors[idx].Id] = &cfg.DataConnectors[idx]
 		cfg.runtimeConfig.DataConnectorsByName[cfg.DataConnectors[idx].Name] = &cfg.DataConnectors[idx]
 	}
