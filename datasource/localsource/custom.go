@@ -27,14 +27,14 @@ type CustomInputDataSource interface {
 
 type CustomInputEndpoint interface {
 	runtime.InputEndpoint
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 	NextMessage()
 }
 
 type CustomEndpointConsumer interface {
 	runtime.InputEndpointConsumer
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 }
 
@@ -49,10 +49,10 @@ type CustomEndpoint struct {
 	delay time.Duration
 }
 
-func (ep *CustomEndpoint) Start() error {
+func (ep *CustomEndpoint) Start(ctx context.Context) error {
 	endpointConsumers := ep.GetEndpointConsumers()
 	for _, endpointConsumer := range endpointConsumers {
-		if err := endpointConsumer.(CustomEndpointConsumer).Start(); err != nil {
+		if err := endpointConsumer.(CustomEndpointConsumer).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -82,7 +82,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
 	ep.DataSourceEndpointConsumer.Consume(value)
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start() error {
+func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	endpoint := ep.Endpoint()
 	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
 	dataSource.WaitGroup().Add(1)
@@ -99,10 +99,10 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 	ep.dataProducer.Stop(ctx)
 }
 
-func (ds *CustomDataSource) Start() error {
+func (ds *CustomDataSource) Start(ctx context.Context) error {
 	endpoints := ds.InputDataSource.GetEndpoints()
 	for _, endpoint := range endpoints {
-		if err := endpoint.(CustomInputEndpoint).Start(); err != nil {
+		if err := endpoint.(CustomInputEndpoint).Start(ctx); err != nil {
 			return err
 		}
 	}

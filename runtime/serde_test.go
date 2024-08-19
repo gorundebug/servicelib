@@ -8,6 +8,7 @@
 package runtime
 
 import (
+	"context"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -26,7 +27,7 @@ func (s *MockService) GetSerde(valueType reflect.Type) (Serializer, error) {
 	return nil, nil
 }
 
-func (s *MockService) ServiceInit(config Config) {
+func (s *MockService) ServiceInit(ctx context.Context, config Config) {
 }
 
 func mockService() *MockService {
@@ -42,7 +43,7 @@ func mockService() *MockService {
 		},
 	}
 	service := MockService{}
-	service.streamsInit("MockService", &service, &config)
+	service.streamsInit(context.Background(), "MockService", &service, &config)
 	return &service
 }
 

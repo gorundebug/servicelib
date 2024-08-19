@@ -152,7 +152,7 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 	return netHTTPEndpoint
 }
 
-func (ds *NetHTTPDataSource) Start() error {
+func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
 	go func() {
 		err := ds.server.ListenAndServe()
 		if !errors.Is(err, http.ErrServerClosed) {

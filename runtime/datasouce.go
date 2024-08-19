@@ -13,7 +13,7 @@ import (
 )
 
 type DataSource interface {
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 	GetDataConnector() *DataConnector
 	GetName() string

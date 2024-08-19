@@ -72,7 +72,11 @@ type OutStubStream[T any] struct {
 	consumer ConsumerFunc[T]
 }
 
-func (s *OutStubStream[T]) Consume(T) {
+func (s *OutStubStream[T]) Consume(value T) {
+	err := s.consumer(value)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 type OutStubBinaryStream[T any] struct {

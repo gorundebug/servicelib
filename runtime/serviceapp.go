@@ -68,7 +68,7 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
 	return app.serdes[tp]
 }
 
-func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, config Config) {
+func (app *ServiceApp) streamsInit(ctx context.Context, name string, runtime StreamExecutionRuntime, config Config) {
 	app.config = config.GetServiceConfig()
 	app.config.initRuntimeConfig()
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
@@ -88,7 +88,7 @@ func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, 
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	runtime.ServiceInit(config)
+	runtime.ServiceInit(ctx, config)
 }
 
 //go:embed status.html
@@ -256,7 +256,7 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (Serializer, error) {
 	return nil, fmt.Errorf("getSerde error. Unsupported type: %s", valueType.Name())
 }
 
-func (app *ServiceApp) Start() error {
+func (app *ServiceApp) Start(ctx context.Context) error {
 	go func() {
 		log.Infof("Monitoring for service '%s' listening at %v", app.serviceConfig.Name, app.httpServer.Addr)
 		err := app.httpServer.ListenAndServe()
@@ -267,7 +267,12 @@ func (app *ServiceApp) Start() error {
 	}()
 
 	for _, v := range app.dataSources {
-		if err := v.Start(); err != nil {
+		if err := v.Start(ctx); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	for _, v := range app.dataSinks {
+		if err := v.Start(ctx); err != nil {
 			log.Fatalln(err)
 		}
 	}

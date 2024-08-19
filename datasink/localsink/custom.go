@@ -22,13 +22,13 @@ type DataConsumer[T any] interface {
 
 type CustomEndpointConsumer interface {
 	runtime.OutputEndpointConsumer
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 }
 
 type CustomSinkEndpoint interface {
 	runtime.SinkEndpoint
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 }
 
@@ -40,10 +40,10 @@ type CustomEndpoint struct {
 	*runtime.DataSinkEndpoint
 }
 
-func (ds *CustomDataSink) Start() error {
+func (ds *CustomDataSink) Start(ctx context.Context) error {
 	endpoints := ds.OutputDataSink.GetEndpoints()
 	for _, endpoint := range endpoints {
-		if err := endpoint.(CustomSinkEndpoint).Start(); err != nil {
+		if err := endpoint.(CustomSinkEndpoint).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -72,10 +72,10 @@ func (ds *CustomDataSink) Stop(ctx context.Context) {
 	}
 }
 
-func (ep *CustomEndpoint) Start() error {
+func (ep *CustomEndpoint) Start(ctx context.Context) error {
 	endpointConsumers := ep.GetEndpointConsumers()
 	for _, endpointConsumer := range endpointConsumers {
-		if err := endpointConsumer.(CustomEndpointConsumer).Start(); err != nil {
+		if err := endpointConsumer.(CustomEndpointConsumer).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -98,7 +98,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
 	ep.dataConsumer.Consume(value)
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start() error {
+func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	if err := ep.dataConsumer.Start(); err != nil {
 		return err
 	}
