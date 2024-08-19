@@ -10,6 +10,7 @@ package runtime
 import (
 	"context"
 	"reflect"
+	"time"
 )
 
 type StreamExecutionEnvironment interface {
@@ -24,7 +25,7 @@ type StreamExecutionEnvironment interface {
 	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
-	GetConsumeTimeout(from int, to int) int
+	GetConsumeTimeout(from int, to int) time.Duration
 }
 
 type Caller[T any] interface {

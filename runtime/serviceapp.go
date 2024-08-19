@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 var englishUpperCaser = cases.Upper(language.English)
@@ -317,16 +318,16 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	}
 }
 
-func (app *ServiceApp) GetConsumeTimeout(from int, to int) int {
+func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 	link := app.config.GetLink(from, to)
 	if link != nil {
 		propTimeout := link.GetProperty("timeout")
 		if propTimeout != nil {
 			timeout := propTimeout.(int)
 			if timeout > 0 {
-				return timeout
+				return time.Duration(timeout) * time.Millisecond
 			}
 		}
 	}
-	return app.serviceConfig.DefaultGrpcTimeout
+	return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond
 }
