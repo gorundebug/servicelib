@@ -142,6 +142,9 @@ components:
           type: integer
           minimum: 80
           maximum: 65535
+        defaultGrpcTimeout:
+          type: integer
+          minimum: 0
         grpcIp:
           type: string
         color:
@@ -158,6 +161,7 @@ components:
         - monitoringPort
         - grpcIp
         - grpcPort
+        - defaultGrpcTimeout
         - shutdownTimeout
 
     JoinStorageType:
@@ -295,6 +299,9 @@ components:
           type: integer
         methodName:
           type: string
+        timeout:
+          type: integer
+          minimum: 0
         communicationProtocol:
           $ref: '#/components/schemas/CommunicationProtocol'
       required:

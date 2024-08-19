@@ -178,6 +178,7 @@ type Link struct {
 	MethodName             *string                `json:"methodName,omitempty"`
 	PoolName               *string                `json:"poolName,omitempty"`
 	Priority               *int                   `json:"priority,omitempty"`
+	Timeout                *int                   `json:"timeout,omitempty"`
 	To                     int                    `json:"to"`
 }
 
@@ -195,6 +196,7 @@ type ProjectSettings struct {
 type Service struct {
 	Color                *string             `json:"color,omitempty"`
 	DefaultCallSemantics CallSemantics       `json:"defaultCallSemantics"`
+	DefaultGrpcTimeout   int                 `json:"defaultGrpcTimeout"`
 	GrpcIp               string              `json:"grpcIp"`
 	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`

@@ -108,22 +108,22 @@ type TypedStreamConsumer[T any] interface {
 	Consumer[T]
 }
 
-type ConsumerFunc[T any] func(T)
+type ConsumerFunc[T any] func(T) error
 
-func (f ConsumerFunc[T]) Consume(value T) {
-	f(value)
+func (f ConsumerFunc[T]) Consume(value T) error {
+	return f(value)
 }
 
-type BinaryConsumerFunc func([]byte)
+type BinaryConsumerFunc func([]byte) error
 
-func (f BinaryConsumerFunc) Consume(data []byte) {
-	f(data)
+func (f BinaryConsumerFunc) Consume(data []byte) error {
+	return f(data)
 }
 
-type BinaryKVConsumerFunc func([]byte, []byte)
+type BinaryKVConsumerFunc func([]byte, []byte) error
 
-func (f BinaryKVConsumerFunc) Consume(key []byte, value []byte) {
-	f(key, value)
+func (f BinaryKVConsumerFunc) Consume(key []byte, value []byte) error {
+	return f(key, value)
 }
 
 type Stream[T any] struct {
