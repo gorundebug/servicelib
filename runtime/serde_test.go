@@ -27,8 +27,10 @@ func (s *MockService) GetSerde(valueType reflect.Type) (Serializer, error) {
 	return nil, nil
 }
 
-func (s *MockService) ServiceInit(ctx context.Context, config Config) {
+func (s *MockService) StreamsInit(ctx context.Context, config Config) {
 }
+
+func (s *MockService) SetConfig(config Config) {}
 
 func mockService() *MockService {
 	config := MockServiceConfig{
@@ -43,7 +45,7 @@ func mockService() *MockService {
 		},
 	}
 	service := MockService{}
-	service.streamsInit(context.Background(), "MockService", &service, &config)
+	service.serviceInit("MockService", &service, &config)
 	return &service
 }
 

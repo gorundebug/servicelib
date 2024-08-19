@@ -42,7 +42,7 @@ type ServiceApp struct {
 func (app *ServiceApp) reloadConfig(config Config) {
 	app.config = config.GetServiceConfig()
 	app.config.initRuntimeConfig()
-	app.ReloadConfig(config)
+	app.runtime.SetConfig(config)
 }
 
 func (app *ServiceApp) GetConfig() *ServiceAppConfig {
@@ -68,7 +68,7 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
 	return app.serdes[tp]
 }
 
-func (app *ServiceApp) streamsInit(ctx context.Context, name string, runtime StreamExecutionRuntime, config Config) {
+func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, config Config) {
 	app.config = config.GetServiceConfig()
 	app.config.initRuntimeConfig()
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
@@ -88,7 +88,7 @@ func (app *ServiceApp) streamsInit(ctx context.Context, name string, runtime Str
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	runtime.ServiceInit(ctx, config)
+	runtime.SetConfig(config)
 }
 
 //go:embed status.html

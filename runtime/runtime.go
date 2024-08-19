@@ -9,7 +9,6 @@ package runtime
 
 import (
 	"bytes"
-	"context"
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
@@ -101,7 +100,7 @@ func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader
 	return bytes.NewReader(output)
 }
 
-func MakeService[Runtime StreamExecutionRuntime, Cfg Config](ctx context.Context, name string, configSettings *ConfigSettings) Runtime {
+func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, configSettings *ConfigSettings) Runtime {
 	configValuesPathArg := flag.String("values", "./values.yaml", "service config values path")
 	configPathArg := flag.String("config", "./config.yaml", "service config path")
 	flag.Parse()
@@ -133,7 +132,7 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg Config](ctx context.Context
 		}
 	})
 	viper.WatchConfig()
-	runtime.streamsInit(ctx, name, runtime, cfg)
+	runtime.serviceInit(name, runtime, cfg)
 	return runtime
 }
 

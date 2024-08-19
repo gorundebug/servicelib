@@ -17,8 +17,8 @@ type StreamExecutionEnvironment interface {
 	GetSerde(valueType reflect.Type) (Serializer, error)
 	GetConfig() *ServiceAppConfig
 	GetServiceConfig() *ServiceConfig
-	ServiceInit(ctx context.Context, config Config)
-	ReloadConfig(config Config)
+	StreamsInit(ctx context.Context, config Config)
+	SetConfig(config Config)
 	Start(context.Context) error
 	Stop(context.Context)
 	AddDataSource(dataSource DataSource)
@@ -36,7 +36,7 @@ type Caller[T any] interface {
 type StreamExecutionRuntime interface {
 	StreamExecutionEnvironment
 	reloadConfig(Config)
-	streamsInit(ctx context.Context, name string, runtime StreamExecutionRuntime, config Config)
+	serviceInit(name string, runtime StreamExecutionRuntime, config Config)
 	getSerde(valueType reflect.Type) (Serializer, error)
 	registerStream(stream StreamBase)
 	registerSerde(tp reflect.Type, serializer StreamSerializer)
