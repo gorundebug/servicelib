@@ -63,15 +63,16 @@ func (s *StreamConfig) GetTransformationName() string {
 }
 
 type ServiceConfig struct {
-	Id              int                    `yaml:"id"`
-	Name            string                 `yaml:"name"`
-	MonitoringPort  int                    `yaml:"monitoringPort"`
-	MonitoringIp    string                 `yaml:"monitoringIp"`
-	GrpcPort        int                    `yaml:"grpcPort"`
-	GrpcIp          string                 `yaml:"grpcIp"`
-	ShutdownTimeout int                    `yaml:"shutdownTimeout"`
-	Color           string                 `yaml:"color"`
-	Properties      map[string]interface{} `mapstructure:",remain"`
+	Id                 int                    `yaml:"id"`
+	Name               string                 `yaml:"name"`
+	MonitoringPort     int                    `yaml:"monitoringPort"`
+	MonitoringIp       string                 `yaml:"monitoringIp"`
+	GrpcPort           int                    `yaml:"grpcPort"`
+	GrpcIp             string                 `yaml:"grpcIp"`
+	ShutdownTimeout    int                    `yaml:"shutdownTimeout"`
+	Color              string                 `yaml:"color"`
+	DefaultGrpcTimeout int                    `yaml:"defaultGrpcTimeout"`
+	Properties         map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ServiceConfig) GetProperty(name string) interface{} {

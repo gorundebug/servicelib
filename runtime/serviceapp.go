@@ -316,3 +316,17 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
 	}
 }
+
+func (app *ServiceApp) GetConsumeTimeout(from int, to int) int {
+	link := app.config.GetLink(from, to)
+	if link != nil {
+		propTimeout := link.GetProperty("timeout")
+		if propTimeout != nil {
+			timeout := propTimeout.(int)
+			if timeout > 0 {
+				return timeout
+			}
+		}
+	}
+	return app.serviceConfig.DefaultGrpcTimeout
+}

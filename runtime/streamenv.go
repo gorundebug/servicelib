@@ -24,6 +24,7 @@ type StreamExecutionEnvironment interface {
 	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
+	GetConsumeTimeout(from int, to int) int
 }
 
 type Caller[T any] interface {
