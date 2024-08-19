@@ -16,7 +16,7 @@ import (
 )
 
 type DataProducer[T any] interface {
-	Start(consumer runtime.Consumer[T]) error
+	Start(ctx context.Context, consumer runtime.Consumer[T]) error
 	Stop(context.Context)
 }
 
@@ -88,7 +88,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	dataSource.WaitGroup().Add(1)
 	go func() {
 		defer dataSource.WaitGroup().Done()
-		if err := ep.dataProducer.Start(ep); err != nil {
+		if err := ep.dataProducer.Start(ctx, ep); err != nil {
 			log.Fatalln(err)
 		}
 	}()

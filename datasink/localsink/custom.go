@@ -16,7 +16,7 @@ import (
 
 type DataConsumer[T any] interface {
 	runtime.Consumer[T]
-	Start() error
+	Start(context.Context) error
 	Stop(context.Context)
 }
 
@@ -99,7 +99,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
-	if err := ep.dataConsumer.Start(); err != nil {
+	if err := ep.dataConsumer.Start(ctx); err != nil {
 		return err
 	}
 	return nil
