@@ -90,7 +90,7 @@ func (s *LinkConfig) GetProperty(name string) interface{} {
 }
 
 type DataConnector struct {
-	ID         int                    `yaml:"id"`
+	Id         int                    `yaml:"id"`
 	Name       string                 `yaml:"name"`
 	Type       api.DataConnectorType  `yaml:"type"`
 	Properties map[string]interface{} `mapstructure:",remain"`
@@ -101,7 +101,7 @@ func (s *DataConnector) GetProperty(name string) interface{} {
 }
 
 type EndpointConfig struct {
-	ID              int                    `yaml:"id"`
+	Id              int                    `yaml:"id"`
 	Name            string                 `yaml:"name"`
 	IdDataConnector int                    `yaml:"idDataConnector"`
 	Properties      map[string]interface{} `mapstructure:",remain"`
@@ -120,12 +120,63 @@ func GetConfigProperty[T any](config ConfigProperties, name string) T {
 	return t
 }
 
+type LinkId struct {
+	From int
+	To   int
+}
+
+type RuntimeConfig struct {
+	StreamsByName        map[string]*StreamConfig
+	ServicesByName       map[string]*ServiceConfig
+	LinksById            map[LinkId]*LinkConfig
+	DataConnectorsByName map[string]*DataConnector
+	EndpointsByName      map[string]*EndpointConfig
+	StreamsById          map[int]*StreamConfig
+	ServicesById         map[int]*ServiceConfig
+	DataConnectorsById   map[int]*DataConnector
+	EndpointsById        map[int]*EndpointConfig
+}
+
 type ServiceAppConfig struct {
 	Streams        []StreamConfig   `yaml:"streams"`
 	Services       []ServiceConfig  `yaml:"services"`
 	Links          []LinkConfig     `yaml:"links"`
 	DataConnectors []DataConnector  `yaml:"dataConnectors"`
 	Endpoints      []EndpointConfig `yaml:"endpoints"`
+	runtimeConfig  *RuntimeConfig   `yaml:"-"`
+}
+
+func (cfg *ServiceAppConfig) initRuntimeConfig() {
+	cfg.runtimeConfig = &RuntimeConfig{
+		StreamsByName:        make(map[string]*StreamConfig),
+		StreamsById:          make(map[int]*StreamConfig),
+		ServicesByName:       make(map[string]*ServiceConfig),
+		ServicesById:         make(map[int]*ServiceConfig),
+		EndpointsById:        make(map[int]*EndpointConfig),
+		DataConnectorsById:   make(map[int]*DataConnector),
+		EndpointsByName:      make(map[string]*EndpointConfig),
+		DataConnectorsByName: make(map[string]*DataConnector),
+		LinksById:            make(map[LinkId]*LinkConfig),
+	}
+	for idx := range cfg.Streams {
+		cfg.runtimeConfig.StreamsByName[cfg.Streams[idx].Name] = &cfg.Streams[idx]
+		cfg.runtimeConfig.StreamsById[cfg.Streams[idx].Id] = &cfg.Streams[idx]
+	}
+	for idx := range cfg.Services {
+		cfg.runtimeConfig.ServicesByName[cfg.Services[idx].Name] = &cfg.Services[idx]
+		cfg.runtimeConfig.ServicesById[cfg.Services[idx].Id] = &cfg.Services[idx]
+	}
+	for idx := range cfg.Endpoints {
+		cfg.runtimeConfig.EndpointsByName[cfg.Endpoints[idx].Name] = &cfg.Endpoints[idx]
+		cfg.runtimeConfig.EndpointsById[cfg.Endpoints[idx].Id] = &cfg.Endpoints[idx]
+	}
+	for idx := range cfg.Endpoints {
+		cfg.runtimeConfig.DataConnectorsById[cfg.DataConnectors[idx].Id] = &cfg.DataConnectors[idx]
+		cfg.runtimeConfig.DataConnectorsByName[cfg.DataConnectors[idx].Name] = &cfg.DataConnectors[idx]
+	}
+	for idx := range cfg.Links {
+		cfg.runtimeConfig.LinksById[LinkId{From: cfg.Links[idx].From, To: cfg.Links[idx].To}] = &cfg.Links[idx]
+	}
 }
 
 func (cfg *ServiceAppConfig) GetServiceConfig() *ServiceAppConfig {
@@ -137,71 +188,29 @@ func (cfg *ServiceAppConfig) GetConfig() Config {
 }
 
 func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
-	for idx := range cfg.Streams {
-		stream := &cfg.Streams[idx]
-		if stream.Name == name {
-			return stream
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.StreamsByName[name]
 }
 
 func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnector {
-	for idx := range cfg.DataConnectors {
-		dataConnector := &cfg.DataConnectors[idx]
-		if dataConnector.ID == id {
-			return dataConnector
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.DataConnectorsById[id]
 }
 
 func (cfg *ServiceAppConfig) GetEndpointConfigById(id int) *EndpointConfig {
-	for idx := range cfg.Endpoints {
-		endpoint := &cfg.Endpoints[idx]
-		if endpoint.ID == id {
-			return endpoint
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.EndpointsById[id]
 }
 
 func (cfg *ServiceAppConfig) GetServiceConfigByName(name string) *ServiceConfig {
-	for idx := range cfg.Services {
-		service := &cfg.Services[idx]
-		if service.Name == name {
-			return service
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.ServicesByName[name]
 }
 
 func (cfg *ServiceAppConfig) GetServiceConfigById(id int) *ServiceConfig {
-	for idx := range cfg.Services {
-		service := &cfg.Services[idx]
-		if service.Id == id {
-			return service
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.ServicesById[id]
 }
 
 func (cfg *ServiceAppConfig) GetStreamConfigById(id int) *StreamConfig {
-	for idx := range cfg.Streams {
-		stream := &cfg.Streams[idx]
-		if stream.Id == id {
-			return stream
-		}
-	}
-	return nil
+	return cfg.runtimeConfig.StreamsById[id]
 }
 
-func (cfg *ServiceAppConfig) GetCallSemantics(from int, to int) api.CallSemantics {
-	for idx := range cfg.Links {
-		link := &cfg.Links[idx]
-		if link.From == from && link.To == to {
-			return link.CallSemantics
-		}
-	}
-	return api.FunctionCall
+func (cfg *ServiceAppConfig) GetLink(from int, to int) *LinkConfig {
+	return cfg.runtimeConfig.LinksById[LinkId{From: from, To: to}]
 }

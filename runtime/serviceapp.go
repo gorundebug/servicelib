@@ -38,9 +38,10 @@ type ServiceApp struct {
 	httpServerDone chan struct{}
 }
 
-func (app *ServiceApp) configReload(config Config) {
+func (app *ServiceApp) reloadConfig(config Config) {
 	app.config = config.GetServiceConfig()
-	app.ConfigReload(config)
+	app.config.initRuntimeConfig()
+	app.ReloadConfig(config)
 }
 
 func (app *ServiceApp) GetConfig() *ServiceAppConfig {
@@ -51,7 +52,7 @@ func (app *ServiceApp) GetServiceConfig() *ServiceConfig {
 	return app.serviceConfig
 }
 
-func (app *ServiceApp) ConfigReload(config Config) {
+func (app *ServiceApp) ReloadConfig(config Config) {
 }
 
 func (app *ServiceApp) registerStream(stream StreamBase) {
@@ -67,11 +68,12 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
 }
 
 func (app *ServiceApp) streamsInit(name string, runtime StreamExecutionRuntime, config Config) {
+	app.config = config.GetServiceConfig()
+	app.config.initRuntimeConfig()
 	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
-	app.config = config.GetServiceConfig()
 	app.runtime = runtime
 	app.streams = make(map[int]StreamBase)
 	app.dataSources = make(map[int]DataSource)

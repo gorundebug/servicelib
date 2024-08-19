@@ -57,7 +57,7 @@ func (ds *OutputDataSink) GetName() string {
 }
 
 func (ds *OutputDataSink) GetId() int {
-	return ds.dataConnector.ID
+	return ds.dataConnector.Id
 }
 
 func (ds *OutputDataSink) GetRuntime() StreamExecutionRuntime {
@@ -101,7 +101,7 @@ func (ep *DataSinkEndpoint) GetName() string {
 }
 
 func (ep *DataSinkEndpoint) GetId() int {
-	return ep.config.ID
+	return ep.config.Id
 }
 
 func (ep *DataSinkEndpoint) GetRuntime() StreamExecutionRuntime {

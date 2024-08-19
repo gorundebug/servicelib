@@ -128,7 +128,7 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, config
 		if err := viper.Unmarshal(cfg); err != nil {
 			log.Println("error config update:\n", err)
 		} else {
-			runtime.configReload(cfg)
+			runtime.reloadConfig(cfg)
 		}
 	})
 	viper.WatchConfig()
@@ -279,7 +279,11 @@ func makeCaller[T any](runtime StreamExecutionRuntime,
 	source TypedStream[T],
 	serde StreamSerde[T]) Caller[T] {
 	consumer := source.GetConsumer()
-	communicationType := runtime.GetConfig().GetCallSemantics(source.GetId(), consumer.GetId())
+	communicationType := api.FunctionCall
+	link := runtime.GetConfig().GetLink(source.GetId(), consumer.GetId())
+	if link != nil {
+		communicationType = link.CallSemantics
+	}
 	switch communicationType {
 
 	case api.FunctionCall:

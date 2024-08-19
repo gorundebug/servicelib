@@ -57,7 +57,7 @@ func (ds *InputDataSource) GetName() string {
 }
 
 func (ds *InputDataSource) GetId() int {
-	return ds.dataConnector.ID
+	return ds.dataConnector.Id
 }
 
 func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
@@ -105,7 +105,7 @@ func (ep *DataSourceEndpoint) GetName() string {
 }
 
 func (ep *DataSourceEndpoint) GetId() int {
-	return ep.config.ID
+	return ep.config.Id
 }
 
 func (ep *DataSourceEndpoint) GetRuntime() StreamExecutionRuntime {
