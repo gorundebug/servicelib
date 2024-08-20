@@ -92,7 +92,20 @@ type OutStubBinaryKVStream[T any] struct {
 	consumer BinaryKVConsumerFunc
 }
 
-func (s *OutStubBinaryKVStream[T]) Consume(T) {
+func (s *OutStubBinaryKVStream[T]) Consume(value T) {
+	ser := s.caller.GetSerde().(StreamKeyValueSerde[T])
+	key, err := ser.SerializeKey(value)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	val, err := ser.SerializeValue(value)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = s.consumer(key, val)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer ConsumerFunc[T]) *OutStubStream[T] {
