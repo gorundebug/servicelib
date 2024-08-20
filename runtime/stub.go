@@ -74,8 +74,8 @@ type OutStubStream[T any] struct {
 }
 
 func (s *OutStubStream[T]) Consume(value T) {
-    ser := s.caller.GetSerde().(StreamKeyValueSerde[T])
-    fmt.Printf("%v", ser)
+    ser, ok := s.caller.GetSerde().(StreamKeyValueSerde[T])
+    fmt.Printf("%v %d", ser, ok)
     err := s.consumer(value)
     if err != nil {
         log.Errorln(err)
