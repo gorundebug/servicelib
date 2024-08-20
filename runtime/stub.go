@@ -60,16 +60,22 @@ func MakeInStubKVStream[T any](name string, runtime StreamExecutionRuntime) *InS
     return inStubStream
 }
 
-func (s *InStubStream[T]) Consume(value T) {
-}
-
 func (s *InStubStream[T]) ConsumeBinary(data []byte) {
-}
-
-func (s *InStubKVStream[T]) Consume(value T) {
+    t, err := s.serde.Deserialize(data)
+    if err != nil {
+        log.Errorln(err)
+    } else {
+        s.caller.Consume(t)
+    }
 }
 
 func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
+    t, err := s.serdeKV.DeserializeKeyValue(key, value)
+    if err != nil {
+        log.Errorln(err)
+    } else {
+        s.caller.Consume(t)
+    }
 }
 
 type OutStubStream[T any] struct {
@@ -91,7 +97,15 @@ type OutStubBinaryStream[T any] struct {
     consumer BinaryConsumerFunc
 }
 
-func (s *OutStubBinaryStream[T]) Consume(T) {
+func (s *OutStubBinaryStream[T]) Consume(value T) {
+    data, err := s.serde.Serialize(value)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    err = s.consumer(data)
+    if err != nil {
+        log.Errorln(err)
+    }
 }
 
 type OutStubBinaryKVStream[T any] struct {

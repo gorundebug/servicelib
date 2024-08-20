@@ -51,7 +51,7 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
         index:           len(multiJoinStream.links),
         source:          stream,
         serdeIn:         stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]),
-        serdeValue:      stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]).GetValueSerializer().(Serde[T2]),
+        serdeValue:      stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]).ValueSerializer().(Serde[T2]),
     }
     multiJoinStream.links = append(multiJoinStream.links, link)
 

@@ -84,15 +84,27 @@ type InputSplitStream[T any] struct {
     *SplitStream[T]
 }
 
-func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
-}
-
 type InputKVSplitStream[T any] struct {
     *SplitStream[T]
     serdeKV StreamKeyValueSerde[T]
 }
 
+func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
+    t, err := s.serde.Deserialize(data)
+    if err != nil {
+        log.Errorln(err)
+    } else {
+        s.caller.Consume(t)
+    }
+}
+
 func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
+    t, err := s.serdeKV.DeserializeKeyValue(key, value)
+    if err != nil {
+        log.Errorln(err)
+    } else {
+        s.caller.Consume(t)
+    }
 }
 
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
