@@ -89,6 +89,7 @@ func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 
 type InputKVSplitStream[T any] struct {
     *SplitStream[T]
+    serdeKV StreamKeyValueSerde[T]
 }
 
 func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
@@ -145,6 +146,7 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
     if streamConfig == nil {
         log.Fatalf("Config for the stream with name=%s does not exists", name)
     }
+    serdeKV := makeSerde[T](runtime).(StreamKeyValueSerde[T])
     inputKVSplitStream := &InputKVSplitStream[T]{
         SplitStream: &SplitStream[T]{
             ConsumedStream: &ConsumedStream[T]{
@@ -152,10 +154,11 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
                     runtime: runtime,
                     config:  *streamConfig,
                 },
-                serde: makeSerde[T](runtime),
+                serde: serdeKV,
             },
             links: make([]*SplitLink[T], 0),
         },
+        serdeKV: serdeKV,
     }
     runtime.registerStream(inputKVSplitStream)
     return inputKVSplitStream

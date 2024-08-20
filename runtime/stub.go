@@ -17,6 +17,7 @@ type InStubStream[T any] struct {
 
 type InStubKVStream[T any] struct {
     *ConsumedStream[T]
+    serdeKV StreamKeyValueSerde[T]
 }
 
 func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStubStream[T] {
@@ -44,14 +45,16 @@ func MakeInStubKVStream[T any](name string, runtime StreamExecutionRuntime) *InS
     if streamConfig == nil {
         log.Fatalf("Config for the stream with name=%s does not exists", name)
     }
+    serdeKV := makeSerde[T](runtime).(StreamKeyValueSerde[T])
     inStubStream := &InStubKVStream[T]{
         ConsumedStream: &ConsumedStream[T]{
             Stream: &Stream[T]{
                 runtime: runtime,
                 config:  *streamConfig,
             },
-            serde: makeSerde[T](runtime),
+            serde: serdeKV,
         },
+        serdeKV: serdeKV,
     }
     runtime.registerStream(inStubStream)
     return inStubStream
