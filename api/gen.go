@@ -127,9 +127,9 @@ type CommunicationProtocol int
 
 // DataConnector defines model for DataConnector.
 type DataConnector struct {
+	Host                *string                     `json:"host,omitempty"`
 	Id                  int                         `json:"id"`
 	Implementation      DataConnectorImplementation `json:"implementation"`
-	Ip                  *string                     `json:"ip,omitempty"`
 	Name                string                      `json:"name"`
 	Port                *int                        `json:"port,omitempty"`
 	ProgrammingLanguage ProgrammingLanguage         `json:"programmingLanguage"`
@@ -197,10 +197,10 @@ type Service struct {
 	Color                *string             `json:"color,omitempty"`
 	DefaultCallSemantics CallSemantics       `json:"defaultCallSemantics"`
 	DefaultGrpcTimeout   int                 `json:"defaultGrpcTimeout"`
-	GrpcIp               string              `json:"grpcIp"`
+	GrpcHost             string              `json:"grpcHost"`
 	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`
-	MonitoringIp         string              `json:"monitoringIp"`
+	MonitoringHost       string              `json:"monitoringHost"`
 	MonitoringPort       int                 `json:"monitoringPort"`
 	Name                 string              `json:"name"`
 	ProgrammingLanguage  ProgrammingLanguage `json:"programmingLanguage"`

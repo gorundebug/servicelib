@@ -38,7 +38,7 @@ func mockService() *MockService {
 			Services: []ServiceConfig{
 				{
 					Name:           "MockService",
-					MonitoringIp:   "127.0.0.1",
+					MonitoringHost: "127.0.0.1",
 					MonitoringPort: 9000,
 				},
 			},

@@ -136,7 +136,7 @@ components:
           type: integer
           minimum: 80
           maximum: 65535
-        monitoringIp:
+        monitoringHost:
           type: string
         grpcPort:
           type: integer
@@ -145,7 +145,7 @@ components:
         defaultGrpcTimeout:
           type: integer
           minimum: 0
-        grpcIp:
+        grpcHost:
           type: string
         color:
           type: string
@@ -157,9 +157,9 @@ components:
         - name
         - programmingLanguage
         - defaultCallSemantics
-        - monitoringIp
+        - monitoringHost
         - monitoringPort
-        - grpcIp
+        - grpcHost
         - grpcPort
         - defaultGrpcTimeout
         - shutdownTimeout
@@ -332,7 +332,7 @@ components:
           example: 1
         implementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
-        ip:
+        host:
           type: string
         port:
           type: integer

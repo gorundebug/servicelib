@@ -84,7 +84,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.httpServerDone = make(chan struct{})
 	app.httpServer = http.Server{
 		Handler: app.mux,
-		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringIp, app.serviceConfig.MonitoringPort),
+		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))

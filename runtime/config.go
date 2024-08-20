@@ -66,9 +66,9 @@ type ServiceConfig struct {
 	Id                 int                    `yaml:"id"`
 	Name               string                 `yaml:"name"`
 	MonitoringPort     int                    `yaml:"monitoringPort"`
-	MonitoringIp       string                 `yaml:"monitoringIp"`
+	MonitoringHost     string                 `yaml:"monitoringHost"`
 	GrpcPort           int                    `yaml:"grpcPort"`
-	GrpcIp             string                 `yaml:"grpcIp"`
+	GrpcHost           string                 `yaml:"grpcHost"`
 	ShutdownTimeout    int                    `yaml:"shutdownTimeout"`
 	Color              string                 `yaml:"color"`
 	DefaultGrpcTimeout int                    `yaml:"defaultGrpcTimeout"`

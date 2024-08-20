@@ -125,7 +125,7 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) ru
 		InputDataSource: runtime.MakeInputDataSource(cfg, execRuntime),
 		mux:             mux,
 		server: http.Server{
-			Addr:    fmt.Sprintf("%s:%d", cfg.Properties["ip"].(string), cfg.Properties["port"].(int)),
+			Addr:    fmt.Sprintf("%s:%d", cfg.Properties["host"].(string), cfg.Properties["port"].(int)),
 			Handler: mux,
 		},
 		done: make(chan struct{}),
