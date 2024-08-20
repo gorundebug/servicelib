@@ -8,7 +8,6 @@
 package runtime
 
 import (
-    "fmt"
     log "github.com/sirupsen/logrus"
 )
 
@@ -77,8 +76,6 @@ type OutStubStream[T any] struct {
 }
 
 func (s *OutStubStream[T]) Consume(value T) {
-    ser, ok := s.serde.(StreamKeyValueSerde[T])
-    fmt.Printf("%v %v", ser, ok)
     err := s.consumer(value)
     if err != nil {
         log.Errorln(err)
@@ -97,6 +94,7 @@ func (s *OutStubBinaryStream[T]) Consume(T) {
 type OutStubBinaryKVStream[T any] struct {
     *ConsumedStream[T]
     source   TypedStream[T]
+    serdeKV  StreamKeyValueSerde[T]
     consumer BinaryKVConsumerFunc
 }
 
@@ -169,14 +167,16 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
     if streamConfig == nil {
         log.Fatalf("Config for the stream with name=%s does not exists", name)
     }
+    serdeKV := makeSerde[T](runtime).(StreamKeyValueSerde[T])
     outStubBinaryKVStream := &OutStubBinaryKVStream[T]{
         ConsumedStream: &ConsumedStream[T]{
             Stream: &Stream[T]{
                 runtime: runtime,
                 config:  *streamConfig,
             },
-            serde: makeSerde[T](runtime),
+            serde: serdeKV,
         },
+        serdeKV:  serdeKV,
         source:   stream,
         consumer: consumer,
     }
