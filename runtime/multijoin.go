@@ -36,7 +36,7 @@ type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
     multiJoinStream *MultiJoinStream[K, T1, R]
     index           int
     serdeIn         StreamKeyValueSerde[KeyValue[K, T2]]
-    serdeValue      StreamSerde[T2]
+    serdeValue      Serde[T2]
     source          TypedStream[KeyValue[K, T2]]
 }
 
@@ -51,7 +51,7 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
         index:           len(multiJoinStream.links),
         source:          stream,
         serdeIn:         stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]),
-        serdeValue:      stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]).GetValueSerializer().(StreamSerde[T2]),
+        serdeValue:      stream.GetSerde().(StreamKeyValueSerde[KeyValue[K, T2]]).GetValueSerializer().(Serde[T2]),
     }
     multiJoinStream.links = append(multiJoinStream.links, link)
 
