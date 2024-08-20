@@ -13,11 +13,10 @@ import (
 )
 
 type DataSink interface {
+	DataConnector
 	Start(context.Context) error
 	Stop(context.Context)
-	GetDataConnector() *DataConnector
-	GetName() string
-	GetId() int
+	GetDataConnector() *DataConnectorConfig
 	GetRuntime() StreamExecutionRuntime
 	AddEndpoint(SinkEndpoint)
 	GetEndpoint(id int) SinkEndpoint
@@ -25,9 +24,8 @@ type DataSink interface {
 }
 
 type SinkEndpoint interface {
+	Endpoint
 	GetConfig() *EndpointConfig
-	GetName() string
-	GetId() int
 	GetRuntime() StreamExecutionRuntime
 	GetDataSink() DataSink
 	AddEndpointConsumer(consumer OutputEndpointConsumer)
@@ -35,12 +33,12 @@ type SinkEndpoint interface {
 }
 
 type OutputDataSink struct {
-	dataConnector *DataConnector
+	dataConnector *DataConnectorConfig
 	runtime       StreamExecutionRuntime
 	endpoints     map[int]SinkEndpoint
 }
 
-func MakeOutputDataSink(dataConnector *DataConnector, runtime StreamExecutionRuntime) *OutputDataSink {
+func MakeOutputDataSink(dataConnector *DataConnectorConfig, runtime StreamExecutionRuntime) *OutputDataSink {
 	return &OutputDataSink{
 		dataConnector: dataConnector,
 		runtime:       runtime,
@@ -48,7 +46,7 @@ func MakeOutputDataSink(dataConnector *DataConnector, runtime StreamExecutionRun
 	}
 }
 
-func (ds *OutputDataSink) GetDataConnector() *DataConnector {
+func (ds *OutputDataSink) GetDataConnector() *DataConnectorConfig {
 	return ds.dataConnector
 }
 
@@ -112,6 +110,10 @@ func (ep *DataSinkEndpoint) GetDataSink() DataSink {
 	return ep.dataSink
 }
 
+func (ep *DataSinkEndpoint) GetDataConnector() DataConnector {
+	return ep.dataSink
+}
+
 func (ep *DataSinkEndpoint) AddEndpointConsumer(endpointConsumer OutputEndpointConsumer) {
 	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
@@ -126,14 +128,20 @@ type OutputEndpointConsumer interface {
 
 type DataSinkEndpointConsumer[T any] struct {
 	endpoint SinkEndpoint
+	stream   TypedSinkStream[T]
 }
 
 func (ec *DataSinkEndpointConsumer[T]) Endpoint() SinkEndpoint {
 	return ec.endpoint
 }
 
-func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint) *DataSinkEndpointConsumer[T] {
+func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSinkStream[T]) *DataSinkEndpointConsumer[T] {
 	return &DataSinkEndpointConsumer[T]{
 		endpoint: endpoint,
+		stream:   stream,
 	}
+}
+
+func (ec *DataSinkEndpointConsumer[T]) GetEndpointWriter() EndpointWriter {
+	return ec.Endpoint().GetRuntime().GetEndpointReader(ec.Endpoint(), ec.stream, GetSerdeType[T]())
 }

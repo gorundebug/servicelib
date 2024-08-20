@@ -144,7 +144,7 @@ func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsum
 	var consumer runtime.Consumer[T]
 	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
-		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T](endpoint),
+		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T](endpoint, stream),
 		dataConsumer:             dataConsumer,
 	}
 	endpointConsumer = typedEndpointConsumer

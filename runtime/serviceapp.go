@@ -236,6 +236,14 @@ func (app *ServiceApp) GetDataSink(id int) DataSink {
 	return app.dataSinks[id]
 }
 
+func (app *ServiceApp) GetEndpointReader(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointReader {
+	return nil
+}
+
+func (app *ServiceApp) GetEndpointWriter(endpoint Endpoint, stream, StreamBase, valueType reflect.Type) EndpointReader {
+	return nil
+}
+
 func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 	app.dataSinks[dataSink.GetId()] = dataSink
 }

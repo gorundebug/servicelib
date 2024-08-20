@@ -90,14 +90,14 @@ func (s *LinkConfig) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
-type DataConnector struct {
+type DataConnectorConfig struct {
 	Id         int                    `yaml:"id"`
 	Name       string                 `yaml:"name"`
 	Type       api.DataConnectorType  `yaml:"type"`
 	Properties map[string]interface{} `mapstructure:",remain"`
 }
 
-func (s *DataConnector) GetProperty(name string) interface{} {
+func (s *DataConnectorConfig) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
@@ -130,21 +130,21 @@ type RuntimeConfig struct {
 	StreamsByName        map[string]*StreamConfig
 	ServicesByName       map[string]*ServiceConfig
 	LinksById            map[LinkId]*LinkConfig
-	DataConnectorsByName map[string]*DataConnector
+	DataConnectorsByName map[string]*DataConnectorConfig
 	EndpointsByName      map[string]*EndpointConfig
 	StreamsById          map[int]*StreamConfig
 	ServicesById         map[int]*ServiceConfig
-	DataConnectorsById   map[int]*DataConnector
+	DataConnectorsById   map[int]*DataConnectorConfig
 	EndpointsById        map[int]*EndpointConfig
 }
 
 type ServiceAppConfig struct {
-	Streams        []StreamConfig   `yaml:"streams"`
-	Services       []ServiceConfig  `yaml:"services"`
-	Links          []LinkConfig     `yaml:"links"`
-	DataConnectors []DataConnector  `yaml:"dataConnectors"`
-	Endpoints      []EndpointConfig `yaml:"endpoints"`
-	runtimeConfig  *RuntimeConfig   `yaml:"-"`
+	Streams        []StreamConfig        `yaml:"streams"`
+	Services       []ServiceConfig       `yaml:"services"`
+	Links          []LinkConfig          `yaml:"links"`
+	DataConnectors []DataConnectorConfig `yaml:"dataConnectors"`
+	Endpoints      []EndpointConfig      `yaml:"endpoints"`
+	runtimeConfig  *RuntimeConfig        `yaml:"-"`
 }
 
 func (cfg *ServiceAppConfig) initRuntimeConfig() {
@@ -154,9 +154,9 @@ func (cfg *ServiceAppConfig) initRuntimeConfig() {
 		ServicesByName:       make(map[string]*ServiceConfig),
 		ServicesById:         make(map[int]*ServiceConfig),
 		EndpointsById:        make(map[int]*EndpointConfig),
-		DataConnectorsById:   make(map[int]*DataConnector),
+		DataConnectorsById:   make(map[int]*DataConnectorConfig),
 		EndpointsByName:      make(map[string]*EndpointConfig),
-		DataConnectorsByName: make(map[string]*DataConnector),
+		DataConnectorsByName: make(map[string]*DataConnectorConfig),
 		LinksById:            make(map[LinkId]*LinkConfig),
 	}
 	for idx := range cfg.Streams {
@@ -192,7 +192,7 @@ func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
 	return cfg.runtimeConfig.StreamsByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnector {
+func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnectorConfig {
 	return cfg.runtimeConfig.DataConnectorsById[id]
 }
 

@@ -13,11 +13,10 @@ import (
 )
 
 type DataSource interface {
+	DataConnector
 	Start(context.Context) error
 	Stop(context.Context)
-	GetDataConnector() *DataConnector
-	GetName() string
-	GetId() int
+	GetDataConnector() *DataConnectorConfig
 	GetRuntime() StreamExecutionRuntime
 	AddEndpoint(InputEndpoint)
 	GetEndpoint(id int) InputEndpoint
@@ -25,9 +24,8 @@ type DataSource interface {
 }
 
 type InputEndpoint interface {
+	Endpoint
 	GetConfig() *EndpointConfig
-	GetName() string
-	GetId() int
 	GetRuntime() StreamExecutionRuntime
 	GetDataSource() DataSource
 	AddEndpointConsumer(consumer InputEndpointConsumer)
@@ -35,12 +33,12 @@ type InputEndpoint interface {
 }
 
 type InputDataSource struct {
-	dataConnector *DataConnector
+	dataConnector *DataConnectorConfig
 	runtime       StreamExecutionRuntime
 	endpoints     map[int]InputEndpoint
 }
 
-func MakeInputDataSource(dataConnector *DataConnector, runtime StreamExecutionRuntime) *InputDataSource {
+func MakeInputDataSource(dataConnector *DataConnectorConfig, runtime StreamExecutionRuntime) *InputDataSource {
 	return &InputDataSource{
 		dataConnector: dataConnector,
 		runtime:       runtime,
@@ -48,7 +46,7 @@ func MakeInputDataSource(dataConnector *DataConnector, runtime StreamExecutionRu
 	}
 }
 
-func (ds *InputDataSource) GetDataConnector() *DataConnector {
+func (ds *InputDataSource) GetDataConnector() *DataConnectorConfig {
 	return ds.dataConnector
 }
 
@@ -116,6 +114,10 @@ func (ep *DataSourceEndpoint) GetDataSource() DataSource {
 	return ep.dataSource
 }
 
+func (ep *DataSourceEndpoint) GetDataConnector() DataConnector {
+	return ep.dataSource
+}
+
 func (ep *DataSourceEndpoint) AddEndpointConsumer(endpointConsumer InputEndpointConsumer) {
 	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
@@ -142,4 +144,8 @@ func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream T
 		inputStream: inputStream,
 		endpoint:    endpoint,
 	}
+}
+
+func (ec *DataSourceEndpointConsumer[T]) GetEndpointReader() EndpointReader {
+	return ec.Endpoint().GetRuntime().GetEndpointReader(ec.Endpoint(), ec.inputStream, GetSerdeType[T]())
 }

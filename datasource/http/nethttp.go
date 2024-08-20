@@ -181,6 +181,10 @@ func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
 }
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error) {
+	epReader := ec.GetEndpointReader()
+	if epReader != nil {
+		return epReader.(runtime.TypedEndpointReader[T]).Read(bytes.NewReader([]byte(data)))
+	}
 	var t T
 	var err error
 	if ec.isTypePtr {
@@ -192,6 +196,10 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error
 }
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) (T, error) {
+	epReader := ec.GetEndpointReader()
+	if epReader != nil {
+		return epReader.(runtime.TypedEndpointReader[T]).Read(reader)
+	}
 	decoder := json.NewDecoder(reader)
 	var t T
 	var err error
