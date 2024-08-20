@@ -99,12 +99,11 @@ type OutStubBinaryKVStream[T any] struct {
 }
 
 func (s *OutStubBinaryKVStream[T]) Consume(value T) {
-    ser := s.serde.(StreamKeyValueSerde[T])
-    key, err := ser.SerializeKey(value)
+    key, err := s.serdeKV.SerializeKey(value)
     if err != nil {
         log.Fatalln(err)
     }
-    val, err := ser.SerializeValue(value)
+    val, err := s.serdeKV.SerializeValue(value)
     if err != nil {
         log.Fatalln(err)
     }
