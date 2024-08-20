@@ -48,7 +48,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
                 runtime: runtime,
                 config:  *streamConfig,
             },
-            serde: makeSerde[KeyValue[K, V]](runtime),
+            serde: makeKeyValueSerde[K, V](runtime),
         },
         serdeIn: stream.GetSerde(),
         source:  stream,
