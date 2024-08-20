@@ -8,57 +8,62 @@
 package runtime
 
 import (
-	log "github.com/sirupsen/logrus"
+    log "github.com/sirupsen/logrus"
 )
 
 type ParallelsFunction[T, R any] interface {
-	Parallels(T, Collect[R])
+    Parallels(T, Collect[R])
 }
 
 type ParallelsFunctionContext[T, R any] struct {
-	StreamFunction[R]
-	context TypedStream[R]
-	f       ParallelsFunction[T, R]
+    StreamFunction[R]
+    context TypedStream[R]
+    f       ParallelsFunction[T, R]
 }
 
 func (f *ParallelsFunctionContext[T, R]) call(value T, out Collect[R]) {
-	f.BeforeCall()
-	f.f.Parallels(value, out)
-	f.AfterCall()
+    f.BeforeCall()
+    f.f.Parallels(value, out)
+    f.AfterCall()
 }
 
 type ParallelsStream[T, R any] struct {
-	*ConsumedStream[R]
-	f ParallelsFunctionContext[T, R]
+    *ConsumedStream[R]
+    source  TypedStream[T]
+    serdeIn StreamSerde[T]
+    f       ParallelsFunctionContext[T, R]
 }
 
 func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f ParallelsFunction[T, R]) *ParallelsStream[T, R] {
-	runtime := stream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
-	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
-	}
+    runtime := stream.GetRuntime()
+    config := runtime.GetConfig()
+    streamConfig := config.GetStreamConfigByName(name)
+    if streamConfig == nil {
+        log.Fatalf("Config for the stream with name=%s does not exists", name)
+    }
 
-	parallelsStream := &ParallelsStream[T, R]{
-		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
-				runtime: runtime,
-				config:  *streamConfig,
-			},
-		},
-		f: ParallelsFunctionContext[T, R]{
-			f: f,
-		},
-	}
-	parallelsStream.f.context = parallelsStream
-	stream.setConsumer(parallelsStream)
-	runtime.registerStream(parallelsStream)
-	return parallelsStream
+    parallelsStream := &ParallelsStream[T, R]{
+        ConsumedStream: &ConsumedStream[R]{
+            Stream: &Stream[R]{
+                runtime: runtime,
+                config:  *streamConfig,
+            },
+            serde: makeSerde[R](runtime),
+        },
+        serdeIn: stream.GetSerde(),
+        source:  stream,
+        f: ParallelsFunctionContext[T, R]{
+            f: f,
+        },
+    }
+    parallelsStream.f.context = parallelsStream
+    stream.setConsumer(parallelsStream)
+    runtime.registerStream(parallelsStream)
+    return parallelsStream
 }
 
 func (s *ParallelsStream[T, R]) Consume(value T) {
-	if s.caller != nil {
-		s.f.call(value, makeParallelsCollector[R](s.caller))
-	}
+    if s.caller != nil {
+        s.f.call(value, makeParallelsCollector[R](s.caller))
+    }
 }

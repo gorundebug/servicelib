@@ -8,181 +8,187 @@
 package runtime
 
 import (
-	log "github.com/sirupsen/logrus"
-	"reflect"
+    log "github.com/sirupsen/logrus"
+    "reflect"
 )
 
 type StreamBase interface {
-	GetName() string
-	GetTransformationName() string
-	GetTypeName() string
-	GetId() int
-	GetConfig() *StreamConfig
-	GetRuntime() StreamExecutionRuntime
-	getConsumers() []StreamBase
+    GetName() string
+    GetTransformationName() string
+    GetTypeName() string
+    GetId() int
+    GetConfig() *StreamConfig
+    GetRuntime() StreamExecutionRuntime
+    getConsumers() []StreamBase
 }
 
 type TypedStream[T any] interface {
-	StreamBase
-	GetConsumer() TypedStreamConsumer[T]
-	setConsumer(TypedStreamConsumer[T])
+    StreamBase
+    GetConsumer() TypedStreamConsumer[T]
+    setConsumer(TypedStreamConsumer[T])
+    GetSerde() StreamSerde[T]
 }
 
 type TypedConsumedStream[T any] interface {
-	TypedStream[T]
-	Consumer[T]
+    TypedStream[T]
+    Consumer[T]
 }
 
 type TypedTransformConsumedStream[T any, R any] interface {
-	TypedStream[R]
-	Consumer[T]
+    TypedStream[R]
+    Consumer[T]
 }
 
 type TypedJoinConsumedStream[K comparable, T1, T2, R any] interface {
-	TypedTransformConsumedStream[KeyValue[K, T1], R]
-	ConsumeRight(KeyValue[K, T2])
+    TypedTransformConsumedStream[KeyValue[K, T1], R]
+    ConsumeRight(KeyValue[K, T2])
 }
 
 type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
-	TypedTransformConsumedStream[KeyValue[K, T], R]
-	ConsumeRight(int, KeyValue[K, interface{}])
+    TypedTransformConsumedStream[KeyValue[K, T], R]
+    ConsumeRight(int, KeyValue[K, interface{}])
 }
 
 type TypedLinkStream[T any] interface {
-	TypedStream[T]
-	Consumer[T]
-	SetConsumer(TypedConsumedStream[T])
+    TypedStream[T]
+    Consumer[T]
+    SetSource(TypedConsumedStream[T])
 }
 
 type TypedSplitStream[T any] interface {
-	TypedConsumedStream[T]
-	AddStream() TypedConsumedStream[T]
+    TypedConsumedStream[T]
+    AddStream() TypedConsumedStream[T]
 }
 
 type TypedBinarySplitStream[T any] interface {
-	TypedBinaryConsumedStream[T]
-	AddStream() TypedConsumedStream[T]
+    TypedBinaryConsumedStream[T]
+    AddStream() TypedConsumedStream[T]
 }
 
 type TypedBinaryKVSplitStream[T any] interface {
-	TypedBinaryKVConsumedStream[T]
-	AddStream() TypedConsumedStream[T]
+    TypedBinaryKVConsumedStream[T]
+    AddStream() TypedConsumedStream[T]
 }
 
 type TypedInputStream[T any] interface {
-	TypedStream[T]
-	Consumer[T]
-	GetEndpointId() int
+    TypedStream[T]
+    Consumer[T]
+    GetEndpointId() int
 }
 
 type TypedSinkStream[T any] interface {
-	TypedStreamConsumer[T]
-	GetEndpointId() int
-	SetConsumer(Consumer[T])
+    TypedStreamConsumer[T]
+    GetEndpointId() int
+    SetConsumer(Consumer[T])
 }
 
 type Consumer[T any] interface {
-	Consume(T)
+    Consume(T)
 }
 
 type BinaryConsumer interface {
-	ConsumeBinary([]byte)
+    ConsumeBinary([]byte)
 }
 
 type BinaryKVConsumer interface {
-	ConsumeBinary([]byte, []byte)
+    ConsumeBinary([]byte, []byte)
 }
 
 type TypedBinaryConsumedStream[T any] interface {
-	TypedConsumedStream[T]
-	BinaryConsumer
+    TypedConsumedStream[T]
+    BinaryConsumer
 }
 
 type TypedBinaryKVConsumedStream[T any] interface {
-	TypedConsumedStream[T]
-	BinaryKVConsumer
+    TypedConsumedStream[T]
+    BinaryKVConsumer
 }
 
 type TypedStreamConsumer[T any] interface {
-	StreamBase
-	Consumer[T]
+    StreamBase
+    Consumer[T]
 }
 
 type ConsumerFunc[T any] func(T) error
 
 func (f ConsumerFunc[T]) Consume(value T) error {
-	return f(value)
+    return f(value)
 }
 
 type BinaryConsumerFunc func([]byte) error
 
 func (f BinaryConsumerFunc) Consume(data []byte) error {
-	return f(data)
+    return f(data)
 }
 
 type BinaryKVConsumerFunc func([]byte, []byte) error
 
 func (f BinaryKVConsumerFunc) Consume(key []byte, value []byte) error {
-	return f(key, value)
+    return f(key, value)
 }
 
 type Stream[T any] struct {
-	runtime StreamExecutionRuntime
-	config  StreamConfig
+    runtime StreamExecutionRuntime
+    config  StreamConfig
 }
 
 func (s *Stream[T]) GetTypeName() string {
-	var t T
-	return reflect.TypeOf(t).String()
+    var t T
+    return reflect.TypeOf(t).String()
 }
 
 func (s *Stream[T]) GetName() string {
-	return s.config.Name
+    return s.config.Name
 }
 
 func (s *Stream[T]) GetId() int {
-	return s.config.Id
+    return s.config.Id
 }
 
 func (s *Stream[T]) GetConfig() *StreamConfig {
-	return &s.config
+    return &s.config
 }
 
 func (s *Stream[T]) GetRuntime() StreamExecutionRuntime {
-	return s.runtime
+    return s.runtime
 }
 
 func (s *Stream[T]) GetTransformationName() string {
-	return s.GetConfig().GetTransformationName()
+    return s.GetConfig().GetTransformationName()
 }
 
 type ConsumedStream[T any] struct {
-	*Stream[T]
-	caller   Caller[T]
-	consumer TypedStreamConsumer[T]
+    *Stream[T]
+    caller   Caller[T]
+    serde    StreamSerde[T]
+    consumer TypedStreamConsumer[T]
 }
 
 func (s *ConsumedStream[T]) getConsumers() []StreamBase {
-	if s.consumer != nil {
-		return []StreamBase{s.consumer}
-	}
-	return []StreamBase{}
+    if s.consumer != nil {
+        return []StreamBase{s.consumer}
+    }
+    return []StreamBase{}
+}
+
+func (s *ConsumedStream[T]) GetSerde() StreamSerde[T] {
+    return s.serde
 }
 
 func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
-	if s.consumer != nil {
-		log.Fatalf("consumer already assigned to the link stream %d", s.Stream.config.Id)
-	}
-	s.consumer = consumer
-	s.caller = makeCaller[T](s.runtime, s, makeSerde[T](s.runtime))
+    if s.consumer != nil {
+        log.Fatalf("consumer already assigned to the stream %d", s.Stream.config.Id)
+    }
+    s.consumer = consumer
+    s.caller = makeCaller[T](s.runtime, s)
 }
 
 func (s *ConsumedStream[T]) Consume(value T) {
-	if s.caller != nil {
-		s.caller.Consume(value)
-	}
+    if s.caller != nil {
+        s.caller.Consume(value)
+    }
 }
 
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {
-	return s.consumer
+    return s.consumer
 }

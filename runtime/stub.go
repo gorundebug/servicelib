@@ -32,6 +32,7 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
                 runtime: runtime,
                 config:  *streamConfig,
             },
+            serde: makeSerde[T](runtime),
         },
     }
     runtime.registerStream(inStubStream)
@@ -50,6 +51,7 @@ func MakeInStubKVStream[T any](name string, runtime StreamExecutionRuntime) *InS
                 runtime: runtime,
                 config:  *streamConfig,
             },
+            serde: makeSerde[T](runtime),
         },
     }
     runtime.registerStream(inStubStream)
@@ -71,11 +73,12 @@ func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 type OutStubStream[T any] struct {
     *ConsumedStream[T]
     consumer ConsumerFunc[T]
+    source   TypedStream[T]
 }
 
 func (s *OutStubStream[T]) Consume(value T) {
-    ser, ok := s.caller.GetSerde().(StreamKeyValueSerde[T])
-    fmt.Printf("%v %d", ser, ok)
+    ser, ok := s.serde.(StreamKeyValueSerde[T])
+    fmt.Printf("%v %v", ser, ok)
     err := s.consumer(value)
     if err != nil {
         log.Errorln(err)
@@ -84,6 +87,7 @@ func (s *OutStubStream[T]) Consume(value T) {
 
 type OutStubBinaryStream[T any] struct {
     *ConsumedStream[T]
+    source   TypedStream[T]
     consumer BinaryConsumerFunc
 }
 
@@ -92,11 +96,12 @@ func (s *OutStubBinaryStream[T]) Consume(T) {
 
 type OutStubBinaryKVStream[T any] struct {
     *ConsumedStream[T]
+    source   TypedStream[T]
     consumer BinaryKVConsumerFunc
 }
 
 func (s *OutStubBinaryKVStream[T]) Consume(value T) {
-    ser := s.caller.GetSerde().(StreamKeyValueSerde[T])
+    ser := s.serde.(StreamKeyValueSerde[T])
     key, err := ser.SerializeKey(value)
     if err != nil {
         log.Fatalln(err)
@@ -124,7 +129,9 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
                 runtime: runtime,
                 config:  *streamConfig,
             },
+            serde: makeSerde[T](runtime),
         },
+        source:   stream,
         consumer: consumer,
     }
     stream.setConsumer(outStubStream)
@@ -145,7 +152,9 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
                 runtime: runtime,
                 config:  *streamConfig,
             },
+            serde: makeSerde[T](runtime),
         },
+        source:   stream,
         consumer: consumer,
     }
     stream.setConsumer(outStubBinaryStream)
@@ -166,7 +175,9 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
                 runtime: runtime,
                 config:  *streamConfig,
             },
+            serde: makeSerde[T](runtime),
         },
+        source:   stream,
         consumer: consumer,
     }
     stream.setConsumer(outStubBinaryKVStream)

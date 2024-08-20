@@ -8,36 +8,38 @@
 package runtime
 
 import (
-	log "github.com/sirupsen/logrus"
+    log "github.com/sirupsen/logrus"
 )
 
 type LinkStream[T any] struct {
-	*ConsumedStream[T]
-	consumer TypedStreamConsumer[T]
+    *ConsumedStream[T]
+    source TypedConsumedStream[T]
 }
 
 func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStream[T] {
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
-	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
-	}
-	linkStream := &LinkStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
-				runtime: runtime,
-				config:  *streamConfig,
-			},
-		},
-	}
-	runtime.registerStream(linkStream)
-	return linkStream
+    config := runtime.GetConfig()
+    streamConfig := config.GetStreamConfigByName(name)
+    if streamConfig == nil {
+        log.Fatalf("Config for the stream with name=%s does not exists", name)
+    }
+    linkStream := &LinkStream[T]{
+        ConsumedStream: &ConsumedStream[T]{
+            Stream: &Stream[T]{
+                runtime: runtime,
+                config:  *streamConfig,
+            },
+        },
+    }
+    runtime.registerStream(linkStream)
+    return linkStream
 }
 
 func (s *LinkStream[T]) Consume(value T) {
-	s.consumer.Consume(value)
+    s.consumer.Consume(value)
 }
 
-func (s *LinkStream[T]) SetConsumer(consumer TypedConsumedStream[T]) {
-	consumer.setConsumer(s)
+func (s *LinkStream[T]) SetSource(stream TypedConsumedStream[T]) {
+    s.serde = stream.GetSerde()
+    s.source = stream
+    stream.setConsumer(s)
 }
