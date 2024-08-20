@@ -143,5 +143,5 @@ func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSink
 }
 
 func (ec *DataSinkEndpointConsumer[T]) GetEndpointWriter() EndpointWriter {
-	return ec.Endpoint().GetRuntime().GetEndpointReader(ec.Endpoint(), ec.stream, GetSerdeType[T]())
+	return ec.Endpoint().GetRuntime().GetEndpointWriter(ec.Endpoint(), ec.stream, GetSerdeType[T]())
 }

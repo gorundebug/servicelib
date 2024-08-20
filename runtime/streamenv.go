@@ -27,7 +27,7 @@ type StreamExecutionEnvironment interface {
 	GetDataSink(id int) DataSink
 	GetConsumeTimeout(from int, to int) time.Duration
 	GetEndpointReader(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointReader
-	GetEndpointWriter(endpoint Endpoint, stream, StreamBase, valueType reflect.Type) EndpointReader
+	GetEndpointWriter(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointReader
 }
 
 type Caller[T any] interface {
