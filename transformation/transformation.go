@@ -81,7 +81,7 @@ func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplit
 	return runtime.MakeSplitStream[T](name, stream)
 }
 
-func SplitInStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[T] {
+func SplitInStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinarySplitStream[T] {
 	return runtime.MakeInputSplitStream[T](name, streamExecutionRuntime)
 }
 

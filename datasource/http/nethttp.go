@@ -108,11 +108,13 @@ type NetHTTPEndpointTypedConsumer[T any] struct {
 
 type NetHTTPEndpointJsonConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
+	tType reflect.Type
 	param string
 }
 
 type NetHTTPEndpointGorillaSchemaConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
+	tType   reflect.Type
 	decoder *schema.Decoder
 }
 
@@ -200,8 +202,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error
 		return t, json.Unmarshal([]byte(data), &t)
 	}
 
-	tp := runtime.GetSerdeType[T]()
-	t := reflect.New(tp).Interface().(T)
+	t := reflect.New(ec.tType).Interface().(T)
 	return t, json.Unmarshal([]byte(data), t)
 }
 
@@ -218,8 +219,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) 
 		return t, err
 	}
 
-	tp := runtime.GetSerdeType[T]()
-	t := reflect.New(tp).Interface().(T)
+	t := reflect.New(ec.tType).Interface().(T)
 	err := decoder.Decode(t)
 	return t, err
 }
@@ -292,17 +292,23 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData N
 	if form, err = endpointRequestData.GetForm(); err != nil {
 		return fmt.Errorf("unable to parse request: %s", err.Error())
 	}
-	var t T
-	if ec.isTypePtr {
-		err = ec.decoder.Decode(t, form)
-	} else {
+
+	if !ec.isTypePtr {
+		var t T
 		err = ec.decoder.Decode(&t, form)
+		if err != nil {
+			return fmt.Errorf("unable to decode data: %s", err.Error())
+		}
+		ec.Consume(t)
 	}
+
+	t := reflect.New(ec.tType).Interface().(T)
+	err = ec.decoder.Decode(&t, form)
 	if err != nil {
 		return fmt.Errorf("unable to decode data: %s", err.Error())
 	}
 	ec.Consume(t)
-	return err
+	return nil
 }
 
 func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runtime.Consumer[T] {
@@ -321,6 +327,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			param: runtime.GetConfigProperty[string](cfg, "param"),
+			tType: runtime.GetSerdeType[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
@@ -332,6 +339,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 				isTypePtr:                  runtime.IsTypePtr[T](),
 			},
 			decoder: schema.NewDecoder(),
+			tType:   runtime.GetSerdeType[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
