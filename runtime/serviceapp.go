@@ -15,6 +15,8 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/api"
+	"gitlab.com/gorundebug/servicelib/telemetry"
+	"gitlab.com/gorundebug/servicelib/telemetry/metrics"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"net"
@@ -38,6 +40,7 @@ type ServiceApp struct {
 	httpServer     http.Server
 	mux            *http.ServeMux
 	httpServerDone chan struct{}
+	metrics        metrics.Metrics
 }
 
 func (app *ServiceApp) reloadConfig(config Config) {
@@ -55,6 +58,10 @@ func (app *ServiceApp) GetServiceConfig() *ServiceConfig {
 }
 
 func (app *ServiceApp) ReloadConfig(config Config) {
+}
+
+func (app *ServiceApp) GetMetrics() metrics.Metrics {
+	return app.metrics
 }
 
 func (app *ServiceApp) registerStream(stream StreamBase) {
@@ -76,6 +83,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
+	app.metrics = telemetry.CreateMetrics(app.config.Settings.MetricsEngine)
 	app.runtime = runtime
 	app.streams = make(map[int]StreamBase)
 	app.dataSources = make(map[int]DataSource)

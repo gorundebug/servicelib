@@ -10,6 +10,7 @@ package runtime
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"gitlab.com/gorundebug/servicelib/api"
 	"reflect"
 	"testing"
 )
@@ -41,6 +42,9 @@ func mockService() *MockService {
 					MonitoringHost: "127.0.0.1",
 					MonitoringPort: 9000,
 				},
+			},
+			Settings: ProjectSettings{
+				MetricsEngine: api.Prometeus,
 			},
 		},
 	}

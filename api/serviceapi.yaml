@@ -114,6 +114,8 @@ components:
           type: string
         golangVersion:
           type: string
+        metricsEngine:
+            $ref: '#/components/schemas/MetricsEngine'
       required:
         - name
         - modulePath
@@ -225,6 +227,12 @@ components:
         - gRPC
         - Kafka
         - Custom
+
+    MetricsEngine:
+      type: integer
+      enum: [ 1 ]
+      x-enum-varnames:
+        - Prometeus
 
     Stream:
       type: object

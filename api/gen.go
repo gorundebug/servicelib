@@ -86,6 +86,11 @@ const (
 	Right JoinType = 3
 )
 
+// Defines values for MetricsEngine.
+const (
+	Prometeus MetricsEngine = 1
+)
+
 // Defines values for ProgrammingLanguage.
 const (
 	Cpp    ProgrammingLanguage = 2
@@ -182,14 +187,18 @@ type Link struct {
 	To                     int                    `json:"to"`
 }
 
+// MetricsEngine defines model for MetricsEngine.
+type MetricsEngine int
+
 // ProgrammingLanguage defines model for ProgrammingLanguage.
 type ProgrammingLanguage int
 
 // ProjectSettings defines model for ProjectSettings.
 type ProjectSettings struct {
-	GolangVersion string `json:"golangVersion"`
-	ModulePath    string `json:"modulePath"`
-	Name          string `json:"name"`
+	GolangVersion string         `json:"golangVersion"`
+	MetricsEngine *MetricsEngine `json:"metricsEngine,omitempty"`
+	ModulePath    string         `json:"modulePath"`
+	Name          string         `json:"name"`
 }
 
 // Service defines model for Service.

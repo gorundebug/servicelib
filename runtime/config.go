@@ -112,6 +112,19 @@ func (s *EndpointConfig) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
+type ProjectSettings struct {
+	GolangVersion string                 `yaml:"golangVersion"`
+	ModulePath    string                 `yaml:"modulePath"`
+	Name          string                 `yaml:"name"`
+	Environment   string                 `yaml:"environment"`
+	MetricsEngine api.MetricsEngine      `yaml:"metricsEngine"`
+	Properties    map[string]interface{} `mapstructure:",remain"`
+}
+
+func (s *ProjectSettings) GetProperty(name string) interface{} {
+	return s.Properties[name]
+}
+
 func GetConfigProperty[T any](config ConfigProperties, name string) T {
 	value := config.GetProperty(name)
 	if value != nil {
@@ -144,6 +157,7 @@ type ServiceAppConfig struct {
 	Links          []LinkConfig          `yaml:"links"`
 	DataConnectors []DataConnectorConfig `yaml:"dataConnectors"`
 	Endpoints      []EndpointConfig      `yaml:"endpoints"`
+	Settings       ProjectSettings       `yaml:"settings"`
 	runtimeConfig  *RuntimeConfig        `yaml:"-"`
 }
 
