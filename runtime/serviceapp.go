@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/telemetry"
@@ -103,6 +104,9 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
+	if app.config.Settings.MetricsEngine == api.Prometeus {
+		app.mux.Handle("/metrics", promhttp.Handler())
+	}
 	runtime.SetConfig(config)
 }
 
