@@ -36,6 +36,11 @@ type Caller[T any] interface {
 	Consume(value T)
 }
 
+type ConsumeStatistics interface {
+	Count() int64
+	LinkId() LinkId
+}
+
 type StreamExecutionRuntime interface {
 	StreamExecutionEnvironment
 	reloadConfig(Config)
@@ -44,6 +49,7 @@ type StreamExecutionRuntime interface {
 	registerStream(stream StreamBase)
 	registerSerde(tp reflect.Type, serializer StreamSerializer)
 	getRegisteredSerde(tp reflect.Type) StreamSerializer
+	registerConsumeStatistics(statistics ConsumeStatistics)
 }
 
 type DataConnector interface {

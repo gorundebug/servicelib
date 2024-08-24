@@ -30,17 +30,18 @@ import (
 var englishUpperCaser = cases.Upper(language.English)
 
 type ServiceApp struct {
-	config         *ServiceAppConfig
-	serviceConfig  *ServiceConfig
-	runtime        StreamExecutionRuntime
-	streams        map[int]StreamBase
-	dataSources    map[int]DataSource
-	dataSinks      map[int]DataSink
-	serdes         map[reflect.Type]StreamSerializer
-	httpServer     http.Server
-	mux            *http.ServeMux
-	httpServerDone chan struct{}
-	metrics        metrics.Metrics
+	config            *ServiceAppConfig
+	serviceConfig     *ServiceConfig
+	runtime           StreamExecutionRuntime
+	streams           map[int]StreamBase
+	dataSources       map[int]DataSource
+	dataSinks         map[int]DataSink
+	serdes            map[reflect.Type]StreamSerializer
+	httpServer        http.Server
+	mux               *http.ServeMux
+	httpServerDone    chan struct{}
+	metrics           metrics.Metrics
+	consumeStatistics map[LinkId]ConsumeStatistics
 }
 
 func (app *ServiceApp) reloadConfig(config Config) {
@@ -76,6 +77,10 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
 	return app.serdes[tp]
 }
 
+func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
+	app.consumeStatistics[statistics.LinkId()] = statistics
+}
+
 func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, config Config) {
 	app.config = config.GetServiceConfig()
 	app.config.initRuntimeConfig()
@@ -86,6 +91,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.metrics = telemetry.CreateMetrics(app.config.Settings.MetricsEngine)
 	app.runtime = runtime
 	app.streams = make(map[int]StreamBase)
+	app.consumeStatistics = make(map[LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
 	app.serdes = make(map[reflect.Type]StreamSerializer)
@@ -175,6 +181,10 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 	for _, consumer := range stream.getConsumers() {
 		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
 		label, _ = strings.CutPrefix(label, "types.")
+		if stat, ok := app.consumeStatistics[LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {
+			label += fmt.Sprintf("\ncalls: %d", stat.Count())
+		}
+
 		config := consumer.GetConfig()
 
 		if config.Type == api.TransformationTypeJoin ||

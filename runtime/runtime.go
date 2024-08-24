@@ -283,53 +283,71 @@ func makeCaller[T any](runtime StreamExecutionRuntime, source TypedStream[T]) Ca
 	if link != nil {
 		communicationType = link.CallSemantics
 	}
+	var streamCaller Caller[T]
+	var consumeStat ConsumeStatistics
 	switch communicationType {
-
 	case api.FunctionCall:
-		return &directCaller[T]{
+		c := &directCaller[T]{
 			caller: caller[T]{
 				runtime:  runtime,
 				source:   source,
 				consumer: consumer,
 			},
 		}
+		consumeStat = c
+		streamCaller = c
 
 	case api.TaskPool:
-		return &taskPoolCaller[T]{
+		c := &taskPoolCaller[T]{
 			caller: caller[T]{
 				runtime:  runtime,
 				source:   source,
 				consumer: consumer,
 			},
 		}
+		consumeStat = c
+		streamCaller = c
 
 	case api.PriorityTaskPool:
-		return &priorityTaskPoolCaller[T]{
+		c := &priorityTaskPoolCaller[T]{
 			caller: caller[T]{
 				runtime:  runtime,
 				source:   source,
 				consumer: consumer,
 			},
 		}
+		consumeStat = c
+		streamCaller = c
+
+	default:
+		log.Fatalf("undefined CommunicationType [%d] ", communicationType)
 	}
 
-	log.Fatalf("undefined CommunicationType [%d] ", communicationType)
-	return nil
+	runtime.registerConsumeStatistics(consumeStat)
+	return streamCaller
 }
 
-type callerStatistics struct {
-	callsCount atomic.Int64
+type consumeStatistics struct {
+	count atomic.Int64
 }
 
-func (s *callerStatistics) Inc() {
-	s.callsCount.Add(1)
+func (s *consumeStatistics) Count() int64 {
+	return s.count.Load()
+}
+
+func (s *consumeStatistics) Inc() {
+	s.count.Add(1)
 }
 
 type caller[T any] struct {
-	callerStatistics
+	consumeStatistics
 	runtime  StreamExecutionRuntime
 	source   TypedStream[T]
 	consumer TypedStreamConsumer[T]
+}
+
+func (c *caller[T]) LinkId() LinkId {
+	return LinkId{c.source.GetId(), c.consumer.GetId()}
 }
 
 type directCaller[T any] struct {
@@ -337,6 +355,7 @@ type directCaller[T any] struct {
 }
 
 func (c *directCaller[T]) Consume(value T) {
+	c.Inc()
 	c.consumer.Consume(value)
 }
 
@@ -345,6 +364,7 @@ type taskPoolCaller[T any] struct {
 }
 
 func (c *taskPoolCaller[T]) Consume(value T) {
+	c.Inc()
 }
 
 type priorityTaskPoolCaller[T any] struct {
@@ -352,4 +372,5 @@ type priorityTaskPoolCaller[T any] struct {
 }
 
 func (c *priorityTaskPoolCaller[T]) Consume(value T) {
+	c.Inc()
 }
