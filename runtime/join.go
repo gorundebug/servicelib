@@ -105,8 +105,8 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	f JoinFunction[K, T1, T2, R]) *JoinStream[K, T1, T2, R] {
 
 	runtime := stream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil

@@ -111,10 +111,11 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
 	runtime := stream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		return nil
 	}
 	splitStream := &SplitStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
@@ -133,10 +134,11 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 }
 
 func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputSplitStream[T] {
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		return nil
 	}
 	inputSplitStream := &InputSplitStream[T]{
 		SplitStream: &SplitStream[T]{
@@ -155,8 +157,8 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 }
 
 func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputKVSplitStream[T] {
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil

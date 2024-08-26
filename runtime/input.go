@@ -16,8 +16,8 @@ type InputStream[T any] struct {
 }
 
 func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionRuntime) *InputStream[T] {
-	config := streamExecutionRuntime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := streamExecutionRuntime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil

@@ -39,8 +39,8 @@ type KeyByStream[T any, K comparable, V any] struct {
 
 func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream[T], f KeyByFunction[T, K, V]) *KeyByStream[T, K, V] {
 	runtime := stream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil

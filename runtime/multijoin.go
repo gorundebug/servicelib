@@ -117,8 +117,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	f MultiJoinFunction[K, T, R]) *MultiJoinStream[K, T, R] {
 
 	runtime := leftStream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil

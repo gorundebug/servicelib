@@ -30,8 +30,8 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 		log.Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
 	}
 	runtime := stream.GetRuntime()
-	config := runtime.GetConfig()
-	streamConfig := config.GetStreamConfigByName(name)
+	cfg := runtime.GetConfig()
+	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
