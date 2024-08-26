@@ -7,6 +7,8 @@
 
 package store
 
+type JoinValueFunc func(values [][]interface{}) bool
+
 type JoinStorage[K comparable] interface {
-	JoinValue(key K, index int, value interface{}) [][]interface{}
+	JoinValue(key K, index int, value interface{}, f JoinValueFunc)
 }

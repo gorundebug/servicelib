@@ -25,16 +25,17 @@ type ConfigProperties interface {
 }
 
 type StreamConfig struct {
-	Id         int                    `yaml:"id"`
-	Name       string                 `yaml:"name"`
-	Type       api.TransformationType `yaml:"type"`
-	IdService  int                    `yaml:"idService"`
-	IdSource   int                    `yaml:"idSource"`
-	IdSources  []int                  `yaml:"idSources"`
-	XPos       int                    `yaml:"xPos"`
-	YPos       int                    `yaml:"yPos"`
-	TTL        *int64                 `yaml:"ttl"`
-	Properties map[string]interface{} `mapstructure:",remain"`
+	Id          int                    `yaml:"id"`
+	Name        string                 `yaml:"name"`
+	Type        api.TransformationType `yaml:"type"`
+	IdService   int                    `yaml:"idService"`
+	IdSource    int                    `yaml:"idSource"`
+	IdSources   []int                  `yaml:"idSources"`
+	XPos        int                    `yaml:"xPos"`
+	YPos        int                    `yaml:"yPos"`
+	TTL         *int64                 `yaml:"ttl"`
+	JoinStorage *api.JoinStorageType   `yaml:"joinStorage"`
+	Properties  map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *StreamConfig) GetProperty(name string) interface{} {

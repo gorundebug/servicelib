@@ -9,9 +9,11 @@ package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
+	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"time"
 )
 
@@ -25,10 +27,11 @@ type JoinFunctionContext[K comparable, T1, T2, R any] struct {
 	f       JoinFunction[K, T1, T2, R]
 }
 
-func (f *JoinFunctionContext[K, T1, T2, R]) call(key K, leftValue []T1, rightValue []T2, out Collect[R]) {
+func (f *JoinFunctionContext[K, T1, T2, R]) call(key K, leftValue []T1, rightValue []T2, out Collect[R]) bool {
 	f.BeforeCall()
-	f.f.Join(key, leftValue, rightValue, out)
+	result := f.f.Join(key, leftValue, rightValue, out)
 	f.AfterCall()
+	return result
 }
 
 type JoinLink[K comparable, T1, T2, R any] struct {
@@ -80,14 +83,28 @@ func (s *JoinLink[K, T1, T2, R]) GetTypeName() string {
 
 type JoinStream[K comparable, T1, T2, R any] struct {
 	*ConsumedStream[R]
-	f       JoinFunctionContext[K, T1, T2, R]
-	serdeIn serde.StreamSerde[datastruct.KeyValue[K, T1]]
-	source  TypedStream[datastruct.KeyValue[K, T1]]
-	ttl     time.Duration
+	f           JoinFunctionContext[K, T1, T2, R]
+	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T1]]
+	source      TypedStream[datastruct.KeyValue[K, T1]]
+	joinStorage store.JoinStorage[K]
 }
 
 func (s *JoinStream[K, T1, T2, R]) ConsumeRight(value datastruct.KeyValue[K, T2]) {
-	s.f.call(value.Key, []T1{}, []T2{}, s)
+	s.joinStorage.JoinValue(value.Key, 1, value.Value, func(values [][]interface{}) bool {
+		var leftValues []T1
+		var rightValues []T2
+		if len(values) > 0 {
+			for _, v := range values[0] {
+				leftValues = append(leftValues, v.(T1))
+			}
+		}
+		if len(values) > 1 {
+			for _, v := range values[1] {
+				rightValues = append(rightValues, v.(T2))
+			}
+		}
+		return s.f.call(value.Key, leftValues, rightValues, s)
+	})
 }
 
 func (s *JoinStream[K, T1, T2, R]) Consume(value datastruct.KeyValue[K, T1]) {
@@ -111,7 +128,6 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
-
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			Stream: &Stream[R]{
@@ -126,9 +142,22 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		serdeIn: stream.GetSerde(),
 		source:  stream,
 	}
-	if streamConfig.TTL != nil {
-		joinStream.ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	if streamConfig.JoinStorage == nil {
+		log.Fatalf("Join storage type is undefined for the stream '%s", name)
+		return nil
 	}
+	ttl := time.Duration(0)
+	if streamConfig.TTL != nil {
+		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	}
+	switch *streamConfig.JoinStorage {
+	case api.HashMap:
+		joinStream.joinStorage = store.MakeHashMapJoinStorage[K](ttl)
+	default:
+		log.Fatalf("Join storage type %d is not supported for the stream '%s", *streamConfig.JoinStorage, name)
+		return nil
+	}
+
 	joinStream.f.context = joinStream
 	stream.setConsumer(joinStream)
 	runtime.registerStream(joinStream)

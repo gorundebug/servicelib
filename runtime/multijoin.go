@@ -25,10 +25,11 @@ type MultiJoinFunctionContext[K comparable, T, R any] struct {
 	f       MultiJoinFunction[K, T, R]
 }
 
-func (f *MultiJoinFunctionContext[K, T, R]) call(key K, values [][]interface{}, out Collect[R]) {
+func (f *MultiJoinFunctionContext[K, T, R]) call(key K, values [][]interface{}, out Collect[R]) bool {
 	f.BeforeCall()
-	f.f.MultiJoin(key, values, out)
+	result := f.f.MultiJoin(key, values, out)
 	f.AfterCall()
+	return result
 }
 
 type multiJoinLinkStream interface {
