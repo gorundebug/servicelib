@@ -9,6 +9,7 @@ package transformation
 
 import (
 	"gitlab.com/gorundebug/servicelib/runtime"
+	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 )
 
 func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
@@ -39,13 +40,14 @@ func Input[T any](name string, streamExecutionRuntime runtime.StreamExecutionRun
 	return runtime.MakeInputStream[T](name, streamExecutionRuntime)
 }
 
-func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[runtime.KeyValue[K, T1]],
-	streamRight runtime.TypedStream[runtime.KeyValue[K, T2]],
+func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[datastruct.KeyValue[K, T1]],
+	streamRight runtime.TypedStream[datastruct.KeyValue[K, T2]],
 	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedJoinConsumedStream[K, T1, T2, R] {
 	return runtime.MakeJoinStream(name, stream, streamRight, f)
 }
 
-func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T], f runtime.KeyByFunction[T, K, V]) runtime.TypedTransformConsumedStream[T, runtime.KeyValue[K, V]] {
+func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T],
+	f runtime.KeyByFunction[T, K, V]) runtime.TypedTransformConsumedStream[T, datastruct.KeyValue[K, V]] {
 	return runtime.MakeKeyByStream[T, K, V](name, stream, f)
 }
 
@@ -58,14 +60,14 @@ func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedC
 }
 
 func MultiJoin[K comparable, T, R any](
-	name string, leftStream runtime.TypedStream[runtime.KeyValue[K, T]],
+	name string, leftStream runtime.TypedStream[datastruct.KeyValue[K, T]],
 	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedMultiJoinConsumedStream[K, T, R] {
 	return runtime.MakeMultiJoinStream[K, T, R](name, leftStream, f)
 }
 
 func MultiJoinLink[K comparable, T1, T2, R any](
 	multiJoin runtime.TypedStream[R],
-	stream runtime.TypedStream[runtime.KeyValue[K, T2]]) {
+	stream runtime.TypedStream[datastruct.KeyValue[K, T2]]) {
 	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoin, stream)
 }
 
@@ -89,14 +91,14 @@ func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRu
 	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
 }
 
-func SplitInStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVSplitStream[runtime.KeyValue[K, V]] {
+func SplitInStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVSplitStream[datastruct.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInputKVSplitStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
+	return runtime.MakeInputKVSplitStream[datastruct.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
-func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVConsumedStream[runtime.KeyValue[K, V]] {
+func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVConsumedStream[datastruct.KeyValue[K, V]] {
 	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInStubKVStream[runtime.KeyValue[K, V]](name, streamExecutionRuntime)
+	return runtime.MakeInStubKVStream[datastruct.KeyValue[K, V]](name, streamExecutionRuntime)
 }
 
 func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
