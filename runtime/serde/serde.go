@@ -86,7 +86,7 @@ func MakeArraySerde(arrayType reflect.Type, valueSerde Serializer) Serializer {
 	}
 }
 
-func MakeTypedMapSerde[T any](keySerde Serializer, valueSerde Serializer) *MapSerde[T] {
+func MakeTypedMapSerde[T any](keySerde Serializer, valueSerde Serializer) Serde[T] {
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Map {
