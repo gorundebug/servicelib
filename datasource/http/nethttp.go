@@ -16,6 +16,8 @@ import (
 	"github.com/gorilla/schema"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/runtime"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"io"
 	"net"
 	"net/http"
@@ -148,9 +150,9 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
-		method:             runtime.GetConfigProperty[string](cfg, "method"),
+		method:             config.GetConfigProperty[string](cfg, "method"),
 	}
-	dataSource.(NetHTTPInputDataSource).AddHandler(runtime.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
+	dataSource.(NetHTTPInputDataSource).AddHandler(config.GetConfigProperty[string](cfg, "path"), http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
 	var inputEndpoint runtime.InputEndpoint = netHTTPEndpoint
 	dataSource.AddEndpoint(inputEndpoint)
 	return netHTTPEndpoint
@@ -228,7 +230,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != ep.method {
 		errText := fmt.Sprintf("Invalid request method '%s' for endpoint '%s' with path '%s'",
 			r.Method, ep.GetName(),
-			runtime.GetConfigProperty[string](ep.GetConfig(), "path"))
+			config.GetConfigProperty[string](ep.GetConfig(), "path"))
 		http.Error(w, errText,
 			http.StatusBadRequest)
 		log.Warnln(errText)
@@ -324,10 +326,10 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				isTypePtr:                  runtime.IsTypePtr[T](),
+				isTypePtr:                  serde.IsTypePtr[T](),
 			},
-			param: runtime.GetConfigProperty[string](cfg, "param"),
-			tType: runtime.GetSerdeType[T](),
+			param: config.GetConfigProperty[string](cfg, "param"),
+			tType: serde.GetSerdeType[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
@@ -336,10 +338,10 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		endpointConsumer := &NetHTTPEndpointGorillaSchemaConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				isTypePtr:                  runtime.IsTypePtr[T](),
+				isTypePtr:                  serde.IsTypePtr[T](),
 			},
 			decoder: schema.NewDecoder(),
-			tType:   runtime.GetSerdeType[T](),
+			tType:   serde.GetSerdeType[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
