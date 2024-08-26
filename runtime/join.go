@@ -16,7 +16,7 @@ import (
 )
 
 type JoinFunction[K comparable, T1, T2, R any] interface {
-	Join(K, []T1, []T2, Collect[R])
+	Join(K, []T1, []T2, Collect[R]) bool
 }
 
 type JoinFunctionContext[K comparable, T1, T2, R any] struct {

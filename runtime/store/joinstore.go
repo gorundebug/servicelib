@@ -5,10 +5,8 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package kvstore
+package store
 
-type KVStorage[K comparable] interface {
-	SetValue1(key K)
-	SetValue2(key K)
-	Get(key K) bool
+type JoinStorage[K comparable] interface {
+	JoinValue(key K, index int, value interface{}) [][]interface{}
 }

@@ -16,7 +16,7 @@ import (
 )
 
 type MultiJoinFunction[K comparable, T, R any] interface {
-	MultiJoin(K, [][]interface{}, Collect[R])
+	MultiJoin(K, [][]interface{}, Collect[R]) bool
 }
 
 type MultiJoinFunctionContext[K comparable, T, R any] struct {
