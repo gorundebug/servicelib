@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package runtime
+package datastruct
 
 type KeyValue[K comparable, V any] struct {
 	Key   K

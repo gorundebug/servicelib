@@ -15,14 +15,38 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gitlab.com/gorundebug/servicelib/api"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"gopkg.in/yaml.v2"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync/atomic"
 )
+
+type Caller[T any] interface {
+	Consume(value T)
+}
+
+type ConsumeStatistics interface {
+	Count() int64
+	LinkId() config.LinkId
+}
+
+type StreamExecutionRuntime interface {
+	StreamExecutionEnvironment
+	reloadConfig(config.Config)
+	serviceInit(name string, runtime StreamExecutionRuntime, config config.Config)
+	getSerde(valueType reflect.Type) (serde.Serializer, error)
+	registerStream(stream StreamBase)
+	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
+	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
+	registerConsumeStatistics(statistics ConsumeStatistics)
+}
 
 func getPath(argPath *string) string {
 	var filePath string
@@ -101,7 +125,7 @@ func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader
 	return bytes.NewReader(output)
 }
 
-func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, configSettings *ConfigSettings) Runtime {
+func MakeService[Runtime StreamExecutionRuntime, Cfg config.Config](name string, configSettings *config.ConfigSettings) Runtime {
 	configValuesPathArg := flag.String("values", "./values.yaml", "service config values path")
 	configPathArg := flag.String("config", "./config.yaml", "service config path")
 	flag.Parse()
@@ -114,17 +138,17 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, config
 		os.Exit(1)
 	}
 
-	configType := GetSerdeType[Cfg]()
+	configType := serde.GetSerdeType[Cfg]()
 	cfg := reflect.New(configType).Interface().(Cfg)
 
 	if err := viper.Unmarshal(cfg); err != nil {
 		log.Fatalf("fatal error config file: %s", err)
 	}
-	appType := GetSerdeType[Runtime]()
+	appType := serde.GetSerdeType[Runtime]()
 	runtime := reflect.New(appType).Interface().(Runtime)
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		configType := GetSerdeType[Cfg]()
+		configType := serde.GetSerdeType[Cfg]()
 		cfg := reflect.New(configType).Interface().(Cfg)
 		if err := viper.Unmarshal(cfg); err != nil {
 			log.Println("error config update:\n", err)
@@ -137,15 +161,15 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg Config](name string, config
 	return runtime
 }
 
-func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (Serializer, error) {
+func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (serde.Serializer, error) {
 	var err error
-	var ser Serializer
+	var ser serde.Serializer
 	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
 		ser, err = makeSerdeForType(tp.Elem(), runtime)
 		if err != nil {
 			return nil, err
 		}
-		return makeArraySerde(tp, ser), nil
+		return serde.MakeArraySerde(tp, ser), nil
 	} else if tp.Kind() == reflect.Map {
 		serKey, err := makeSerdeForType(tp.Key(), runtime)
 		if err != nil {
@@ -155,14 +179,14 @@ func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (Serializ
 		if err != nil {
 			return nil, err
 		}
-		return makeMapSerde(tp, serKey, serValue), nil
+		return serde.MakeMapSerde(tp, serKey, serValue), nil
 	} else {
 		ser, err = runtime.getSerde(tp)
 	}
 	return ser, err
 }
 
-func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (Serializer, error) {
+func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	elementType := v.Type().Elem()
@@ -177,10 +201,10 @@ func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (Serializer, err
 	if err != nil {
 		return nil, err
 	}
-	return MakeArraySerde[T](serElm), nil
+	return serde.MakeTypedArraySerde[T](serElm), nil
 }
 
-func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (Serializer, error) {
+func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	mapType := v.Type()
@@ -208,27 +232,27 @@ func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (Serializer, error
 	if err != nil {
 		return nil, err
 	}
-	return MakeMapSerde[T](serKey, serValue), nil
+	return serde.MakeTypedMapSerde[T](serKey, serValue), nil
 }
 
-func registerSerde[T any](runtime StreamExecutionRuntime, serde StreamSerde[T]) {
-	runtime.registerSerde(GetSerdeType[T](), serde)
+func registerSerde[T any](runtime StreamExecutionRuntime, ser serde.StreamSerde[T]) {
+	runtime.registerSerde(serde.GetSerdeType[T](), ser)
 }
 
-func getRegisteredSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
-	if serde := runtime.getRegisteredSerde(GetSerdeType[T]()); serde != nil {
-		return serde.(StreamSerde[T])
+func getRegisteredSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+	if ser := runtime.getRegisteredSerde(serde.GetSerdeType[T]()); ser != nil {
+		return ser.(serde.StreamSerde[T])
 	}
 	return nil
 }
 
-func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
-	if serde := getRegisteredSerde[T](runtime); serde != nil {
-		return serde
+func MakeSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+	if ser := getRegisteredSerde[T](runtime); ser != nil {
+		return ser
 	}
-	tp := GetSerdeType[T]()
+	tp := serde.GetSerdeType[T]()
 	var err error
-	var ser Serializer
+	var ser serde.Serializer
 	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
 		ser, err = makeTypedArraySerde[T](runtime)
 	} else if tp.Kind() == reflect.Map {
@@ -239,41 +263,56 @@ func makeSerde[T any](runtime StreamExecutionRuntime) StreamSerde[T] {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	serT, ok := ser.(Serde[T])
+	serT, ok := ser.(serde.Serde[T])
 	if !ok {
 		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
-	serde := makeStreamSerde(serT)
-	registerSerde[T](runtime, serde)
-	return serde
+	streamSer := serde.MakeStreamSerde(serT)
+	registerSerde[T](runtime, streamSer)
+	return streamSer
 }
 
-func makeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) StreamKeyValueSerde[KeyValue[K, V]] {
-	if serde := getRegisteredSerde[KeyValue[K, V]](runtime); serde != nil {
-		return serde.(StreamKeyValueSerde[KeyValue[K, V]])
+func MakeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
+	if ser := getRegisteredSerde[datastruct.KeyValue[K, V]](runtime); ser != nil {
+		return ser.(serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]])
 	}
-	tp := GetSerdeType[K]()
+	tp := serde.GetSerdeType[K]()
 	ser, err := runtime.getSerde(tp)
 	if err != nil {
 		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
 	}
-	serdeK, ok := ser.(Serde[K])
+	serdeK, ok := ser.(serde.Serde[K])
 	if !ok {
 		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 
-	tp = GetSerdeType[V]()
+	tp = serde.GetSerdeType[V]()
 	ser, err = runtime.getSerde(tp)
 	if err != nil {
 		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
 	}
-	serdeV, ok := ser.(Serde[V])
+	serdeV, ok := ser.(serde.Serde[V])
 	if !ok {
 		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
-	serde := makeStreamKeyValueSerde[K, V](serdeK, serdeV)
-	registerSerde[KeyValue[K, V]](runtime, serde)
-	return serde
+	streamSer := serde.MakeStreamKeyValueSerde[K, V](serdeK, serdeV)
+	registerSerde[datastruct.KeyValue[K, V]](runtime, streamSer)
+	return streamSer
+}
+
+var keyValuePattern = regexp.MustCompile(`^KeyValue\[\w+,\w+]$`)
+
+func IsKeyValueType[T any]() bool {
+	tp := serde.GetSerdeType[T]()
+	return tp.PkgPath() == "gitlab.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
+}
+
+func RegisterSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+	return MakeSerde[T](runtime)
+}
+
+func RegisterKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
+	return MakeKeyValueSerde[K, V](runtime)
 }
 
 func makeCaller[T any](runtime StreamExecutionRuntime, source TypedStream[T]) Caller[T] {
@@ -346,8 +385,8 @@ type caller[T any] struct {
 	consumer TypedStreamConsumer[T]
 }
 
-func (c *caller[T]) LinkId() LinkId {
-	return LinkId{c.source.GetId(), c.consumer.GetId()}
+func (c *caller[T]) LinkId() config.LinkId {
+	return config.LinkId{From: c.source.GetId(), To: c.consumer.GetId()}
 }
 
 type directCaller[T any] struct {

@@ -8,150 +8,152 @@
 package runtime
 
 import (
-    "context"
-    "golang.org/x/exp/maps"
+	"context"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"golang.org/x/exp/maps"
 )
 
 type DataSource interface {
-    DataConnector
-    Start(context.Context) error
-    Stop(context.Context)
-    GetDataConnector() *DataConnectorConfig
-    GetRuntime() StreamExecutionRuntime
-    AddEndpoint(InputEndpoint)
-    GetEndpoint(id int) InputEndpoint
-    GetEndpoints() []InputEndpoint
+	DataConnector
+	Start(context.Context) error
+	Stop(context.Context)
+	GetDataConnector() *config.DataConnectorConfig
+	GetRuntime() StreamExecutionRuntime
+	AddEndpoint(InputEndpoint)
+	GetEndpoint(id int) InputEndpoint
+	GetEndpoints() []InputEndpoint
 }
 
 type InputEndpoint interface {
-    Endpoint
-    GetConfig() *EndpointConfig
-    GetRuntime() StreamExecutionRuntime
-    GetDataSource() DataSource
-    AddEndpointConsumer(consumer InputEndpointConsumer)
-    GetEndpointConsumers() []InputEndpointConsumer
+	Endpoint
+	GetConfig() *config.EndpointConfig
+	GetRuntime() StreamExecutionRuntime
+	GetDataSource() DataSource
+	AddEndpointConsumer(consumer InputEndpointConsumer)
+	GetEndpointConsumers() []InputEndpointConsumer
 }
 
 type InputDataSource struct {
-    dataConnector *DataConnectorConfig
-    runtime       StreamExecutionRuntime
-    endpoints     map[int]InputEndpoint
+	dataConnector *config.DataConnectorConfig
+	runtime       StreamExecutionRuntime
+	endpoints     map[int]InputEndpoint
 }
 
-func MakeInputDataSource(dataConnector *DataConnectorConfig, runtime StreamExecutionRuntime) *InputDataSource {
-    return &InputDataSource{
-        dataConnector: dataConnector,
-        runtime:       runtime,
-        endpoints:     make(map[int]InputEndpoint),
-    }
+func MakeInputDataSource(dataConnector *config.DataConnectorConfig, runtime StreamExecutionRuntime) *InputDataSource {
+	return &InputDataSource{
+		dataConnector: dataConnector,
+		runtime:       runtime,
+		endpoints:     make(map[int]InputEndpoint),
+	}
 }
 
-func (ds *InputDataSource) GetDataConnector() *DataConnectorConfig {
-    return ds.dataConnector
+func (ds *InputDataSource) GetDataConnector() *config.DataConnectorConfig {
+	return ds.dataConnector
 }
 
 func (ds *InputDataSource) GetName() string {
-    return ds.dataConnector.Name
+	return ds.dataConnector.Name
 }
 
 func (ds *InputDataSource) GetId() int {
-    return ds.dataConnector.Id
+	return ds.dataConnector.Id
 }
 
 func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
-    return ds.runtime
+	return ds.runtime
 }
 
 func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
-    return ds.endpoints[id]
+	return ds.endpoints[id]
 }
 
 func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
-    return maps.Values(ds.endpoints)
+	return maps.Values(ds.endpoints)
 }
 
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
-    ds.endpoints[endpoint.GetId()] = endpoint
+	ds.endpoints[endpoint.GetId()] = endpoint
 }
 
 type InputEndpointConsumer interface {
-    Endpoint() InputEndpoint
+	Endpoint() InputEndpoint
 }
 
 type DataSourceEndpoint struct {
-    config            *EndpointConfig
-    runtime           StreamExecutionRuntime
-    dataSource        DataSource
-    endpointConsumers []InputEndpointConsumer
+	config            *config.EndpointConfig
+	runtime           StreamExecutionRuntime
+	dataSource        DataSource
+	endpointConsumers []InputEndpointConsumer
 }
 
-func MakeDataSourceEndpoint(dataSource DataSource, config *EndpointConfig, runtime StreamExecutionRuntime) *DataSourceEndpoint {
-    return &DataSourceEndpoint{
-        dataSource:        dataSource,
-        config:            config,
-        runtime:           runtime,
-        endpointConsumers: make([]InputEndpointConsumer, 0),
-    }
+func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig, runtime StreamExecutionRuntime) *DataSourceEndpoint {
+	return &DataSourceEndpoint{
+		dataSource:        dataSource,
+		config:            config,
+		runtime:           runtime,
+		endpointConsumers: make([]InputEndpointConsumer, 0),
+	}
 }
 
-func (ep *DataSourceEndpoint) GetConfig() *EndpointConfig {
-    return ep.config
+func (ep *DataSourceEndpoint) GetConfig() *config.EndpointConfig {
+	return ep.config
 }
 
 func (ep *DataSourceEndpoint) GetName() string {
-    return ep.config.Name
+	return ep.config.Name
 }
 
 func (ep *DataSourceEndpoint) GetId() int {
-    return ep.config.Id
+	return ep.config.Id
 }
 
 func (ep *DataSourceEndpoint) GetRuntime() StreamExecutionRuntime {
-    return ep.runtime
+	return ep.runtime
 }
 
 func (ep *DataSourceEndpoint) GetDataSource() DataSource {
-    return ep.dataSource
+	return ep.dataSource
 }
 
 func (ep *DataSourceEndpoint) GetDataConnector() DataConnector {
-    return ep.dataSource
+	return ep.dataSource
 }
 
 func (ep *DataSourceEndpoint) AddEndpointConsumer(endpointConsumer InputEndpointConsumer) {
-    ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
+	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
 
 func (ep *DataSourceEndpoint) GetEndpointConsumers() []InputEndpointConsumer {
-    return ep.endpointConsumers
+	return ep.endpointConsumers
 }
 
 type DataSourceEndpointConsumer[T any] struct {
-    inputStream TypedInputStream[T]
-    endpoint    InputEndpoint
-    reader      TypedEndpointReader[T]
+	inputStream TypedInputStream[T]
+	endpoint    InputEndpoint
+	reader      TypedEndpointReader[T]
 }
 
 func (ec *DataSourceEndpointConsumer[T]) Consume(value T) {
-    ec.inputStream.Consume(value)
+	ec.inputStream.Consume(value)
 }
 
 func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
-    return ec.endpoint
+	return ec.endpoint
 }
 
 func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream TypedInputStream[T]) *DataSourceEndpointConsumer[T] {
-    ec := &DataSourceEndpointConsumer[T]{
-        inputStream: inputStream,
-        endpoint:    endpoint,
-    }
-    reader := endpoint.GetRuntime().GetEndpointReader(endpoint, inputStream, GetSerdeType[T]())
-    if reader != nil {
-        ec.reader = reader.(TypedEndpointReader[T])
-    }
-    return ec
+	ec := &DataSourceEndpointConsumer[T]{
+		inputStream: inputStream,
+		endpoint:    endpoint,
+	}
+	reader := endpoint.GetRuntime().GetEndpointReader(endpoint, inputStream, serde.GetSerdeType[T]())
+	if reader != nil {
+		ec.reader = reader.(TypedEndpointReader[T])
+	}
+	return ec
 }
 
 func (ec *DataSourceEndpointConsumer[T]) GetEndpointReader() TypedEndpointReader[T] {
-    return ec.reader
+	return ec.reader
 }

@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package runtime
+package config
 
 import (
 	"gitlab.com/gorundebug/servicelib/api"
@@ -33,6 +33,7 @@ type StreamConfig struct {
 	IdSources  []int                  `yaml:"idSources"`
 	XPos       int                    `yaml:"xPos"`
 	YPos       int                    `yaml:"yPos"`
+	TTL        *int64                 `yaml:"ttl"`
 	Properties map[string]interface{} `mapstructure:",remain"`
 }
 
@@ -161,7 +162,7 @@ type ServiceAppConfig struct {
 	runtimeConfig  *RuntimeConfig        `yaml:"-"`
 }
 
-func (cfg *ServiceAppConfig) initRuntimeConfig() {
+func (cfg *ServiceAppConfig) InitRuntimeConfig() {
 	cfg.runtimeConfig = &RuntimeConfig{
 		StreamsByName:        make(map[string]*StreamConfig),
 		StreamsById:          make(map[int]*StreamConfig),

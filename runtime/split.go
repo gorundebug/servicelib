@@ -9,6 +9,8 @@ package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"strconv"
 )
 
@@ -31,7 +33,7 @@ func (s *SplitLink[T]) GetRuntime() StreamExecutionRuntime {
 	return s.splitStream.GetRuntime()
 }
 
-func (s *SplitLink[T]) GetConfig() *StreamConfig {
+func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
 	return s.splitStream.GetConfig()
 }
 
@@ -48,7 +50,7 @@ func (s *SplitLink[T]) GetTypeName() string {
 	return s.splitStream.GetTypeName()
 }
 
-func (s *SplitLink[T]) GetSerde() StreamSerde[T] {
+func (s *SplitLink[T]) GetSerde() serde.StreamSerde[T] {
 	return s.splitStream.GetSerde()
 }
 
@@ -86,7 +88,7 @@ type InputSplitStream[T any] struct {
 
 type InputKVSplitStream[T any] struct {
 	*SplitStream[T]
-	serdeKV StreamKeyValueSerde[T]
+	serdeKV serde.StreamKeyValueSerde[T]
 }
 
 func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
@@ -143,7 +145,7 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 					runtime: runtime,
 					config:  *streamConfig,
 				},
-				serde: makeSerde[T](runtime),
+				serde: MakeSerde[T](runtime),
 			},
 			links: make([]*SplitLink[T], 0, 1),
 		},
@@ -157,8 +159,9 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
 	streamConfig := config.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		return nil
 	}
-	serdeKV := makeSerde[T](runtime).(StreamKeyValueSerde[T])
+	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
 	inputKVSplitStream := &InputKVSplitStream[T]{
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: &ConsumedStream[T]{

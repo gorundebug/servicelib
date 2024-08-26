@@ -8,62 +8,63 @@
 package runtime
 
 import (
-    log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 type FilterFunction[T any] interface {
-    Filter(T) bool
+	Filter(T) bool
 }
 
 type FilterFunctionContext[T any] struct {
-    StreamFunction[T]
-    context TypedStream[T]
-    f       FilterFunction[T]
+	StreamFunction[T]
+	context TypedStream[T]
+	f       FilterFunction[T]
 }
 
 func (f *FilterFunctionContext[T]) call(value T) bool {
-    f.BeforeCall()
-    result := f.f.Filter(value)
-    f.AfterCall()
-    return result
+	f.BeforeCall()
+	result := f.f.Filter(value)
+	f.AfterCall()
+	return result
 }
 
 type FilterStream[T any] struct {
-    *ConsumedStream[T]
-    source TypedStream[T]
-    f      FilterFunctionContext[T]
+	*ConsumedStream[T]
+	source TypedStream[T]
+	f      FilterFunctionContext[T]
 }
 
 func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunction[T]) *FilterStream[T] {
-    runtime := stream.GetRuntime()
-    config := runtime.GetConfig()
-    streamConfig := config.GetStreamConfigByName(name)
-    if streamConfig == nil {
-        log.Fatalf("Config for the stream with name=%s does not exists", name)
-    }
-    filterStream := &FilterStream[T]{
-        ConsumedStream: &ConsumedStream[T]{
-            Stream: &Stream[T]{
-                runtime: runtime,
-                config:  *streamConfig,
-            },
-            serde: stream.GetSerde(),
-        },
-        source: stream,
-        f: FilterFunctionContext[T]{
-            f: f,
-        },
-    }
-    filterStream.f.context = filterStream
-    stream.setConsumer(filterStream)
-    runtime.registerStream(filterStream)
-    return filterStream
+	runtime := stream.GetRuntime()
+	config := runtime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		return nil
+	}
+	filterStream := &FilterStream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
+				runtime: runtime,
+				config:  *streamConfig,
+			},
+			serde: stream.GetSerde(),
+		},
+		source: stream,
+		f: FilterFunctionContext[T]{
+			f: f,
+		},
+	}
+	filterStream.f.context = filterStream
+	stream.setConsumer(filterStream)
+	runtime.registerStream(filterStream)
+	return filterStream
 }
 
 func (s *FilterStream[T]) Consume(value T) {
-    if s.caller != nil {
-        if s.f.call(value) {
-            s.caller.Consume(value)
-        }
-    }
+	if s.caller != nil {
+		if s.f.call(value) {
+			s.caller.Consume(value)
+		}
+	}
 }

@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"gitlab.com/gorundebug/servicelib/api"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"gitlab.com/gorundebug/servicelib/telemetry"
 	"gitlab.com/gorundebug/servicelib/telemetry/metrics"
 	"golang.org/x/text/cases"
@@ -31,35 +33,35 @@ import (
 var englishUpperCaser = cases.Upper(language.English)
 
 type ServiceApp struct {
-	config            *ServiceAppConfig
-	serviceConfig     *ServiceConfig
+	config            *config.ServiceAppConfig
+	serviceConfig     *config.ServiceConfig
 	runtime           StreamExecutionRuntime
 	streams           map[int]StreamBase
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
-	serdes            map[reflect.Type]StreamSerializer
+	serdes            map[reflect.Type]serde.StreamSerializer
 	httpServer        http.Server
 	mux               *http.ServeMux
 	httpServerDone    chan struct{}
 	metrics           metrics.Metrics
-	consumeStatistics map[LinkId]ConsumeStatistics
+	consumeStatistics map[config.LinkId]ConsumeStatistics
 }
 
-func (app *ServiceApp) reloadConfig(config Config) {
+func (app *ServiceApp) reloadConfig(config config.Config) {
 	app.config = config.GetServiceConfig()
-	app.config.initRuntimeConfig()
+	app.config.InitRuntimeConfig()
 	app.runtime.SetConfig(config)
 }
 
-func (app *ServiceApp) GetConfig() *ServiceAppConfig {
+func (app *ServiceApp) GetConfig() *config.ServiceAppConfig {
 	return app.config
 }
 
-func (app *ServiceApp) GetServiceConfig() *ServiceConfig {
+func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
 	return app.serviceConfig
 }
 
-func (app *ServiceApp) ReloadConfig(config Config) {
+func (app *ServiceApp) ReloadConfig(config config.Config) {
 }
 
 func (app *ServiceApp) GetMetrics() metrics.Metrics {
@@ -70,11 +72,11 @@ func (app *ServiceApp) registerStream(stream StreamBase) {
 	app.streams[stream.GetId()] = stream
 }
 
-func (app *ServiceApp) registerSerde(tp reflect.Type, serializer StreamSerializer) {
+func (app *ServiceApp) registerSerde(tp reflect.Type, serializer serde.StreamSerializer) {
 	app.serdes[tp] = serializer
 }
 
-func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) StreamSerializer {
+func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) serde.StreamSerializer {
 	return app.serdes[tp]
 }
 
@@ -82,20 +84,20 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, config Config) {
-	app.config = config.GetServiceConfig()
-	app.config.initRuntimeConfig()
-	app.serviceConfig = config.GetServiceConfig().GetServiceConfigByName(name)
+func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, cfg config.Config) {
+	app.config = cfg.GetServiceConfig()
+	app.config.InitRuntimeConfig()
+	app.serviceConfig = cfg.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
 	app.metrics = telemetry.CreateMetrics(app.config.Settings.MetricsEngine)
 	app.runtime = runtime
 	app.streams = make(map[int]StreamBase)
-	app.consumeStatistics = make(map[LinkId]ConsumeStatistics)
+	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
-	app.serdes = make(map[reflect.Type]StreamSerializer)
+	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
 	app.httpServer = http.Server{
@@ -107,7 +109,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	if app.config.Settings.MetricsEngine == api.Prometeus {
 		app.mux.Handle("/metrics", promhttp.Handler())
 	}
-	runtime.SetConfig(config)
+	runtime.SetConfig(cfg)
 }
 
 //go:embed status.html
@@ -185,7 +187,7 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 	for _, consumer := range stream.getConsumers() {
 		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
 		label, _ = strings.CutPrefix(label, "types.")
-		if stat, ok := app.consumeStatistics[LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {
+		if stat, ok := app.consumeStatistics[config.LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {
 			label += fmt.Sprintf("\ncalls: %d", stat.Count())
 		}
 
@@ -271,17 +273,17 @@ func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 	app.dataSinks[dataSink.GetId()] = dataSink
 }
 
-func (app *ServiceApp) getSerde(valueType reflect.Type) (Serializer, error) {
-	if serde, err := app.runtime.GetSerde(valueType); err != nil {
+func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error) {
+	if ser, err := app.runtime.GetSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
-	} else if serde != nil {
-		return serde, nil
+	} else if ser != nil {
+		return ser, nil
 	}
 
-	if serde, err := makeDefaultSerde(valueType); err != nil {
+	if ser, err := serde.MakeDefaultSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
-	} else if serde != nil {
-		return serde, nil
+	} else if ser != nil {
+		return ser, nil
 	}
 
 	return nil, fmt.Errorf("getSerde error. Unsupported type: %s", valueType.Name())

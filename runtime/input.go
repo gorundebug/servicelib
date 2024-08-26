@@ -8,32 +8,33 @@
 package runtime
 
 import (
-    log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 type InputStream[T any] struct {
-    *ConsumedStream[T]
+	*ConsumedStream[T]
 }
 
 func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionRuntime) *InputStream[T] {
-    config := streamExecutionRuntime.GetConfig()
-    streamConfig := config.GetStreamConfigByName(name)
-    if streamConfig == nil {
-        log.Fatalf("Config for the stream with name=%s does not exists", name)
-    }
-    inputStream := &InputStream[T]{
-        ConsumedStream: &ConsumedStream[T]{
-            Stream: &Stream[T]{
-                runtime: streamExecutionRuntime,
-                config:  *streamConfig,
-            },
-            serde: makeSerde[T](streamExecutionRuntime),
-        },
-    }
-    streamExecutionRuntime.registerStream(inputStream)
-    return inputStream
+	config := streamExecutionRuntime.GetConfig()
+	streamConfig := config.GetStreamConfigByName(name)
+	if streamConfig == nil {
+		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		return nil
+	}
+	inputStream := &InputStream[T]{
+		ConsumedStream: &ConsumedStream[T]{
+			Stream: &Stream[T]{
+				runtime: streamExecutionRuntime,
+				config:  *streamConfig,
+			},
+			serde: MakeSerde[T](streamExecutionRuntime),
+		},
+	}
+	streamExecutionRuntime.registerStream(inputStream)
+	return inputStream
 }
 
 func (s *InputStream[T]) GetEndpointId() int {
-    return s.config.Properties["idendpoint"].(int)
+	return s.config.Properties["idendpoint"].(int)
 }
