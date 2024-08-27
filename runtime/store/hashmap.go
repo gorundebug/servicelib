@@ -8,7 +8,6 @@
 package store
 
 import (
-	"container/list"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +18,7 @@ type Item[K comparable] struct {
 	key       K
 	lock      sync.Mutex
 	deadline  time.Time
+	next      *Item[K]
 	processed atomic.Bool
 }
 
@@ -33,75 +33,86 @@ func (item *Item[K]) SetValue(index int, value interface{}, f JoinValueFunc) boo
 }
 
 type HashMapJoinStorage[K comparable] struct {
-	storage      map[K]*Item[K]
-	ttl          time.Duration
-	lock         sync.Mutex
-	deadlineList *list.List
-	timer        *time.Timer
+	storage           map[K]*Item[K]
+	ttl               time.Duration
+	lock              sync.RWMutex
+	deadlineListFirst *Item[K]
+	deadlineListLast  *Item[K]
+	timer             *time.Timer
 }
 
 func (s *HashMapJoinStorage[K]) processDeadline() {
-	deadlineReached := func() []*Item[K] {
-		var deadlineReached []*Item[K]
+	deadlineReached := func() *Item[K] {
+		var deadlineReached *Item[K]
+		var deadlineReachedLast *Item[K]
 		s.lock.Lock()
 		defer s.lock.Unlock()
-		for e := s.deadlineList.Front(); e != nil; e = s.deadlineList.Front() {
-			item := e.Value.(*Item[K])
-			if !time.Now().Before(item.deadline) {
-				deadlineReached = append(deadlineReached, item)
-				s.deadlineList.Remove(e)
+		for s.deadlineListFirst != nil {
+			if !time.Now().Before(s.deadlineListFirst.deadline) {
+				if deadlineReachedLast == nil {
+					deadlineReached = s.deadlineListFirst
+					deadlineReachedLast = s.deadlineListFirst
+				} else {
+					deadlineReachedLast.next = s.deadlineListFirst
+					deadlineReachedLast = s.deadlineListFirst
+				}
+				s.deadlineListFirst = s.deadlineListFirst.next
+				deadlineReachedLast.next = nil
 			} else {
-				s.timer.Reset(time.Until(item.deadline))
+				s.timer.Reset(time.Until(s.deadlineListFirst.deadline))
 				break
 			}
 		}
-		if s.deadlineList.Len() == 0 {
+		if s.deadlineListFirst == nil {
+			s.deadlineListLast = nil
 			s.timer.Stop()
 			s.timer = nil
 		}
 		return deadlineReached
 	}()
-	for _, item := range deadlineReached {
+	for ; deadlineReached != nil; deadlineReached = deadlineReached.next {
 		func(item *Item[K]) {
 			if item.processed.CompareAndSwap(false, true) {
 				s.lock.Lock()
 				defer s.lock.Unlock()
 				delete(s.storage, item.key)
 			}
-		}(item)
+		}(deadlineReached)
 	}
 }
 
 func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f JoinValueFunc) {
 	item := func() *Item[K] {
+		s.lock.RLock()
+		item := s.storage[key]
+		s.lock.RUnlock()
+		if item != nil {
+			return item
+		}
+		newItem := &Item[K]{
+			values: make([][]interface{}, index+1, 2),
+		}
 		s.lock.Lock()
 		defer s.lock.Unlock()
-		item := s.storage[key]
-		if item == nil {
-			item = &Item[K]{
-				values: make([][]interface{}, index+1, 2),
+		item = s.storage[key]
+		if item != nil {
+			return item
+		}
+		s.storage[key] = newItem
+		if s.ttl > 0 {
+			if s.deadlineListLast == nil {
+				s.deadlineListLast = newItem
+				s.deadlineListFirst = newItem
+			} else {
+				s.deadlineListLast.next = item
+				s.deadlineListLast = newItem
 			}
-			s.storage[key] = item
-			if s.ttl > 0 {
-				e := s.deadlineList.Back()
-				item.deadline = time.Now().Add(s.ttl)
-				for e != nil {
-					if item.deadline.Before(e.Value.(*Item[K]).deadline) {
-						e = e.Prev()
-					} else {
-						s.deadlineList.InsertAfter(item, e)
-						break
-					}
-				}
-				if e == nil {
-					s.deadlineList.PushFront(item)
-				}
-				if s.timer == nil {
-					s.timer = time.AfterFunc(time.Until(item.deadline), s.processDeadline)
-				}
+			newItem.deadline = time.Now().Add(s.ttl)
+			if s.timer == nil {
+				s.timer = time.AfterFunc(time.Until(item.deadline), s.processDeadline)
 			}
 		}
-		return item
+		return newItem
 	}()
 	if item.SetValue(index, value, f) {
 		if item.processed.CompareAndSwap(false, true) {
@@ -114,8 +125,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 
 func MakeHashMapJoinStorage[K comparable](ttl time.Duration) JoinStorage[K] {
 	return &HashMapJoinStorage[K]{
-		storage:      make(map[K]*Item[K]),
-		deadlineList: list.New(),
-		ttl:          ttl,
+		storage: make(map[K]*Item[K]),
+		ttl:     ttl,
 	}
 }
