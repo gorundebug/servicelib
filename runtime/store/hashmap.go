@@ -219,7 +219,7 @@ func (s *RotateHashMapJoinStorage[K]) JoinValue(key K, index int, value interfac
 				if item != nil && !time.Now().Before(item.deadline) {
 					return item, s.storage1
 				}
-			} else {
+			} else if &storage != &s.storage1 {
 				delete(storage, key)
 			}
 			newItem := &Item[K]{
