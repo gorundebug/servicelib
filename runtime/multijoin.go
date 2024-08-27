@@ -9,9 +9,11 @@ package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
+	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"time"
 )
 
@@ -106,11 +108,11 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTypeName() string {
 
 type MultiJoinStream[K comparable, T, R any] struct {
 	*ConsumedStream[R]
-	f       MultiJoinFunctionContext[K, T, R]
-	links   []multiJoinLinkStream
-	serdeIn serde.StreamSerde[datastruct.KeyValue[K, T]]
-	source  TypedStream[datastruct.KeyValue[K, T]]
-	ttl     time.Duration
+	f           MultiJoinFunctionContext[K, T, R]
+	links       []multiJoinLinkStream
+	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T]]
+	source      TypedStream[datastruct.KeyValue[K, T]]
+	joinStorage store.JoinStorage[K]
 }
 
 func MakeMultiJoinStream[K comparable, T, R any](
@@ -138,8 +140,16 @@ func MakeMultiJoinStream[K comparable, T, R any](
 			f: f,
 		},
 	}
+	ttl := time.Duration(0)
 	if streamConfig.TTL != nil {
-		multiJoinStream.ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	}
+	switch *streamConfig.JoinStorage {
+	case api.HashMap:
+		multiJoinStream.joinStorage = store.MakeHashMapJoinStorage[K](ttl)
+	default:
+		log.Fatalf("Join storage type %d is not supported for the stream '%s", *streamConfig.JoinStorage, name)
+		return nil
 	}
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.setConsumer(multiJoinStream)
@@ -148,13 +158,21 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	return multiJoinStream
 }
 
+func (s *MultiJoinStream[K, T, R]) consume(key K, index int, value interface{}) {
+	s.joinStorage.JoinValue(key, index, value, func(values [][]interface{}) bool {
+		return s.f.call(key, values, s)
+	})
+}
+
 func (s *MultiJoinStream[K, T, R]) Consume(value datastruct.KeyValue[K, T]) {
+	s.consume(value.Key, 0, value.Value)
 }
 
 func (s *MultiJoinStream[K, T, R]) ConsumeRight(index int, value datastruct.KeyValue[K, interface{}]) {
+	s.consume(value.Key, index+1, value.Value)
 }
 
-func (s *MultiJoinStream[K, T, R]) consume(value R) {
+func (s *MultiJoinStream[K, T, R]) Out(value R) {
 	if s.caller != nil {
 		s.caller.Consume(value)
 	}

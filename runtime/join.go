@@ -89,26 +89,32 @@ type JoinStream[K comparable, T1, T2, R any] struct {
 	joinStorage store.JoinStorage[K]
 }
 
-func (s *JoinStream[K, T1, T2, R]) ConsumeRight(value datastruct.KeyValue[K, T2]) {
-	s.joinStorage.JoinValue(value.Key, 1, value.Value, func(values [][]interface{}) bool {
+func (s *JoinStream[K, T1, T2, R]) consume(key K, index int, value interface{}) {
+	s.joinStorage.JoinValue(key, index, value, func(values [][]interface{}) bool {
 		var leftValues []T1
 		var rightValues []T2
 		if len(values) > 0 {
-			for _, v := range values[0] {
-				leftValues = append(leftValues, v.(T1))
+			leftValues = make([]T1, len(values[0]))
+			for idx, v := range values[0] {
+				leftValues[idx] = v.(T1)
 			}
 		}
 		if len(values) > 1 {
-			for _, v := range values[1] {
-				rightValues = append(rightValues, v.(T2))
+			rightValues = make([]T2, len(values[1]))
+			for idx, v := range values[1] {
+				rightValues[idx] = v.(T2)
 			}
 		}
-		return s.f.call(value.Key, leftValues, rightValues, s)
+		return s.f.call(key, leftValues, rightValues, s)
 	})
 }
 
+func (s *JoinStream[K, T1, T2, R]) ConsumeRight(value datastruct.KeyValue[K, T2]) {
+	s.consume(value.Key, 1, value.Value)
+}
+
 func (s *JoinStream[K, T1, T2, R]) Consume(value datastruct.KeyValue[K, T1]) {
-	s.f.call(value.Key, []T1{}, []T2{}, s)
+	s.consume(value.Key, 0, value.Value)
 }
 
 func (s *JoinStream[K, T1, T2, R]) Out(value R) {
