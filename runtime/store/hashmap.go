@@ -49,9 +49,9 @@ func (s *HashMapJoinStorage[K]) processDeadline() {
 		defer s.lock.Unlock()
 		for s.deadlineListFirst != nil {
 			if !time.Now().Before(s.deadlineListFirst.deadline) {
-				if deadlineReachedLast == nil {
+				if deadlineReached == nil {
 					deadlineReached = s.deadlineListFirst
-					deadlineReachedLast = s.deadlineListFirst
+					deadlineReachedLast = deadlineReached
 				} else {
 					deadlineReachedLast.next = s.deadlineListFirst
 					deadlineReachedLast = s.deadlineListFirst
@@ -65,8 +65,6 @@ func (s *HashMapJoinStorage[K]) processDeadline() {
 		}
 		if s.deadlineListFirst == nil {
 			s.deadlineListLast = nil
-			s.timer.Stop()
-			s.timer = nil
 		}
 		return deadlineReached
 	}()
@@ -100,16 +98,18 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 		}
 		s.storage[key] = newItem
 		if s.ttl > 0 {
+			newItem.deadline = time.Now().Add(s.ttl)
 			if s.deadlineListLast == nil {
 				s.deadlineListLast = newItem
 				s.deadlineListFirst = newItem
+				if s.timer == nil {
+					s.timer = time.AfterFunc(time.Until(newItem.deadline), s.processDeadline)
+				} else {
+					s.timer.Reset(time.Until(newItem.deadline))
+				}
 			} else {
-				s.deadlineListLast.next = item
+				s.deadlineListLast.next = newItem
 				s.deadlineListLast = newItem
-			}
-			newItem.deadline = time.Now().Add(s.ttl)
-			if s.timer == nil {
-				s.timer = time.AfterFunc(time.Until(item.deadline), s.processDeadline)
 			}
 		}
 		return newItem
