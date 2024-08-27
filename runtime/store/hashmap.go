@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const clearInterval = time.Duration(1) * time.Second
+
 type Item[K comparable] struct {
 	values    [][]interface{}
 	key       K
@@ -47,24 +49,49 @@ func (s *HashMapJoinStorage[K]) processDeadline() {
 		var deadlineReachedLast *Item[K]
 		s.lock.Lock()
 		defer s.lock.Unlock()
-		for s.deadlineListFirst != nil {
-			if !time.Now().Before(s.deadlineListFirst.deadline) {
-				if deadlineReached == nil {
-					deadlineReached = s.deadlineListFirst
-					deadlineReachedLast = deadlineReached
+		if s.deadlineListFirst == nil {
+			return deadlineReached
+		}
+		it := s.deadlineListFirst
+		s.deadlineListFirst = nil
+		s.deadlineListLast = nil
+		before := false
+		now := time.Now()
+		for it != nil {
+			before = before || now.Before(it.deadline)
+			processed := it.processed.Load()
+			if !before {
+				if !processed {
+					if deadlineReached == nil {
+						deadlineReached = it
+						deadlineReachedLast = it
+					} else {
+						deadlineReachedLast.next = it
+						deadlineReachedLast = it
+					}
+					it = it.next
+					deadlineReachedLast.next = nil
 				} else {
-					deadlineReachedLast.next = s.deadlineListFirst
-					deadlineReachedLast = s.deadlineListFirst
+					it = it.next
 				}
-				s.deadlineListFirst = s.deadlineListFirst.next
-				deadlineReachedLast.next = nil
 			} else {
-				s.timer.Reset(time.Until(s.deadlineListFirst.deadline))
-				break
+				if !processed {
+					if s.deadlineListFirst == nil {
+						s.deadlineListFirst = it
+						s.deadlineListLast = it
+					} else {
+						s.deadlineListLast.next = it
+						s.deadlineListLast = it
+					}
+					it = it.next
+					s.deadlineListLast.next = nil
+				} else {
+					it = it.next
+				}
 			}
 		}
-		if s.deadlineListFirst == nil {
-			s.deadlineListLast = nil
+		if s.deadlineListFirst != nil {
+			s.timer.Reset(clearInterval)
 		}
 		return deadlineReached
 	}()
@@ -103,9 +130,9 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 				s.deadlineListLast = newItem
 				s.deadlineListFirst = newItem
 				if s.timer == nil {
-					s.timer = time.AfterFunc(time.Until(newItem.deadline), s.processDeadline)
+					s.timer = time.AfterFunc(clearInterval, s.processDeadline)
 				} else {
-					s.timer.Reset(time.Until(newItem.deadline))
+					s.timer.Reset(clearInterval)
 				}
 			} else {
 				s.deadlineListLast.next = newItem
