@@ -158,7 +158,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 	switch *streamConfig.JoinStorage {
 	case api.HashMap:
-		joinStream.joinStorage = store.MakeHashMapJoinStorage[K](ttl)
+		joinStream.joinStorage = store.MakeRotateHashMapJoinStorage[K](ttl)
 	default:
 		log.Fatalf("Join storage type %d is not supported for the stream '%s", *streamConfig.JoinStorage, name)
 		return nil

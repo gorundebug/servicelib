@@ -31,7 +31,11 @@ func (item *Item[K]) SetValue(index int, value interface{}, f JoinValueFunc) boo
 		item.values = append(item.values, make([][]interface{}, index-len(item.values)+1)...)
 	}
 	item.values[index] = append(item.values[index], value)
-	return f(item.values)
+	if f(item.values) {
+		item.processed.Store(true)
+		return true
+	}
+	return false
 }
 
 type HashMapJoinStorage[K comparable] struct {
@@ -111,7 +115,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 		s.lock.RLock()
 		item := s.storage[key]
 		s.lock.RUnlock()
-		if item != nil {
+		if item != nil && time.Now().Before(item.deadline) {
 			return item
 		}
 		newItem := &Item[K]{
@@ -119,9 +123,14 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 		}
 		s.lock.Lock()
 		defer s.lock.Unlock()
-		item = s.storage[key]
+		if item == nil {
+			item = s.storage[key]
+			if item != nil && time.Now().Before(item.deadline) {
+				return item
+			}
+		}
 		if item != nil {
-			return item
+			item.processed.Store(true)
 		}
 		s.storage[key] = newItem
 		if s.ttl > 0 {
@@ -142,11 +151,9 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 		return newItem
 	}()
 	if item.SetValue(index, value, f) {
-		if item.processed.CompareAndSwap(false, true) {
-			s.lock.Lock()
-			defer s.lock.Unlock()
-			delete(s.storage, key)
-		}
+		s.lock.Lock()
+		defer s.lock.Unlock()
+		delete(s.storage, key)
 	}
 }
 
@@ -154,5 +161,78 @@ func MakeHashMapJoinStorage[K comparable](ttl time.Duration) JoinStorage[K] {
 	return &HashMapJoinStorage[K]{
 		storage: make(map[K]*Item[K]),
 		ttl:     ttl,
+	}
+}
+
+type RotateHashMapJoinStorage[K comparable] struct {
+	storage1   map[K]*Item[K]
+	storage2   map[K]*Item[K]
+	ttl        time.Duration
+	rotateLock sync.RWMutex
+	lock       sync.RWMutex
+	timer      *time.Timer
+}
+
+func MakeRotateHashMapJoinStorage[K comparable](ttl time.Duration) JoinStorage[K] {
+	return &RotateHashMapJoinStorage[K]{
+		storage1: make(map[K]*Item[K]),
+		storage2: make(map[K]*Item[K]),
+		ttl:      ttl,
+	}
+}
+
+func (s *RotateHashMapJoinStorage[K]) rotate() {
+	s.rotateLock.Lock()
+	defer s.rotateLock.Unlock()
+	s.storage2 = s.storage1
+	s.storage1 = make(map[K]*Item[K])
+	s.timer.Reset(s.ttl)
+}
+
+func (s *RotateHashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f JoinValueFunc) {
+	s.rotateLock.RLock()
+	defer s.rotateLock.RUnlock()
+	if s.timer == nil && s.ttl > 0 {
+		s.timer = time.AfterFunc(s.ttl, s.rotate)
+	}
+	item, storage := func() (*Item[K], map[K]*Item[K]) {
+		item, storage := func() (*Item[K], map[K]*Item[K]) {
+			s.lock.RLock()
+			defer s.lock.RUnlock()
+			if s.ttl > 0 {
+				item := s.storage2[key]
+				if item != nil {
+					return item, s.storage2
+				}
+			}
+			item := s.storage1[key]
+			if item != nil {
+				return item, s.storage1
+			}
+			return nil, nil
+		}()
+		if item == nil || time.Now().Before(item.deadline) {
+			s.lock.Lock()
+			defer s.lock.Unlock()
+			if item == nil {
+				item = s.storage1[key]
+				if item != nil && !time.Now().Before(item.deadline) {
+					return item, s.storage1
+				}
+			} else {
+				delete(storage, key)
+			}
+			newItem := &Item[K]{
+				values: make([][]interface{}, index+1, 2),
+			}
+			s.storage1[key] = newItem
+			return item, s.storage1
+		}
+		return item, storage
+	}()
+	if item.SetValue(index, value, f) {
+		s.lock.Lock()
+		defer s.lock.Unlock()
+		delete(storage, key)
 	}
 }
