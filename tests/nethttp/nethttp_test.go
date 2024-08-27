@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gitlab.com/gorundebug/servicelib/datasource"
 	"gitlab.com/gorundebug/servicelib/runtime"
+	"gitlab.com/gorundebug/servicelib/runtime/config"
+	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"gitlab.com/gorundebug/servicelib/transformation"
 	"io"
 	"net/http"
@@ -54,7 +56,7 @@ func (s *RequestDataSerde) Deserialize(data []byte) (*RequestData, error) {
 }
 
 type MockServiceConfig struct {
-	runtime.ServiceAppConfig `mapstructure:",squash"`
+	config.ServiceAppConfig `mapstructure:",squash"`
 }
 
 type MockService struct {
@@ -67,12 +69,12 @@ type MockService struct {
 	requestData            *RequestData
 }
 
-func (s *MockService) GetSerde(valueType reflect.Type) (runtime.Serializer, error) {
+func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error) {
 	switch valueType {
-	case runtime.GetSerdeType[RequestData]():
+	case serde.GetSerdeType[RequestData]():
 		{
-			var serde runtime.Serde[*RequestData] = &RequestDataSerde{}
-			return serde, nil
+			var ser serde.Serde[*RequestData] = &RequestDataSerde{}
+			return ser, nil
 		}
 
 	}
@@ -92,7 +94,7 @@ func (s *MockService) consume(value *RequestData) error {
 	return nil
 }
 
-func (s *MockService) SetConfig(config runtime.Config) {
+func (s *MockService) SetConfig(config config.Config) {
 }
 
 func (s *MockService) StartService(ctx context.Context) error {
@@ -126,9 +128,11 @@ func (s *MockService) sendRequest() error {
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(data))
 	if err != nil {
-		return fmt.Errorf("Error sending request: %s", err)
+		return fmt.Errorf("error sending request: %s", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	_, err = io.ReadAll(resp.Body)
 	if err != nil {
@@ -150,7 +154,7 @@ func TestNetHTTPEndpointConsumer(t *testing.T) {
 	timeoutCtx, cancel := context.WithTimeout(mainCtx, time.Duration(1000)*time.Second)
 	defer cancel()
 
-	configSettings := runtime.ConfigSettings{}
+	configSettings := config.ConfigSettings{}
 	service := runtime.MakeService[*MockService, *MockServiceConfig]("IncomeService", &configSettings)
 	if err := service.StartService(mainCtx); err != nil {
 		assert.Equal(t, nil, err)
