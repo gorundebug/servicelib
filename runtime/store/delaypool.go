@@ -18,9 +18,9 @@ type DelayPool interface {
 	Stop(ctx context.Context)
 }
 
-func MakeDelayPool(runnersCount int) DelayPool {
+func MakeDelayPool(executorsCount int) DelayPool {
 	return &DelayPoolImpl{
-		runnersCount: runnersCount,
+		executorsCount: executorsCount,
 	}
 }
 
@@ -102,7 +102,7 @@ func (pq *PriorityQueue) Remove(item *DelayTask) {
 }
 
 type DelayPoolImpl struct {
-	runnersCount int
+	executorsCount int
 }
 
 func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {

@@ -115,7 +115,12 @@ components:
         golangVersion:
           type: string
         metricsEngine:
-            $ref: '#/components/schemas/MetricsEngine'
+          $ref: '#/components/schemas/MetricsEngine'
+        environment:
+          type: string
+        delayExecutors:
+          type: integer
+          minimum: 1
       required:
         - name
         - modulePath
