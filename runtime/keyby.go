@@ -14,7 +14,7 @@ import (
 )
 
 type KeyByFunction[T any, K comparable, V any] interface {
-	KeyBy(T) datastruct.KeyValue[K, V]
+	KeyBy(Stream, T) datastruct.KeyValue[K, V]
 }
 
 type KeyByFunctionContext[T any, K comparable, V any] struct {
@@ -25,7 +25,7 @@ type KeyByFunctionContext[T any, K comparable, V any] struct {
 
 func (f *KeyByFunctionContext[T, K, V]) call(value T) datastruct.KeyValue[K, V] {
 	f.BeforeCall()
-	result := f.f.KeyBy(value)
+	result := f.f.KeyBy(f.context, value)
 	f.AfterCall()
 	return result
 }
@@ -47,7 +47,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 	}
 	keyByStream := &KeyByStream[T, K, V]{
 		ConsumedStream: &ConsumedStream[datastruct.KeyValue[K, V]]{
-			Stream: &Stream[datastruct.KeyValue[K, V]]{
+			StreamBase: &StreamBase[datastruct.KeyValue[K, V]]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

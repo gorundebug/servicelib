@@ -52,7 +52,7 @@ func (s *MergeLink[T]) GetConfig() *config.StreamConfig {
 	return s.mergeStream.GetConfig()
 }
 
-func (s *MergeLink[T]) getConsumers() []StreamBase {
+func (s *MergeLink[T]) getConsumers() []Stream {
 	return s.mergeStream.getConsumers()
 }
 
@@ -78,7 +78,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	}
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
+			StreamBase: &StreamBase[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

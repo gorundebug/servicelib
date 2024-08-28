@@ -12,7 +12,7 @@ import (
 )
 
 type FilterFunction[T any] interface {
-	Filter(T) bool
+	Filter(Stream, T) bool
 }
 
 type FilterFunctionContext[T any] struct {
@@ -23,7 +23,7 @@ type FilterFunctionContext[T any] struct {
 
 func (f *FilterFunctionContext[T]) call(value T) bool {
 	f.BeforeCall()
-	result := f.f.Filter(value)
+	result := f.f.Filter(f.context, value)
 	f.AfterCall()
 	return result
 }
@@ -44,7 +44,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 	}
 	filterStream := &FilterStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
+			StreamBase: &StreamBase[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

@@ -13,7 +13,7 @@ import (
 )
 
 type AppSinkStream[T any] struct {
-	*Stream[T]
+	*StreamBase[T]
 	consumer ConsumerFunc[T]
 	serde    serde.StreamSerde[T]
 	source   TypedStream[T]
@@ -28,7 +28,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 		return nil
 	}
 	appSink := &AppSinkStream[T]{
-		Stream: &Stream[T]{
+		StreamBase: &StreamBase[T]{
 			runtime: runtime,
 			config:  *streamConfig,
 		},
@@ -45,6 +45,6 @@ func (s *AppSinkStream[T]) Consume(value T) {
 	_ = s.consumer(value)
 }
 
-func (s *AppSinkStream[T]) getConsumers() []StreamBase {
-	return []StreamBase{}
+func (s *AppSinkStream[T]) getConsumers() []Stream {
+	return []Stream{}
 }

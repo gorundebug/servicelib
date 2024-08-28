@@ -12,7 +12,7 @@ import (
 )
 
 type ForEachFunction[T any] interface {
-	ForEach(T)
+	ForEach(Stream, T)
 }
 
 type ForEachFunctionContext[T any] struct {
@@ -23,7 +23,7 @@ type ForEachFunctionContext[T any] struct {
 
 func (f *ForEachFunctionContext[T]) call(value T) {
 	f.BeforeCall()
-	f.f.ForEach(value)
+	f.f.ForEach(f.context, value)
 	f.AfterCall()
 }
 
@@ -43,7 +43,7 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 	}
 	forEachStream := &ForEachStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
+			StreamBase: &StreamBase[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

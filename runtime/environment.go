@@ -31,8 +31,8 @@ type StreamExecutionEnvironment interface {
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
 	GetConsumeTimeout(from int, to int) time.Duration
-	GetEndpointReader(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointReader
-	GetEndpointWriter(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointWriter
+	GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader
+	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
 	GetMetrics() metrics.Metrics
 }
 
@@ -63,21 +63,25 @@ type TypedEndpointWriter[T any] interface {
 	Write(T, io.Writer) error
 }
 
-type StreamBase interface {
+type Stream interface {
 	GetName() string
 	GetTransformationName() string
 	GetTypeName() string
 	GetId() int
 	GetConfig() *config.StreamConfig
 	GetRuntime() StreamExecutionRuntime
-	getConsumers() []StreamBase
+}
+
+type ServiceStream interface {
+	Stream
+	getConsumers() []Stream
 }
 
 type TypedStream[T any] interface {
-	StreamBase
+	Stream
 	GetConsumer() TypedStreamConsumer[T]
-	setConsumer(TypedStreamConsumer[T])
 	GetSerde() serde.StreamSerde[T]
+	setConsumer(TypedStreamConsumer[T])
 }
 
 type Consumer[T any] interface {
@@ -156,7 +160,7 @@ type TypedBinaryKVConsumedStream[T any] interface {
 }
 
 type TypedStreamConsumer[T any] interface {
-	StreamBase
+	Stream
 	Consumer[T]
 }
 

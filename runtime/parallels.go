@@ -13,7 +13,7 @@ import (
 )
 
 type ParallelsFunction[T, R any] interface {
-	Parallels(T, Collect[R])
+	Parallels(Stream, T, Collect[R])
 }
 
 type ParallelsFunctionContext[T, R any] struct {
@@ -24,7 +24,7 @@ type ParallelsFunctionContext[T, R any] struct {
 
 func (f *ParallelsFunctionContext[T, R]) call(value T, out Collect[R]) {
 	f.BeforeCall()
-	f.f.Parallels(value, out)
+	f.f.Parallels(f.context, value, out)
 	f.AfterCall()
 }
 
@@ -46,7 +46,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 
 	parallelsStream := &ParallelsStream[T, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

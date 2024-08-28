@@ -18,7 +18,7 @@ import (
 )
 
 type MultiJoinFunction[K comparable, T, R any] interface {
-	MultiJoin(K, [][]interface{}, Collect[R]) bool
+	MultiJoin(Stream, K, [][]interface{}, Collect[R]) bool
 }
 
 type MultiJoinFunctionContext[K comparable, T, R any] struct {
@@ -29,7 +29,7 @@ type MultiJoinFunctionContext[K comparable, T, R any] struct {
 
 func (f *MultiJoinFunctionContext[K, T, R]) call(key K, values [][]interface{}, out Collect[R]) bool {
 	f.BeforeCall()
-	result := f.f.MultiJoin(key, values, out)
+	result := f.f.MultiJoin(f.context, key, values, out)
 	f.AfterCall()
 	return result
 }
@@ -94,7 +94,7 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetConfig() *config.StreamConfig {
 	return s.multiJoinStream.GetConfig()
 }
 
-func (s *MultiJoinLinkStream[K, T1, T2, R]) getConsumers() []StreamBase {
+func (s *MultiJoinLinkStream[K, T1, T2, R]) getConsumers() []Stream {
 	return s.multiJoinStream.getConsumers()
 }
 
@@ -128,7 +128,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

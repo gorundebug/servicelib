@@ -36,7 +36,7 @@ type ServiceApp struct {
 	config            *config.ServiceAppConfig
 	serviceConfig     *config.ServiceConfig
 	runtime           StreamExecutionRuntime
-	streams           map[int]StreamBase
+	streams           map[int]ServiceStream
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
@@ -68,7 +68,7 @@ func (app *ServiceApp) GetMetrics() metrics.Metrics {
 	return app.metrics
 }
 
-func (app *ServiceApp) registerStream(stream StreamBase) {
+func (app *ServiceApp) registerStream(stream ServiceStream) {
 	app.streams[stream.GetId()] = stream
 }
 
@@ -93,7 +93,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	}
 	app.metrics = telemetry.CreateMetrics(app.config.Settings.MetricsEngine)
 	app.runtime = runtime
-	app.streams = make(map[int]StreamBase)
+	app.streams = make(map[int]ServiceStream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
@@ -152,13 +152,13 @@ const (
 	edgeLength = 200
 )
 
-func (app *ServiceApp) makeNode(stream StreamBase) *Node {
-	config := stream.GetConfig()
+func (app *ServiceApp) makeNode(stream Stream) *Node {
+	cfg := stream.GetConfig()
 	background := app.serviceConfig.Color
 	serviceName := app.serviceConfig.Name
-	if config.IdService != app.serviceConfig.Id {
+	if cfg.IdService != app.serviceConfig.Id {
 		for i := range app.config.Services {
-			if app.config.Services[i].Id == config.IdService {
+			if app.config.Services[i].Id == cfg.IdService {
 				serviceName = app.config.Services[i].Name
 				background = app.config.Services[i].Color
 				break
@@ -174,14 +174,14 @@ func (app *ServiceApp) makeNode(stream StreamBase) *Node {
 		Color: struct {
 			Background string `json:"background"`
 		}{Background: background},
-		X:       config.XPos,
-		Y:       config.YPos,
+		X:       cfg.XPos,
+		Y:       cfg.YPos,
 		Opacity: opacity,
 		Label:   label,
 	}
 }
 
-func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
+func (app *ServiceApp) makeEdges(stream ServiceStream) []*Edge {
 	edges := make([]*Edge, 0)
 
 	for _, consumer := range stream.getConsumers() {
@@ -191,18 +191,18 @@ func (app *ServiceApp) makeEdges(stream StreamBase) []*Edge {
 			label += fmt.Sprintf("\ncalls: %d", stat.Count())
 		}
 
-		config := consumer.GetConfig()
+		cfg := consumer.GetConfig()
 
-		if config.Type == api.TransformationTypeJoin ||
-			config.Type == api.TransformationTypeMultiJoin {
-			if config.IdSource == stream.GetId() {
+		if cfg.Type == api.TransformationTypeJoin ||
+			cfg.Type == api.TransformationTypeMultiJoin {
+			if cfg.IdSource == stream.GetId() {
 				label = label + " (L)"
 			} else {
 				label = label + " (R)"
 			}
 		}
 		if stream.GetConfig().IdService != app.serviceConfig.Id ||
-			config.IdService != app.serviceConfig.Id {
+			cfg.IdService != app.serviceConfig.Id {
 		}
 
 		edges = append(edges, &Edge{
@@ -261,11 +261,11 @@ func (app *ServiceApp) GetDataSink(id int) DataSink {
 	return app.dataSinks[id]
 }
 
-func (app *ServiceApp) GetEndpointReader(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointReader {
+func (app *ServiceApp) GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader {
 	return nil
 }
 
-func (app *ServiceApp) GetEndpointWriter(endpoint Endpoint, stream StreamBase, valueType reflect.Type) EndpointWriter {
+func (app *ServiceApp) GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter {
 	return nil
 }
 

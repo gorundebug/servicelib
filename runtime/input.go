@@ -24,7 +24,7 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 	}
 	inputStream := &InputStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
+			StreamBase: &StreamBase[T]{
 				runtime: streamExecutionRuntime,
 				config:  *streamConfig,
 			},

@@ -18,7 +18,7 @@ import (
 )
 
 type JoinFunction[K comparable, T1, T2, R any] interface {
-	Join(K, []T1, []T2, Collect[R]) bool
+	Join(Stream, K, []T1, []T2, Collect[R]) bool
 }
 
 type JoinFunctionContext[K comparable, T1, T2, R any] struct {
@@ -29,7 +29,7 @@ type JoinFunctionContext[K comparable, T1, T2, R any] struct {
 
 func (f *JoinFunctionContext[K, T1, T2, R]) call(key K, leftValue []T1, rightValue []T2, out Collect[R]) bool {
 	f.BeforeCall()
-	result := f.f.Join(key, leftValue, rightValue, out)
+	result := f.f.Join(f.context, key, leftValue, rightValue, out)
 	f.AfterCall()
 	return result
 }
@@ -69,7 +69,7 @@ func (s *JoinLink[K, T1, T2, R]) GetConfig() *config.StreamConfig {
 	return s.joinStream.GetConfig()
 }
 
-func (s *JoinLink[K, T1, T2, R]) getConsumers() []StreamBase {
+func (s *JoinLink[K, T1, T2, R]) getConsumers() []Stream {
 	return s.joinStream.getConsumers()
 }
 
@@ -136,7 +136,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

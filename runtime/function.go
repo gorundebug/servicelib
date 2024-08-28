@@ -8,7 +8,7 @@
 package runtime
 
 type StreamFunction[T any] struct {
-	context Stream[T]
+	context StreamBase[T]
 }
 
 func (f *StreamFunction[T]) BeforeCall() {

@@ -38,7 +38,7 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

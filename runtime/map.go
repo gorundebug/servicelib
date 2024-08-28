@@ -13,7 +13,7 @@ import (
 )
 
 type MapFunction[T, R any] interface {
-	Map(T) R
+	Map(Stream, T) R
 }
 
 type MapFunctionContext[T, R any] struct {
@@ -24,7 +24,7 @@ type MapFunctionContext[T, R any] struct {
 
 func (f *MapFunctionContext[T, R]) call(value T) R {
 	f.BeforeCall()
-	result := f.f.Map(value)
+	result := f.f.Map(f.context, value)
 	f.AfterCall()
 	return result
 }
@@ -46,7 +46,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 	}
 	mapStream := &MapStream[T, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},

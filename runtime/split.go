@@ -54,7 +54,7 @@ func (s *SplitLink[T]) GetSerde() serde.StreamSerde[T] {
 	return s.splitStream.GetSerde()
 }
 
-func (s *SplitLink[T]) getConsumers() []StreamBase {
+func (s *SplitLink[T]) getConsumers() []Stream {
 	return s.splitStream.getConsumers()
 }
 
@@ -119,7 +119,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 	}
 	splitStream := &SplitStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
-			Stream: &Stream[T]{
+			StreamBase: &StreamBase[T]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
@@ -143,7 +143,7 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 	inputSplitStream := &InputSplitStream[T]{
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: &ConsumedStream[T]{
-				Stream: &Stream[T]{
+				StreamBase: &StreamBase[T]{
 					runtime: runtime,
 					config:  *streamConfig,
 				},
@@ -167,7 +167,7 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
 	inputKVSplitStream := &InputKVSplitStream[T]{
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: &ConsumedStream[T]{
-				Stream: &Stream[T]{
+				StreamBase: &StreamBase[T]{
 					runtime: runtime,
 					config:  *streamConfig,
 				},
@@ -194,8 +194,8 @@ func (s *SplitStream[T]) Consume(value T) {
 	}
 }
 
-func (s *SplitStream[T]) getConsumers() []StreamBase {
-	var consumers = make([]StreamBase, len(s.links))
+func (s *SplitStream[T]) getConsumers() []Stream {
+	var consumers = make([]Stream, len(s.links))
 	for i := 0; i < len(s.links); i++ {
 		consumers[i] = s.links[i].GetConsumer()
 	}

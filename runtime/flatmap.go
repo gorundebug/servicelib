@@ -13,7 +13,7 @@ import (
 )
 
 type FlatMapFunction[T, R any] interface {
-	FlatMap(T, Collect[R])
+	FlatMap(Stream, T, Collect[R])
 }
 
 type FlatMapFunctionContext[T, R any] struct {
@@ -24,7 +24,7 @@ type FlatMapFunctionContext[T, R any] struct {
 
 func (f FlatMapFunctionContext[T, R]) call(value T, out Collect[R]) {
 	f.BeforeCall()
-	f.f.FlatMap(value, out)
+	f.f.FlatMap(f.context, value, out)
 	f.AfterCall()
 }
 
@@ -45,7 +45,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 	}
 	flatMapStream := &FlatMapStream[T, R]{
 		ConsumedStream: &ConsumedStream[R]{
-			Stream: &Stream[R]{
+			StreamBase: &StreamBase[R]{
 				runtime: runtime,
 				config:  *streamConfig,
 			},
