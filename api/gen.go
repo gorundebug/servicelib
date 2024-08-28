@@ -196,10 +196,12 @@ type ProgrammingLanguage int
 
 // ProjectSettings defines model for ProjectSettings.
 type ProjectSettings struct {
-	GolangVersion string         `json:"golangVersion"`
-	MetricsEngine *MetricsEngine `json:"metricsEngine,omitempty"`
-	ModulePath    string         `json:"modulePath"`
-	Name          string         `json:"name"`
+	DelayExecutors int           `json:"delayExecutors"`
+	Environment    string        `json:"environment"`
+	GolangVersion  string        `json:"golangVersion"`
+	MetricsEngine  MetricsEngine `json:"metricsEngine"`
+	ModulePath     string        `json:"modulePath"`
+	Name           string        `json:"name"`
 }
 
 // Service defines model for Service.

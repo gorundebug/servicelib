@@ -125,6 +125,9 @@ components:
         - name
         - modulePath
         - golangVersion
+        - metricsEngine
+        - delayExecutors
+        - environment
 
     Service:
       type: object
