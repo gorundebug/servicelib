@@ -84,8 +84,10 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 				defer s.lock.Unlock()
 				if item == nil {
 					item = s.storage1[key]
-					if item != nil && !time.Now().Before(item.deadline) {
-						return item, s.storage1
+					if item != nil {
+						if !time.Now().Before(item.deadline) {
+							return item, s.storage1
+						}
 					}
 				} else if &storage != &s.storage1 {
 					delete(storage, key)
