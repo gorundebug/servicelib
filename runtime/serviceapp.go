@@ -378,3 +378,7 @@ func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 	}
 	return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond
 }
+
+func (app *ServiceApp) Delay(duration time.Duration, f func()) {
+
+}

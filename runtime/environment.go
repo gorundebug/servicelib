@@ -34,7 +34,10 @@ type StreamExecutionEnvironment interface {
 	GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader
 	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
 	GetMetrics() metrics.Metrics
+	Delay(duration time.Duration, f func())
 }
+
+type DelayFunc[T any] func(T) error
 
 type DataConnector interface {
 	GetName() string

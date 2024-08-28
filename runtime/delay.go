@@ -63,8 +63,9 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 }
 
 func (s *DelayStream[T]) Consume(value T) {
-	_ = s.f.call(value)
-	if s.caller != nil {
-		s.caller.Consume(value)
-	}
+	s.runtime.Delay(s.f.call(value), func() {
+		if s.caller != nil {
+			s.caller.Consume(value)
+		}
+	})
 }
