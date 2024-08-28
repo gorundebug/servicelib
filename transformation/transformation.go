@@ -113,6 +113,6 @@ func OutStubBinaryKV[T any](name string, stream runtime.TypedStream[T], consumer
 	return runtime.MakeOutStubBinaryKVStream[T](name, stream, consumer)
 }
 
-func MakeDelayStream[T any](name string, stream runtime.TypedStream[T]) *runtime.DelayStream[T] {
-	return runtime.MakeDelayStream[T](name, stream)
+func MakeDelayStream[T any](name string, stream runtime.TypedStream[T], f runtime.DelayFunction[T]) runtime.TypedConsumedStream[T] {
+	return runtime.MakeDelayStream[T](name, stream, f)
 }
