@@ -45,7 +45,7 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},

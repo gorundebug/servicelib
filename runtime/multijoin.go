@@ -130,7 +130,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

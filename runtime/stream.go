@@ -16,7 +16,7 @@ import (
 
 type StreamBase[T any] struct {
 	runtime StreamExecutionRuntime
-	config  config.StreamConfig
+	config  *config.StreamConfig
 }
 
 func (s *StreamBase[T]) GetTypeName() string {
@@ -33,7 +33,7 @@ func (s *StreamBase[T]) GetId() int {
 }
 
 func (s *StreamBase[T]) GetConfig() *config.StreamConfig {
-	return &s.config
+	return s.config
 }
 
 func (s *StreamBase[T]) GetRuntime() StreamExecutionRuntime {

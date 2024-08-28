@@ -47,7 +47,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

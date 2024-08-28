@@ -30,7 +30,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 	appSink := &AppSinkStream[T]{
 		StreamBase: &StreamBase[T]{
 			runtime: runtime,
-			config:  *streamConfig,
+			config:  streamConfig,
 		},
 		consumer: consumer,
 		serde:    stream.GetSerde(),

@@ -26,7 +26,7 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: streamExecutionRuntime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[T](streamExecutionRuntime),
 		},

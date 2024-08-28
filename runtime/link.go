@@ -27,7 +27,7 @@ func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStr
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 		},
 	}

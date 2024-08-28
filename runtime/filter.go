@@ -46,7 +46,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},

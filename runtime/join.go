@@ -138,7 +138,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

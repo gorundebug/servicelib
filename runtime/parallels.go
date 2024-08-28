@@ -48,7 +48,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

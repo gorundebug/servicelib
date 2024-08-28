@@ -49,7 +49,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 		ConsumedStream: &ConsumedStream[datastruct.KeyValue[K, V]]{
 			StreamBase: &StreamBase[datastruct.KeyValue[K, V]]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeKeyValueSerde[K, V](runtime),
 		},

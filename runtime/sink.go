@@ -30,7 +30,7 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 	sinkStream := &SinkStream[T]{
 		StreamBase: &StreamBase[T]{
 			runtime: runtime,
-			config:  *streamConfig,
+			config:  streamConfig,
 		},
 		serde:  stream.GetSerde(),
 		source: stream,

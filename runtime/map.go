@@ -48,7 +48,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

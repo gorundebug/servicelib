@@ -80,7 +80,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: ser,
 		},

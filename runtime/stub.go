@@ -32,7 +32,7 @@ func MakeInStubStream[T any](name string, runtime StreamExecutionRuntime) *InStu
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[T](runtime),
 		},
@@ -53,7 +53,7 @@ func MakeInStubKVStream[T any](name string, runtime StreamExecutionRuntime) *InS
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: serdeKV,
 		},
@@ -145,7 +145,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[T](runtime),
 		},
@@ -169,7 +169,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: MakeSerde[T](runtime),
 		},
@@ -194,7 +194,7 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: serdeKV,
 		},

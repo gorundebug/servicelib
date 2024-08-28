@@ -121,7 +121,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
 				runtime: runtime,
-				config:  *streamConfig,
+				config:  streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},
@@ -145,7 +145,7 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 			ConsumedStream: &ConsumedStream[T]{
 				StreamBase: &StreamBase[T]{
 					runtime: runtime,
-					config:  *streamConfig,
+					config:  streamConfig,
 				},
 				serde: MakeSerde[T](runtime),
 			},
@@ -169,7 +169,7 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
 			ConsumedStream: &ConsumedStream[T]{
 				StreamBase: &StreamBase[T]{
 					runtime: runtime,
-					config:  *streamConfig,
+					config:  streamConfig,
 				},
 				serde: serdeKV,
 			},
