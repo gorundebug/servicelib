@@ -75,6 +75,9 @@ type ServiceConfig struct {
 	ShutdownTimeout    int                    `yaml:"shutdownTimeout"`
 	Color              string                 `yaml:"color"`
 	DefaultGrpcTimeout int                    `yaml:"defaultGrpcTimeout"`
+	Environment        string                 `yaml:"environment"`
+	MetricsEngine      api.MetricsEngine      `yaml:"metricsEngine"`
+	DelayExecutors     int                    `yaml:"delayExecutors"`
 	Properties         map[string]interface{} `mapstructure:",remain"`
 }
 
@@ -116,13 +119,10 @@ func (s *EndpointConfig) GetProperty(name string) interface{} {
 }
 
 type ProjectSettings struct {
-	GolangVersion  string                 `yaml:"golangVersion"`
-	ModulePath     string                 `yaml:"modulePath"`
-	Name           string                 `yaml:"name"`
-	Environment    string                 `yaml:"environment"`
-	MetricsEngine  api.MetricsEngine      `yaml:"metricsEngine"`
-	DelayExecutors int                    `yaml:"delayExecutors"`
-	Properties     map[string]interface{} `mapstructure:",remain"`
+	GolangVersion string                 `yaml:"golangVersion"`
+	ModulePath    string                 `yaml:"modulePath"`
+	Name          string                 `yaml:"name"`
+	Properties    map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ProjectSettings) GetProperty(name string) interface{} {

@@ -115,20 +115,10 @@ components:
           type: string
         golangVersion:
           type: string
-        metricsEngine:
-          $ref: '#/components/schemas/MetricsEngine'
-        environment:
-          type: string
-        delayExecutors:
-          type: integer
-          minimum: 1
       required:
         - name
         - modulePath
         - golangVersion
-        - metricsEngine
-        - delayExecutors
-        - environment
 
     Service:
       type: object
@@ -163,6 +153,13 @@ components:
         shutdownTimeout:
           type: integer
           minimum: 0
+        metricsEngine:
+          $ref: '#/components/schemas/MetricsEngine'
+        environment:
+          type: string
+        delayExecutors:
+          type: integer
+          minimum: 1
       required:
         - id
         - name
@@ -174,6 +171,9 @@ components:
         - grpcPort
         - defaultGrpcTimeout
         - shutdownTimeout
+        - metricsEngine
+        - delayExecutors
+        - environment
 
     JoinStorageType:
       type: integer

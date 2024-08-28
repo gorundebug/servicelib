@@ -91,7 +91,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
-	app.metrics = telemetry.CreateMetrics(app.config.Settings.MetricsEngine)
+	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine)
 	app.runtime = runtime
 	app.streams = make(map[int]ServiceStream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
@@ -106,7 +106,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	if app.config.Settings.MetricsEngine == api.Prometeus {
+	if app.serviceConfig.MetricsEngine == api.Prometeus {
 		app.mux.Handle("/metrics", promhttp.Handler())
 	}
 	runtime.SetConfig(cfg)

@@ -197,12 +197,9 @@ type ProgrammingLanguage int
 
 // ProjectSettings defines model for ProjectSettings.
 type ProjectSettings struct {
-	DelayExecutors int           `json:"delayExecutors"`
-	Environment    string        `json:"environment"`
-	GolangVersion  string        `json:"golangVersion"`
-	MetricsEngine  MetricsEngine `json:"metricsEngine"`
-	ModulePath     string        `json:"modulePath"`
-	Name           string        `json:"name"`
+	GolangVersion string `json:"golangVersion"`
+	ModulePath    string `json:"modulePath"`
+	Name          string `json:"name"`
 }
 
 // Service defines model for Service.
@@ -210,9 +207,12 @@ type Service struct {
 	Color                *string             `json:"color,omitempty"`
 	DefaultCallSemantics CallSemantics       `json:"defaultCallSemantics"`
 	DefaultGrpcTimeout   int                 `json:"defaultGrpcTimeout"`
+	DelayExecutors       int                 `json:"delayExecutors"`
+	Environment          string              `json:"environment"`
 	GrpcHost             string              `json:"grpcHost"`
 	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`
+	MetricsEngine        MetricsEngine       `json:"metricsEngine"`
 	MonitoringHost       string              `json:"monitoringHost"`
 	MonitoringPort       int                 `json:"monitoringPort"`
 	Name                 string              `json:"name"`

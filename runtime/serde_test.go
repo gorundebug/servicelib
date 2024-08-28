@@ -44,10 +44,10 @@ func mockService() *MockService {
 					Name:           "MockService",
 					MonitoringHost: "127.0.0.1",
 					MonitoringPort: 9000,
+					MetricsEngine:  api.Prometeus,
+					Environment:    "",
+					DelayExecutors: 1,
 				},
-			},
-			Settings: config.ProjectSettings{
-				MetricsEngine: api.Prometeus,
 			},
 		},
 	}
