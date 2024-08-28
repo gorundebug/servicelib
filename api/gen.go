@@ -101,6 +101,7 @@ const (
 const (
 	TransformationTypeAppSink         TransformationType = 14
 	TransformationTypeCycleLink       TransformationType = 15
+	TransformationTypeDelay           TransformationType = 16
 	TransformationTypeFilter          TransformationType = 3
 	TransformationTypeFlatMap         TransformationType = 7
 	TransformationTypeFlatMapIterable TransformationType = 8
@@ -218,6 +219,7 @@ type Service struct {
 
 // Stream defines model for Stream.
 type Stream struct {
+	Duration        *int               `json:"duration,omitempty"`
 	FunctionName    *string            `json:"functionName,omitempty"`
 	FunctionPackage *string            `json:"functionPackage,omitempty"`
 	Id              int                `json:"id"`
@@ -230,6 +232,7 @@ type Stream struct {
 	KeyType         *string            `json:"keyType,omitempty"`
 	Name            string             `json:"name"`
 	PublicFunction  *bool              `json:"publicFunction,omitempty"`
+	Ttl             *int               `json:"ttl,omitempty"`
 	Type            TransformationType `json:"type"`
 	ValueType       *string            `json:"valueType,omitempty"`
 	XPos            *int               `json:"xPos,omitempty"`

@@ -35,25 +35,25 @@ func MakeHashMapJoinStorage[K comparable](ttl time.Duration) JoinStorage[K] {
 	}
 	if ttl > 0 {
 		joinStorage.storage2 = make(map[K]*Item)
+		joinStorage.timer = time.AfterFunc(ttl, joinStorage.rotate)
 	}
 	return joinStorage
 }
 
 func (s *HashMapJoinStorage[K]) rotate() {
+	newStorage := make(map[K]*Item)
 	s.rotateLock.Lock()
 	defer s.rotateLock.Unlock()
 	s.storage2 = s.storage1
-	s.storage1 = make(map[K]*Item)
+	s.storage1 = newStorage
 	s.timer.Reset(s.ttl)
 }
 
 func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f JoinValueFunc) {
-	if s.timer == nil && s.ttl > 0 {
+	if s.ttl > 0 {
 		s.rotateLock.RLock()
 		defer s.rotateLock.RUnlock()
-		s.timer = time.AfterFunc(s.ttl, s.rotate)
 	}
-
 	for {
 		item, storage := func() (*Item, map[K]*Item) {
 
@@ -109,15 +109,15 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 					s.lock.Lock()
 					defer s.lock.Unlock()
 					delete(storage, key)
-				} // else { //Depend on logic: should we extend deadline after change or not
-				//  s.lock.Lock()
-				//  defer s.lock.Unlock()
-				//  if &storage == &s.storage1 {
-				//      delete(storage, key)
-				//  }
-				//  item.deadline = time.Now().Add(s.ttl)
-				//  s.storage1[key] = item
-				// }
+				} else if false { //Depend on logic: should we extend deadline after change or not
+					s.lock.Lock()
+					defer s.lock.Unlock()
+					if &storage == &s.storage1 {
+						delete(storage, key)
+					}
+					item.deadline = time.Now().Add(s.ttl)
+					s.storage1[key] = item
+				}
 				return true
 			}
 			return false
