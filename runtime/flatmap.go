@@ -58,7 +58,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 		},
 	}
 	flatMapStream.f.context = flatMapStream
-	stream.setConsumer(flatMapStream)
+	stream.SetConsumer(flatMapStream)
 	runtime.registerStream(flatMapStream)
 	return flatMapStream
 }

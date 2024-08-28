@@ -35,7 +35,7 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 		serde:  stream.GetSerde(),
 		source: stream,
 	}
-	stream.setConsumer(sinkStream)
+	stream.SetConsumer(sinkStream)
 	runtime.registerStream(sinkStream)
 	return sinkStream
 }

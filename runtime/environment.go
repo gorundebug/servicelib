@@ -84,7 +84,7 @@ type TypedStream[T any] interface {
 	Stream
 	GetConsumer() TypedStreamConsumer[T]
 	GetSerde() serde.StreamSerde[T]
-	setConsumer(TypedStreamConsumer[T])
+	SetConsumer(TypedStreamConsumer[T])
 }
 
 type Consumer[T any] interface {

@@ -59,7 +59,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 		},
 	}
 	parallelsStream.f.context = parallelsStream
-	stream.setConsumer(parallelsStream)
+	stream.SetConsumer(parallelsStream)
 	runtime.registerStream(parallelsStream)
 	return parallelsStream
 }

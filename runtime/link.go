@@ -42,5 +42,5 @@ func (s *LinkStream[T]) Consume(value T) {
 func (s *LinkStream[T]) SetSource(stream TypedConsumedStream[T]) {
 	s.serde = stream.GetSerde()
 	s.source = stream
-	stream.setConsumer(s)
+	stream.SetConsumer(s)
 }

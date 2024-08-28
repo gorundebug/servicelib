@@ -60,7 +60,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 		},
 	}
 	keyByStream.f.context = keyByStream
-	stream.setConsumer(keyByStream)
+	stream.SetConsumer(keyByStream)
 	runtime.registerStream(keyByStream)
 	return keyByStream
 }

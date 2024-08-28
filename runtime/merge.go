@@ -88,7 +88,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	runtime.registerStream(mergeStream)
 	for index, stream := range streams {
 		link := mergeLink[T](index, mergeStream, stream)
-		stream.setConsumer(link)
+		stream.SetConsumer(link)
 	}
 	return mergeStream
 }

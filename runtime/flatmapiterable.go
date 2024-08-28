@@ -46,7 +46,7 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 		},
 		serdeIn: stream.GetSerde(),
 	}
-	stream.setConsumer(flatMapStreamIterable)
+	stream.SetConsumer(flatMapStreamIterable)
 	runtime.registerStream(flatMapStreamIterable)
 	return flatMapStreamIterable
 }

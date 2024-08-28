@@ -56,7 +56,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 		},
 	}
 	filterStream.f.context = filterStream
-	stream.setConsumer(filterStream)
+	stream.SetConsumer(filterStream)
 	runtime.registerStream(filterStream)
 	return filterStream
 }

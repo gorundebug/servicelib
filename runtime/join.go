@@ -165,10 +165,10 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 
 	joinStream.f.context = joinStream
-	stream.setConsumer(joinStream)
+	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)
 
 	link := joinLink[K, T1, T2, R](joinStream, streamRight)
-	streamRight.setConsumer(link)
+	streamRight.SetConsumer(link)
 	return joinStream
 }

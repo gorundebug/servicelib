@@ -55,7 +55,7 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 		},
 	}
 	forEachStream.f.context = forEachStream
-	stream.setConsumer(forEachStream)
+	stream.SetConsumer(forEachStream)
 	runtime.registerStream(forEachStream)
 	return forEachStream
 }

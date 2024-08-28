@@ -57,7 +57,7 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 		},
 	}
 	delayStream.f.context = delayStream
-	stream.setConsumer(delayStream)
+	stream.SetConsumer(delayStream)
 	runtime.registerStream(delayStream)
 	return delayStream
 }

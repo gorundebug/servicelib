@@ -62,7 +62,7 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 	}
 	multiJoinStream.links = append(multiJoinStream.links, link)
 
-	stream.setConsumer(link)
+	stream.SetConsumer(link)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) serializeValue(value interface{}) ([]byte, error) {
@@ -152,7 +152,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		return nil
 	}
 	multiJoinStream.f.context = multiJoinStream
-	leftStream.setConsumer(multiJoinStream)
+	leftStream.SetConsumer(multiJoinStream)
 	runtime.registerStream(multiJoinStream)
 
 	return multiJoinStream

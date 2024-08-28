@@ -62,7 +62,7 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 	return s.serde
 }
 
-func (s *ConsumedStream[T]) setConsumer(consumer TypedStreamConsumer[T]) {
+func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
 		log.Fatalf("consumer already assigned to the stream %d", s.StreamBase.config.Id)
 	}

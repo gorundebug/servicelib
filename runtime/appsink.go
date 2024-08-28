@@ -36,7 +36,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 		serde:    stream.GetSerde(),
 		source:   stream,
 	}
-	stream.setConsumer(appSink)
+	stream.SetConsumer(appSink)
 	runtime.registerStream(appSink)
 	return appSink
 }

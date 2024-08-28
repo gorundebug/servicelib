@@ -152,7 +152,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 		source:   stream,
 		consumer: consumer,
 	}
-	stream.setConsumer(outStubStream)
+	stream.SetConsumer(outStubStream)
 	runtime.registerStream(outStubStream)
 	return outStubStream
 }
@@ -176,7 +176,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 		source:   stream,
 		consumer: consumer,
 	}
-	stream.setConsumer(outStubBinaryStream)
+	stream.SetConsumer(outStubBinaryStream)
 	runtime.registerStream(outStubBinaryStream)
 	return outStubBinaryStream
 }
@@ -202,7 +202,7 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 		source:   stream,
 		consumer: consumer,
 	}
-	stream.setConsumer(outStubBinaryKVStream)
+	stream.SetConsumer(outStubBinaryKVStream)
 	runtime.registerStream(outStubBinaryKVStream)
 	return outStubBinaryKVStream
 }

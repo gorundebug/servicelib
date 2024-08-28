@@ -59,7 +59,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 		},
 	}
 	mapStream.f.context = mapStream
-	stream.setConsumer(mapStream)
+	stream.SetConsumer(mapStream)
 	runtime.registerStream(mapStream)
 	return mapStream
 }

@@ -37,7 +37,7 @@ func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
 	return s.splitStream.GetConfig()
 }
 
-func (s *SplitLink[T]) setConsumer(consumer TypedStreamConsumer[T]) {
+func (s *SplitLink[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.splitStream.runtime, s)
 }
@@ -129,7 +129,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 		links:  make([]*SplitLink[T], 0, 2),
 	}
 	runtime.registerStream(splitStream)
-	stream.setConsumer(splitStream)
+	stream.SetConsumer(splitStream)
 	return splitStream
 }
 
