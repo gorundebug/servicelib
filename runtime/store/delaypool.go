@@ -8,7 +8,10 @@
 package store
 
 import (
+	"container/heap"
 	"context"
+	log "github.com/sirupsen/logrus"
+	"sync"
 	"time"
 )
 
@@ -16,12 +19,6 @@ type DelayPool interface {
 	Delay(deadline time.Duration, fn func()) *DelayTask
 	Start(ctx context.Context)
 	Stop(ctx context.Context)
-}
-
-func MakeDelayPool(executorsCount int) DelayPool {
-	return &DelayPoolImpl{
-		executorsCount: executorsCount,
-	}
 }
 
 type DelayTask struct {
@@ -61,56 +58,104 @@ func (pq *PriorityQueue) Pop() interface{} {
 	return item
 }
 
-func (pq *PriorityQueue) down(i, n int) {
-	for {
-		left := 2*i + 1
-		right := 2*i + 2
-		smallest := i
-		if left < n && pq.Less(left, smallest) {
-			smallest = left
-		}
-		if right < n && pq.Less(right, smallest) {
-			smallest = right
-		}
-		if smallest == i {
-			break
-		}
-		pq.Swap(i, smallest)
-		i = smallest
-	}
-}
-
-func (pq *PriorityQueue) up(i int) {
-	for {
-		parent := (i - 1) / 2
-		if i == 0 || pq.Less(parent, i) {
-			break
-		}
-		pq.Swap(i, parent)
-		i = parent
-	}
-}
-
-func (pq *PriorityQueue) Remove(item *DelayTask) {
-	index := item.index
-	n := len(*pq)
-	pq.Swap(index, n-1)
-	*pq = (*pq)[:n-1]
-	pq.down(index, n-1)
-	pq.up(index)
-	item.index = -1
-}
-
 type DelayPoolImpl struct {
 	executorsCount int
+	pq             *PriorityQueue
+	ch             chan *DelayTask
+	wg             sync.WaitGroup
+	timer          *time.Timer
+	lock           sync.Mutex
+	stopCh         chan struct{}
+}
+
+func MakeDelayPool(executorsCount int) DelayPool {
+	return &DelayPoolImpl{
+		executorsCount: executorsCount,
+		ch:             make(chan *DelayTask),
+		pq:             &PriorityQueue{},
+	}
+}
+
+func (p *DelayPoolImpl) processTimer() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	now := time.Now()
+	for p.pq.Len() > 0 {
+		if !(*p.pq)[0].deadline.After(now) {
+			p.ch <- heap.Pop(p.pq).(*DelayTask)
+		}
+	}
+	if p.pq.Len() > 0 {
+		p.timer.Reset(time.Until((*p.pq)[0].deadline))
+	} else if p.stopCh != nil {
+		close(p.stopCh)
+	}
 }
 
 func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
-	return nil
+	task := &DelayTask{
+		deadline: time.Now().Add(deadline),
+		fn:       fn,
+		index:    -1,
+	}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	if p.pq.Len() == 0 || task.deadline.Before((*p.pq)[0].deadline) {
+		if p.timer != nil {
+			p.timer.Reset(deadline)
+		} else {
+			p.timer = time.AfterFunc(deadline, p.processTimer)
+		}
+	}
+	heap.Push(p.pq, task)
+	return task
 }
 
 func (p *DelayPoolImpl) Start(ctx context.Context) {
+	for i := 0; i < p.executorsCount; i++ {
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			for task := range p.ch {
+				task.fn()
+			}
+		}()
+	}
 }
 
 func (p *DelayPoolImpl) Stop(ctx context.Context) {
+	p.lock.Lock()
+	if p.pq.Len() > 0 {
+		go func() {
+			p.stopCh = make(chan struct{})
+			p.lock.Unlock()
+			select {
+			case <-p.stopCh:
+			case <-ctx.Done():
+				p.lock.Lock()
+				log.Warnf("delay task pool stopped by timeout and was not empty (tasks count=%d), %s",
+					p.pq.Len(), ctx.Err())
+				p.lock.Unlock()
+			}
+		}()
+	} else {
+		p.lock.Unlock()
+	}
+	p.lock.Lock()
+	if p.pq.Len() == 0 {
+		p.lock.Unlock()
+		close(p.ch)
+		done := make(chan struct{})
+		go func() {
+			p.wg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			log.Warnf("delay task pool stopped by timeout: %s", ctx.Err())
+		}
+	} else {
+		p.lock.Unlock()
+	}
 }
