@@ -9,7 +9,6 @@ package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
@@ -134,6 +133,14 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
+	if streamConfig.JoinStorage == nil {
+		log.Fatalf("Join storage type is undefined for the stream '%s", name)
+		return nil
+	}
+	ttl := time.Duration(0)
+	if streamConfig.TTL != nil {
+		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
@@ -145,25 +152,10 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		f: JoinFunctionContext[K, T1, T2, R]{
 			f: f,
 		},
-		serdeIn: stream.GetSerde(),
-		source:  stream,
+		serdeIn:     stream.GetSerde(),
+		source:      stream,
+		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl),
 	}
-	if streamConfig.JoinStorage == nil {
-		log.Fatalf("Join storage type is undefined for the stream '%s", name)
-		return nil
-	}
-	ttl := time.Duration(0)
-	if streamConfig.TTL != nil {
-		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
-	}
-	switch *streamConfig.JoinStorage {
-	case api.HashMap:
-		joinStream.joinStorage = store.MakeHashMapJoinStorage[K](ttl)
-	default:
-		log.Fatalf("Join storage type %d is not supported for the stream '%s", *streamConfig.JoinStorage, name)
-		return nil
-	}
-
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)

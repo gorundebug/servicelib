@@ -9,7 +9,6 @@ package runtime
 
 import (
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
@@ -126,6 +125,14 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
+	if streamConfig.JoinStorage == nil {
+		log.Fatalf("Join storage type is undefined for the stream '%s", name)
+		return nil
+	}
+	ttl := time.Duration(0)
+	if streamConfig.TTL != nil {
+		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
@@ -139,17 +146,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
-	}
-	ttl := time.Duration(0)
-	if streamConfig.TTL != nil {
-		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
-	}
-	switch *streamConfig.JoinStorage {
-	case api.HashMap:
-		multiJoinStream.joinStorage = store.MakeHashMapJoinStorage[K](ttl)
-	default:
-		log.Fatalf("Join storage type %d is not supported for the stream '%s", *streamConfig.JoinStorage, name)
-		return nil
+		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl),
 	}
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
