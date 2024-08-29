@@ -45,6 +45,7 @@ func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R],
 		source:     stream,
 		serde:      stream.GetSerde(),
 	}
+	stream.SetConsumer(joinLink)
 	return joinLink
 }
 
@@ -160,7 +161,6 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)
 
-	link := joinLink[K, T1, T2, R](joinStream, streamRight)
-	streamRight.SetConsumer(link)
+	_ = joinLink[K, T1, T2, R](joinStream, streamRight)
 	return joinStream
 }

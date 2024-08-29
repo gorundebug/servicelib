@@ -59,9 +59,8 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 		serdeIn:         stream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]),
 		serdeValue:      stream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]).ValueSerializer().(serde.Serde[T2]),
 	}
-	multiJoinStream.links = append(multiJoinStream.links, link)
-
 	stream.SetConsumer(link)
+	multiJoinStream.links = append(multiJoinStream.links, link)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) serializeValue(value interface{}) ([]byte, error) {
