@@ -25,11 +25,11 @@ services:
   name: IncomeService
   programmingLanguage: 1
   shutdownTimeout: 30000
+  metricsEngine: 1
 settings:
   golangVersion: 1.22.3
   modulePath: test.com
   name: FilterWords
-  metricsEngine: 1
 streams:
 - id: 1
   idEndpoint: 1

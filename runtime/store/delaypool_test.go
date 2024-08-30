@@ -14,13 +14,13 @@ import (
 	"time"
 )
 
-func TestIsKeyValueType(t *testing.T) {
+func Test_PriorityQueue(t *testing.T) {
 	pq := &PriorityQueue{}
 	heap.Push(pq, &DelayTask{deadline: time.Unix(1, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(7, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(20, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(4, 0)})
-	task := &DelayTask{deadline: time.Unix(77, 0)}
+	task := &DelayTask{deadline: time.Unix(19, 0)}
 	heap.Push(pq, task)
 	heap.Push(pq, &DelayTask{deadline: time.Unix(4, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(12, 0)})
