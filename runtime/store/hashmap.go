@@ -80,11 +80,11 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 				newItem := &Item{
 					values: make([][]interface{}, index+1, 2),
 				}
+				s.lock.Lock()
+				defer s.lock.Unlock()
 				if s.ttl > 0 {
 					newItem.deadline = time.Now().Add(s.ttl)
 				}
-				s.lock.Lock()
-				defer s.lock.Unlock()
 				if item == nil {
 					item = s.storage1[key]
 					if item != nil {
