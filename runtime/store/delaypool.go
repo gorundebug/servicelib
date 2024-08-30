@@ -9,6 +9,7 @@ package store
 
 import (
 	"container/heap"
+	"container/list"
 	"context"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -60,19 +61,24 @@ func (pq *PriorityQueue) Pop() interface{} {
 type DelayPoolImpl struct {
 	executorsCount int
 	pq             *PriorityQueue
-	ch             chan *DelayTask
+	tasks          *list.List
 	wg             sync.WaitGroup
 	timer          *time.Timer
 	lock           sync.Mutex
 	stopCh         chan struct{}
+	cond           *sync.Cond
+	tasksLock      sync.Mutex
+	done           bool
 }
 
 func makeDelayPool(executorsCount int) DelayPool {
-	return &DelayPoolImpl{
+	pool := &DelayPoolImpl{
 		executorsCount: executorsCount,
-		ch:             make(chan *DelayTask),
+		tasks:          list.New(),
 		pq:             &PriorityQueue{},
 	}
+	pool.cond = sync.NewCond(&pool.tasksLock)
+	return pool
 }
 
 func (p *DelayPoolImpl) processTimer() {
@@ -81,7 +87,11 @@ func (p *DelayPoolImpl) processTimer() {
 	now := time.Now()
 	for p.pq.Len() > 0 {
 		if !(*p.pq)[0].deadline.After(now) {
-			p.ch <- heap.Pop(p.pq).(*DelayTask)
+			task := heap.Pop(p.pq).(*DelayTask)
+			p.tasksLock.Lock()
+			p.tasks.PushBack(task)
+			p.cond.Signal()
+			p.tasksLock.Unlock()
 		}
 	}
 	if p.pq.Len() > 0 {
@@ -115,7 +125,17 @@ func (p *DelayPoolImpl) Start(ctx context.Context) error {
 		p.wg.Add(1)
 		go func() {
 			defer p.wg.Done()
-			for task := range p.ch {
+			for {
+				p.tasksLock.Lock()
+				for p.tasks.Len() == 0 && !p.done {
+					p.cond.Wait()
+				}
+				if p.done {
+					p.tasksLock.Unlock()
+					break
+				}
+				task := p.tasks.Remove(p.tasks.Front()).(*DelayTask)
+				p.tasksLock.Unlock()
 				task.fn()
 			}
 		}()
@@ -144,7 +164,10 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
 	if p.pq.Len() == 0 {
 		p.lock.Unlock()
-		close(p.ch)
+		p.tasksLock.Lock()
+		p.done = true
+		p.cond.Broadcast()
+		p.tasksLock.Unlock()
 		done := make(chan struct{})
 		go func() {
 			p.wg.Wait()
