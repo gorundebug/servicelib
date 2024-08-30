@@ -142,6 +142,10 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	if streamConfig.TTL != nil {
 		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
 	}
+	renewTTL := false
+	if streamConfig.RenewTTL != nil {
+		renewTTL = *streamConfig.RenewTTL
+	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
@@ -155,8 +159,9 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		},
 		serdeIn:     stream.GetSerde(),
 		source:      stream,
-		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl),
+		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl, renewTTL),
 	}
+	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)

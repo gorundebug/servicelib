@@ -18,6 +18,7 @@ import (
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"gopkg.in/yaml.v2"
 	"io"
 	"os"
@@ -46,6 +47,7 @@ type StreamExecutionRuntime interface {
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(statistics ConsumeStatistics)
+	registerStorage(storage store.Storage)
 }
 
 func getPath(argPath *string) string {

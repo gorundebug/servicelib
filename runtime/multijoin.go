@@ -132,6 +132,10 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	if streamConfig.TTL != nil {
 		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
 	}
+	renewTTL := false
+	if streamConfig.RenewTTL != nil {
+		renewTTL = *streamConfig.RenewTTL
+	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
@@ -145,8 +149,9 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
-		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl),
+		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl, renewTTL),
 	}
+	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
 	runtime.registerStream(multiJoinStream)

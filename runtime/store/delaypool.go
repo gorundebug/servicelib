@@ -16,9 +16,8 @@ import (
 )
 
 type DelayPool interface {
+	Storage
 	Delay(deadline time.Duration, fn func()) *DelayTask
-	Start(ctx context.Context)
-	Stop(ctx context.Context)
 }
 
 type DelayTask struct {
@@ -68,7 +67,7 @@ type DelayPoolImpl struct {
 	stopCh         chan struct{}
 }
 
-func MakeDelayPool(executorsCount int) DelayPool {
+func makeDelayPool(executorsCount int) DelayPool {
 	return &DelayPoolImpl{
 		executorsCount: executorsCount,
 		ch:             make(chan *DelayTask),
@@ -111,7 +110,7 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 	return task
 }
 
-func (p *DelayPoolImpl) Start(ctx context.Context) {
+func (p *DelayPoolImpl) Start(ctx context.Context) error {
 	for i := 0; i < p.executorsCount; i++ {
 		p.wg.Add(1)
 		go func() {
@@ -121,6 +120,7 @@ func (p *DelayPoolImpl) Start(ctx context.Context) {
 			}
 		}()
 	}
+	return nil
 }
 
 func (p *DelayPoolImpl) Stop(ctx context.Context) {

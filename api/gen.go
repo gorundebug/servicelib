@@ -235,6 +235,7 @@ type Stream struct {
 	KeyType         *string            `json:"keyType,omitempty"`
 	Name            string             `json:"name"`
 	PublicFunction  *bool              `json:"publicFunction,omitempty"`
+	RenewTTL        *bool              `json:"renewTTL,omitempty"`
 	Ttl             *int               `json:"ttl,omitempty"`
 	Type            TransformationType `json:"type"`
 	ValueType       *string            `json:"valueType,omitempty"`

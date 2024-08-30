@@ -8,6 +8,7 @@
 package store
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -26,12 +27,14 @@ type HashMapJoinStorage[K comparable] struct {
 	rotateLock sync.RWMutex
 	lock       sync.RWMutex
 	timer      *time.Timer
+	renewTTL   bool
 }
 
-func MakeHashMapJoinStorage[K comparable](ttl time.Duration) JoinStorage[K] {
+func MakeHashMapJoinStorage[K comparable](ttl time.Duration, renewTTL bool) JoinStorage[K] {
 	joinStorage := &HashMapJoinStorage[K]{
 		storage1: make(map[K]*Item),
 		ttl:      ttl,
+		renewTTL: renewTTL,
 	}
 	if ttl > 0 {
 		joinStorage.storage2 = make(map[K]*Item)
@@ -111,7 +114,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 					s.lock.Lock()
 					defer s.lock.Unlock()
 					delete(storage, key)
-				} else if false { //Depend on logic: should we extend deadline after change or not
+				} else if s.renewTTL { //Depend on logic: should we extend deadline after change or not
 					s.lock.Lock()
 					defer s.lock.Unlock()
 					if &storage == &s.storage1 {
@@ -127,4 +130,11 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 			break
 		}
 	}
+}
+
+func (s *HashMapJoinStorage[K]) Start(ctx context.Context) error {
+	return nil
+}
+
+func (s *HashMapJoinStorage[K]) Stop(ctx context.Context) {
 }

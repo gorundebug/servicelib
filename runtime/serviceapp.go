@@ -18,6 +18,7 @@ import (
 	"gitlab.com/gorundebug/servicelib/api"
 	"gitlab.com/gorundebug/servicelib/runtime/config"
 	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"gitlab.com/gorundebug/servicelib/telemetry"
 	"gitlab.com/gorundebug/servicelib/telemetry/metrics"
 	"golang.org/x/text/cases"
@@ -45,6 +46,8 @@ type ServiceApp struct {
 	httpServerDone    chan struct{}
 	metrics           metrics.Metrics
 	consumeStatistics map[config.LinkId]ConsumeStatistics
+	storages          []store.Storage
+	delayPool         store.DelayPool
 }
 
 func (app *ServiceApp) reloadConfig(config config.Config) {
@@ -70,6 +73,10 @@ func (app *ServiceApp) GetMetrics() metrics.Metrics {
 
 func (app *ServiceApp) registerStream(stream ServiceStream) {
 	app.streams[stream.GetId()] = stream
+}
+
+func (app *ServiceApp) registerStorage(storage store.Storage) {
+	app.storages = append(app.storages, storage)
 }
 
 func (app *ServiceApp) registerSerde(tp reflect.Type, serializer serde.StreamSerializer) {
@@ -100,6 +107,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
+	app.delayPool = store.MakeDelayTaskPool(app.serviceConfig.DelayExecutors)
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),
@@ -307,7 +315,6 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		}
 		app.httpServerDone <- struct{}{}
 	}()
-
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
 			log.Fatalln(err)
@@ -318,11 +325,24 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			log.Fatalln(err)
 		}
 	}
+	for _, v := range app.storages {
+		if err := v.Start(ctx); err != nil {
+			log.Fatalln(err)
+		}
+	}
+	if err := app.delayPool.Start(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
 	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.delayPool.Stop(ctx)
+	}()
 	for _, v := range app.dataSources {
 		wg.Add(1)
 		go func() {
@@ -376,5 +396,5 @@ func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 }
 
 func (app *ServiceApp) Delay(duration time.Duration, f func()) {
-
+	_ = app.delayPool.Delay(duration, f)
 }

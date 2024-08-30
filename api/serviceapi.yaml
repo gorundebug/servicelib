@@ -291,6 +291,8 @@ components:
         ttl:
           type: integer
           minimum: 0
+        renewTTL:
+          type: boolean
         duration:
           type: integer
           minimum: 0

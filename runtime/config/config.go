@@ -34,6 +34,7 @@ type StreamConfig struct {
 	XPos        int                    `yaml:"xPos"`
 	YPos        int                    `yaml:"yPos"`
 	TTL         *int64                 `yaml:"ttl"`
+	RenewTTL    *bool                  `yaml:"renewTTL"`
 	Duration    *int64                 `yaml:"duration"`
 	JoinStorage *api.JoinStorageType   `yaml:"joinStorage"`
 	Properties  map[string]interface{} `mapstructure:",remain"`
