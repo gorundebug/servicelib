@@ -11,7 +11,6 @@ import (
 	"container/heap"
 	"container/list"
 	"context"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -101,7 +100,6 @@ func (p *DelayPoolImpl) processTimer() {
 		p.stop = true
 		close(p.stopCh)
 	}
-	fmt.Printf("processTimer %d\n", p.pq.Len())
 }
 
 func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
@@ -120,7 +118,6 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 		}
 	}
 	heap.Push(p.pq, task)
-	fmt.Printf("delay %d\n", p.pq.Len())
 	return task
 }
 
