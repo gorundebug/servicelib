@@ -11,6 +11,7 @@ import (
 	"container/heap"
 	"container/list"
 	"context"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -69,6 +70,7 @@ type DelayPoolImpl struct {
 	cond           *sync.Cond
 	tasksLock      sync.Mutex
 	done           bool
+	stop           bool
 }
 
 func makeDelayPool(executorsCount int) DelayPool {
@@ -84,9 +86,8 @@ func makeDelayPool(executorsCount int) DelayPool {
 func (p *DelayPoolImpl) processTimer() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	now := time.Now()
 	for p.pq.Len() > 0 {
-		if !(*p.pq)[0].deadline.After(now) {
+		if !(*p.pq)[0].deadline.After(time.Now()) {
 			task := heap.Pop(p.pq).(*DelayTask)
 			p.tasksLock.Lock()
 			p.tasks.PushBack(task)
@@ -96,19 +97,21 @@ func (p *DelayPoolImpl) processTimer() {
 	}
 	if p.pq.Len() > 0 {
 		p.timer.Reset(time.Until((*p.pq)[0].deadline))
-	} else if p.stopCh != nil {
+	} else if p.stopCh != nil && !p.stop {
+		p.stop = true
 		close(p.stopCh)
 	}
+	fmt.Printf("processTimer %d\n", p.pq.Len())
 }
 
 func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 	task := &DelayTask{
-		deadline: time.Now().Add(deadline),
-		fn:       fn,
-		index:    -1,
+		fn:    fn,
+		index: -1,
 	}
 	p.lock.Lock()
 	defer p.lock.Unlock()
+	task.deadline = time.Now().Add(deadline)
 	if p.pq.Len() == 0 || task.deadline.Before((*p.pq)[0].deadline) {
 		if p.timer != nil {
 			p.timer.Reset(deadline)
@@ -117,6 +120,7 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 		}
 	}
 	heap.Push(p.pq, task)
+	fmt.Printf("delay %d\n", p.pq.Len())
 	return task
 }
 
