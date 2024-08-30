@@ -37,7 +37,7 @@ func (s *MockService) StreamsInit(ctx context.Context) {
 func (s *MockService) SetConfig(config config.Config) {}
 
 func mockService() *MockService {
-	config := MockServiceConfig{
+	cfg := MockServiceConfig{
 		ServiceAppConfig: config.ServiceAppConfig{
 			Services: []config.ServiceConfig{
 				{
@@ -52,7 +52,7 @@ func mockService() *MockService {
 		},
 	}
 	service := MockService{}
-	service.serviceInit("MockService", &service, &config)
+	service.serviceInit("MockService", &service, &cfg)
 	return &service
 }
 
