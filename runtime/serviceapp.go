@@ -368,12 +368,8 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 	link := app.config.GetLink(from, to)
 	if link != nil {
-		propTimeout := link.GetProperty("timeout")
-		if propTimeout != nil {
-			timeout := propTimeout.(int)
-			if timeout > 0 {
-				return time.Duration(timeout) * time.Millisecond
-			}
+		if link.Timeout != nil {
+			return time.Duration(*link.Timeout) * time.Millisecond
 		}
 	}
 	return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond

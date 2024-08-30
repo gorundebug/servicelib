@@ -89,6 +89,7 @@ type LinkConfig struct {
 	From          int                    `yaml:"from"`
 	To            int                    `yaml:"to"`
 	CallSemantics api.CallSemantics      `yaml:"callSemantics"`
+	Timeout       *int                   `yaml:"timeout"`
 	Properties    map[string]interface{} `mapstructure:",remain"`
 }
 
