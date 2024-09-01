@@ -4,4 +4,4 @@
 
 git add .
 git commit -m "$2"
-bash set_tag.sh $1
+bash set_tag.sh "$1"
