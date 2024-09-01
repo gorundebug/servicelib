@@ -8,8 +8,8 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/runtime/serde"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
 )
 
 type InStubStream[T any] struct {

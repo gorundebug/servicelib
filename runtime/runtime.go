@@ -12,13 +12,13 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/serde"
+	"github.com/gorundebug/servicelib/runtime/store"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"gitlab.com/gorundebug/servicelib/api"
-	"gitlab.com/gorundebug/servicelib/runtime/config"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
-	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"gopkg.in/yaml.v2"
 	"io"
 	"os"
@@ -306,7 +306,7 @@ var keyValuePattern = regexp.MustCompile(`^KeyValue\[\w+,\w+]$`)
 
 func IsKeyValueType[T any]() bool {
 	tp := serde.GetSerdeType[T]()
-	return tp.PkgPath() == "gitlab.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
+	return tp.PkgPath() == "github.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
 }
 
 func RegisterSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {

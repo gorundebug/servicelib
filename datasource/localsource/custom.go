@@ -9,8 +9,8 @@ package localsource
 
 import (
 	"context"
+	"github.com/gorundebug/servicelib/runtime"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime"
 	"sync"
 	"time"
 )

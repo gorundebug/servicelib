@@ -8,8 +8,8 @@
 package datasink
 
 import (
-	"gitlab.com/gorundebug/servicelib/datasink/localsink"
-	"gitlab.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/datasink/localsink"
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 func CustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer localsink.DataConsumer[T]) runtime.Consumer[T] {

@@ -8,9 +8,9 @@
 package datasource
 
 import (
-	"gitlab.com/gorundebug/servicelib/datasource/http"
-	"gitlab.com/gorundebug/servicelib/datasource/localsource"
-	"gitlab.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/datasource/http"
+	"github.com/gorundebug/servicelib/datasource/localsource"
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 func CustomEndpointConsumer[T any](stream runtime.TypedInputStream[T], dataProducer localsource.DataProducer[T]) runtime.Consumer[T] {

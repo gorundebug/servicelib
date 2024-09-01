@@ -1,4 +1,4 @@
-module gitlab.com/gorundebug/servicelib
+module github.com/gorundebug/servicelib
 
 go 1.22
 

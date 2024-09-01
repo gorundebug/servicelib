@@ -8,10 +8,10 @@
 package telemetry
 
 import (
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/telemetry/prometeus"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/api"
-	"gitlab.com/gorundebug/servicelib/telemetry/metrics"
-	"gitlab.com/gorundebug/servicelib/telemetry/prometeus"
 )
 
 func CreateMetrics(metricsEngine api.MetricsEngine) metrics.Metrics {

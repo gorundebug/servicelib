@@ -9,11 +9,11 @@ package runtime
 
 import (
 	"context"
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/stretchr/testify/assert"
-	"gitlab.com/gorundebug/servicelib/api"
-	"gitlab.com/gorundebug/servicelib/runtime/config"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
 	"reflect"
 	"testing"
 )

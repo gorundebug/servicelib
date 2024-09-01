@@ -8,8 +8,8 @@
 package store
 
 import (
+	"github.com/gorundebug/servicelib/api"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/api"
 	"time"
 )
 

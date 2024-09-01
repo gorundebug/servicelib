@@ -10,7 +10,7 @@ package serde
 import (
 	"encoding/binary"
 	"fmt"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"math"
 	"math/bits"
 	"reflect"

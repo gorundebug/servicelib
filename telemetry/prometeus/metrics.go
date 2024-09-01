@@ -8,9 +8,9 @@
 package prometeus
 
 import (
+	"github.com/gorundebug/servicelib/telemetry/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"gitlab.com/gorundebug/servicelib/telemetry/metrics"
 )
 
 type Metrics struct {

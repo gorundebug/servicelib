@@ -8,11 +8,11 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/serde"
+	"github.com/gorundebug/servicelib/runtime/store"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime/config"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
-	"gitlab.com/gorundebug/servicelib/runtime/store"
 	"time"
 )
 

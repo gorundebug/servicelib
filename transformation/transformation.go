@@ -8,8 +8,8 @@
 package transformation
 
 import (
-	"gitlab.com/gorundebug/servicelib/runtime"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 )
 
 func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {

@@ -8,8 +8,8 @@
 package serde
 
 import (
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
 	"reflect"
 )
 

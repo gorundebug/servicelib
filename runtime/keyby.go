@@ -8,9 +8,9 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/serde"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime/datastruct"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
 )
 
 type KeyByFunction[T any, K comparable, V any] interface {

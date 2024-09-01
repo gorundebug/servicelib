@@ -8,9 +8,9 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/serde"
 	log "github.com/sirupsen/logrus"
-	"gitlab.com/gorundebug/servicelib/runtime/config"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
 )
 
 type MergeStream[T any] struct {

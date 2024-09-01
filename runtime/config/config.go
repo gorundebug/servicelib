@@ -8,7 +8,7 @@
 package config
 
 import (
-	"gitlab.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/api"
 )
 
 type Config interface {

@@ -9,8 +9,8 @@ package runtime
 
 import (
 	"context"
-	"gitlab.com/gorundebug/servicelib/runtime/config"
-	"gitlab.com/gorundebug/servicelib/runtime/serde"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/serde"
 	"golang.org/x/exp/maps"
 )
 
