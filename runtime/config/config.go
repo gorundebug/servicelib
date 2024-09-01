@@ -37,6 +37,7 @@ type StreamConfig struct {
 	RenewTTL    *bool                  `yaml:"renewTTL"`
 	Duration    *int64                 `yaml:"duration"`
 	JoinStorage *api.JoinStorageType   `yaml:"joinStorage"`
+	JoinType    *api.JoinType          `yaml:"joinType"`
 	Properties  map[string]interface{} `mapstructure:",remain"`
 }
 

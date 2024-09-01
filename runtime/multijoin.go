@@ -161,7 +161,10 @@ func MakeMultiJoinStream[K comparable, T, R any](
 
 func (s *MultiJoinStream[K, T, R]) consume(key K, index int, value interface{}) {
 	s.joinStorage.JoinValue(key, index, value, func(values [][]interface{}) bool {
-		return s.f.call(key, values, s)
+		if len(values) > 0 && len(values[0]) > 0 {
+			return s.f.call(key, values, s)
+		}
+		return false
 	})
 }
 
