@@ -1,0 +1,5 @@
+package: api
+generate:
+  gorilla-server: true
+  models: true
+output: gen.go

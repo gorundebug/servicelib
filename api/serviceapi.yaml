@@ -1,0 +1,488 @@
+openapi: 3.0.0
+info:
+  title: Service Architect API
+  description: Service Architect API.
+  version: 0.0.1
+servers:
+  - url: https://api.gorundebug.com/v1
+    description: Service Architect API Server
+paths:
+  /generateCode:
+    post:
+      summary: Generate project code.
+      description: Generate project code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamApp'
+            examples:
+              default:
+                summary: A base example
+                value:
+                  streams:
+                    - type: 1
+                      id: 1
+                      name: Stream1
+                      idSource: 0
+                      idSources: [ ]
+                      valueType: Input1ValueType
+                      idService: 1
+                      idEndpoint: 1
+                    - type: 7
+                      id: 2
+                      name: Stream2
+                      idSource: 1
+                      idSources: [ ]
+                      valueType: FlatMap2ValueType
+                      idService: 1
+                  services:
+                    - id: 1
+                      name: Service1
+                      programmingLanguage: 1
+                  dataConnector:
+                    - id: 1
+                      name: DataConnector1
+                      type: 1
+                  endpoints:
+                    - id: 1
+                      name: Endpoint1
+
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/zip:
+              schema:
+                $ref: '#/components/schemas/StringBinary'
+
+components:
+  schemas:
+    StreamApp:
+      type: object
+      properties:
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+        streams:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stream'
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+            minItems: 1
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/Type'
+        dataConnectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataConnector'
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Endpoint'
+      required:
+        - services
+        - streams
+        - links
+        - types
+        - dataConnectors
+        - endpoints
+        - settings
+
+    ProgrammingLanguage:
+      type: integer
+      enum: [ 1, 2, 3 ]
+      x-enum-varnames:
+        - GoLang
+        - Cpp
+        - Python
+
+    ProjectSettings:
+      type: object
+      properties:
+        name:
+          type: string
+        modulePath:
+          type: string
+        golangVersion:
+          type: string
+      required:
+        - name
+        - modulePath
+        - golangVersion
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Service1
+        programmingLanguage:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        defaultCallSemantics:
+          $ref: '#/components/schemas/CallSemantics'
+        monitoringPort:
+          type: integer
+          minimum: 80
+          maximum: 65535
+        monitoringHost:
+          type: string
+        grpcPort:
+          type: integer
+          minimum: 80
+          maximum: 65535
+        defaultGrpcTimeout:
+          type: integer
+          minimum: 0
+        grpcHost:
+          type: string
+        color:
+          type: string
+        shutdownTimeout:
+          type: integer
+          minimum: 0
+        metricsEngine:
+          $ref: '#/components/schemas/MetricsEngine'
+        environment:
+          type: string
+        delayExecutors:
+          type: integer
+          minimum: 1
+      required:
+        - id
+        - name
+        - programmingLanguage
+        - defaultCallSemantics
+        - monitoringHost
+        - monitoringPort
+        - grpcHost
+        - grpcPort
+        - defaultGrpcTimeout
+        - shutdownTimeout
+        - metricsEngine
+        - delayExecutors
+        - environment
+
+    JoinStorageType:
+      type: integer
+      enum: [ 1, 2, 3 ]
+      x-enum-varnames:
+        - HashMap
+        - RocksDB
+        - Aerospike
+
+    TransformationType:
+      type: integer
+      enum: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ]
+      x-enum-varnames:
+        - Input
+        - Map
+        - Filter
+        - Join
+        - MultiJoin
+        - ForEach
+        - FlatMap
+        - FlatMapIterable
+        - KeyBy
+        - Merge
+        - Split
+        - Parallels
+        - Sink
+        - AppSink
+        - CycleLink
+        - Delay
+
+    JoinType:
+      type: integer
+      enum: [ 1, 2, 3, 4 ]
+      x-enum-varnames:
+        - Inner
+        - Left
+        - Right
+        - Outer
+
+    CallSemantics:
+      type: integer
+      enum: [ 0, 1, 2, 3 ]
+      x-enum-varnames:
+        - Inherited
+        - FunctionCall
+        - TaskPool
+        - PriorityTaskPool
+
+    CommunicationProtocol:
+      type: integer
+      enum: [ 1, 2 ]
+      x-enum-varnames:
+        - HTTP
+        - gRPC
+
+    DataConnectorType:
+      type: integer
+      enum: [ 1, 2, 3, 4 ]
+      x-enum-varnames:
+        - HTTP
+        - gRPC
+        - Kafka
+        - Custom
+
+    MetricsEngine:
+      type: integer
+      enum: [ 1 ]
+      x-enum-varnames:
+        - Prometeus
+
+    Stream:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: httpInputStream
+        idSource:
+          type: integer
+          minimum: 0
+        idSources:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        type:
+          $ref: '#/components/schemas/TransformationType'
+        valueType:
+          type: string
+          minLength: 1
+        keyType:
+          type: string
+          minLength: 1
+        idService:
+          type: integer
+          minimum: 1
+        idEndpoint:
+          type: integer
+        joinType:
+          $ref: '#/components/schemas/JoinType'
+        joinStorage:
+          $ref: '#/components/schemas/JoinStorageType'
+        xPos:
+          type: integer
+        yPos:
+          type: integer
+        functionName:
+          type: string
+        functionPackage:
+          type: string
+        publicFunction:
+          type: boolean
+        ttl:
+          type: integer
+          minimum: 0
+        renewTTL:
+          type: boolean
+        duration:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - type
+        - idService
+        - name
+        - idSource
+        - idSources
+
+    Link:
+      type: object
+      properties:
+        from:
+          type: integer
+          example: 1
+        to:
+          type: integer
+          example: 2
+        callSemantics:
+          $ref: '#/components/schemas/CallSemantics'
+          example: 1
+        inheritedCallSemantics:
+          type: boolean
+        poolName:
+          type: string
+          example: default
+        priority:
+          type: integer
+        methodName:
+          type: string
+        timeout:
+          type: integer
+          minimum: 0
+        communicationProtocol:
+          $ref: '#/components/schemas/CommunicationProtocol'
+      required:
+        - from
+        - to
+        - inheritedCallSemantics
+        - callSemantics
+
+    DataConnectorImplementation:
+      type: string
+      enum: [ 'net/http',
+              'FastHTTP'
+      ]
+
+    DataConnector:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: DataConnector1
+        programmingLanguage:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        type:
+          $ref: '#/components/schemas/DataConnectorType'
+          example: 1
+        implementation:
+          $ref: '#/components/schemas/DataConnectorImplementation'
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 80
+          maximum: 65535
+      required:
+        - id
+        - name
+        - type
+        - programmingLanguage
+        - implementation
+
+    DataFormat:
+      type: string
+      enum: [ 'json',
+              'gorilla/schema'
+      ]
+
+    Endpoint:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Endpoint1
+        idDataConnector:
+          type: integer
+          example: 1
+        method:
+          type: string
+        path:
+          type: string
+        format:
+          $ref: '#/components/schemas/DataFormat'
+        param:
+          type: string
+        functionName:
+          type: string
+        functionPackage:
+          type: string
+        publicFunction:
+          type: boolean
+        delay:
+          type: integer
+
+      required:
+        - id
+        - name
+        - idDataConnector
+
+    TypeDefinitionFormat:
+      type: integer
+      enum: [ 1, 2, 3, 4 ]
+      x-enum-varnames:
+        - Native
+        - Protobuf
+        - FlatBuffers
+        - CapNProto
+
+    DataType:
+      type: string
+      enum: [ 'int',
+              'uint',
+              'byte',
+              'char',
+              'boolean',
+              'unicode char',
+              'string',
+              'unicode string',
+              'float',
+              'double',
+              'int8',
+              'int16',
+              'int32',
+              'int64',
+              'uint8',
+              'uint16',
+              'uint32',
+              'uint64',
+              'array',
+              'map',
+              'struct',
+              'custom'
+      ]
+
+    StringBinary:
+      type: string
+      format: binary
+
+    Type:
+      type: object
+      properties:
+        name:
+          type: string
+          example: 'DataType'
+        type:
+          $ref: '#/components/schemas/DataType'
+        valueType:
+          type: string
+        keyType:
+          type: string
+        definitionFormat:
+          $ref: '#/components/schemas/TypeDefinitionFormat'
+        transferByValue:
+          type: boolean
+          example: false
+        useAlias:
+          type: boolean
+        typeDefinitionLang1:
+          type: string
+          example: 'interface{}'
+        typeDefinitionLang2:
+          type: string
+          example: 'std::any'
+        typeImportLang1:
+          type: string
+        typeImportLang2:
+          type: string
+        package:
+          type: string
+        publicType:
+          type: boolean
+      required:
+        - name
+        - type
