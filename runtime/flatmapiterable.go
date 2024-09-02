@@ -22,13 +22,18 @@ type FlatMapIterableStream[T, R any] struct {
 func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
 	tpT := reflect.TypeOf((*T)(nil)).Elem()
 	tpR := reflect.TypeOf((*R)(nil)).Elem()
-	if tpT.Kind() != reflect.Array && tpT.Kind() != reflect.Slice {
+	if tpT.Kind() != reflect.Array && tpT.Kind() != reflect.Slice && tpT.Kind() != reflect.String {
 		log.Fatalf("Type %s is not an array or slice", tpR.Name())
 	}
-	tpE := tpT.Elem()
-	if tpE != tpR {
-		log.Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
+	if tpT.Kind() != reflect.String {
+		tpE := tpT.Elem()
+		if tpE != tpR {
+			log.Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
+		}
+	} else if tpR.Kind() != reflect.Int32 && tpR.Kind() != reflect.Uint8 {
+		log.Fatalf("Element type %s is not rune or byte", tpR.Name())
 	}
+
 	runtime := stream.GetRuntime()
 	cfg := runtime.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)

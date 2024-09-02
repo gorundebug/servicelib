@@ -108,19 +108,19 @@ func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader
 		log.Fatalf("Error reading values file: %s", err)
 	}
 
-	var config map[string]interface{}
+	var cfg map[string]interface{}
 	var values map[string]interface{}
 
-	if err := yaml.Unmarshal(configData, &config); err != nil {
+	if err := yaml.Unmarshal(configData, &cfg); err != nil {
 		log.Fatalf("Error unmarshalling config YAML: %s", err)
 	}
 	if err := yaml.Unmarshal(valuesData, &values); err != nil {
 		log.Fatalf("Error unmarshalling values YAML: %s", err)
 	}
 
-	replacePlaceholders(config, values)
+	replacePlaceholders(cfg, values)
 
-	output, err := yaml.Marshal(config)
+	output, err := yaml.Marshal(cfg)
 	if err != nil {
 		log.Fatalf("Error marshaling config to YAML: %s", err)
 	}
