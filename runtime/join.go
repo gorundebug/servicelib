@@ -8,6 +8,7 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
@@ -87,25 +88,40 @@ type JoinStream[K comparable, T1, T2, R any] struct {
 	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T1]]
 	source      TypedStream[datastruct.KeyValue[K, T1]]
 	joinStorage store.JoinStorage[K]
+	joinType    api.JoinType
 }
 
 func (s *JoinStream[K, T1, T2, R]) consume(key K, index int, value interface{}) {
 	s.joinStorage.JoinValue(key, index, value, func(values [][]interface{}) bool {
-		var leftValues []T1
-		var rightValues []T2
-		if len(values) > 0 {
-			leftValues = make([]T1, len(values[0]))
-			for idx, v := range values[0] {
-				leftValues[idx] = v.(T1)
-			}
+		canCall := false
+		switch s.joinType {
+		case api.Inner:
+			canCall = len(values) > 1 && len(values[0]) != 0 && len(values[1]) != 0
+		case api.Left:
+			canCall = len(values) > 0 && len(values[0]) != 0
+		case api.Right:
+			canCall = len(values) > 1 && len(values[1]) != 0
+		case api.Outer:
+			canCall = true
 		}
-		if len(values) > 1 {
-			rightValues = make([]T2, len(values[1]))
-			for idx, v := range values[1] {
-				rightValues[idx] = v.(T2)
+		if canCall {
+			var leftValues []T1
+			var rightValues []T2
+			if len(values) > 0 {
+				leftValues = make([]T1, len(values[0]))
+				for idx, v := range values[0] {
+					leftValues[idx] = v.(T1)
+				}
 			}
+			if len(values) > 1 {
+				rightValues = make([]T2, len(values[1]))
+				for idx, v := range values[1] {
+					rightValues[idx] = v.(T2)
+				}
+			}
+			return s.f.call(key, leftValues, rightValues, s)
 		}
-		return s.f.call(key, leftValues, rightValues, s)
+		return false
 	})
 }
 
@@ -160,6 +176,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		serdeIn:     stream.GetSerde(),
 		source:      stream,
 		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl, renewTTL),
+		joinType:    *streamConfig.JoinType,
 	}
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
