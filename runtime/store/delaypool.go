@@ -85,17 +85,15 @@ func makeDelayPool(m metrics.Metrics, executorsCount int) DelayPool {
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
-			Namespace: "DelayPool",
-			Name:      "WaitQueueLength",
-			Help:      "Delay pool wait queue length",
+			Name: "delay_pool_wait_queue_length",
+			Help: "Delay pool wait queue length",
 		},
 	}
 	pool.gaugeWaitQueueLength = m.Gauge(gaugeOpts)
 	gaugeOpts = metrics.GaugeOpts{
 		Opts: metrics.Opts{
-			Namespace: "DelayPool",
-			Name:      "ExecuteQueueLength",
-			Help:      "Delay pool execute queue length",
+			Name: "delay_pool_execute_queue_length",
+			Help: "Delay pool execute queue length",
 		},
 	}
 	pool.gaugeExecuteQueueLength = m.Gauge(gaugeOpts)
