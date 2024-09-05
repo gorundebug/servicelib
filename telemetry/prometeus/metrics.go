@@ -27,7 +27,7 @@ func labelsToPrometeusLabels(labels metrics.Labels) prometheus.Labels {
 }
 
 func counterOptsToPrometeusCounterOtps(namespace string, opts metrics.CounterOpts) prometheus.CounterOpts {
-	if len(namespace) > 0 {
+	if len(namespace) > 0 && len(opts.Namespace) > 0 {
 		namespace += "_"
 	}
 	return prometheus.CounterOpts{
@@ -40,7 +40,7 @@ func counterOptsToPrometeusCounterOtps(namespace string, opts metrics.CounterOpt
 }
 
 func summaryOptsToPrometeusSummaryOpts(namespace string, opts metrics.SummaryOpts) prometheus.SummaryOpts {
-	if len(namespace) > 0 {
+	if len(namespace) > 0 && len(opts.Namespace) > 0 {
 		namespace += "_"
 	}
 	return prometheus.SummaryOpts{
@@ -57,7 +57,7 @@ func summaryOptsToPrometeusSummaryOpts(namespace string, opts metrics.SummaryOpt
 }
 
 func gaugeOptsToPrometeusGaugeOpts(namespace string, opts metrics.GaugeOpts) prometheus.GaugeOpts {
-	if len(namespace) > 0 {
+	if len(namespace) > 0 && len(opts.Namespace) > 0 {
 		namespace += "_"
 	}
 	return prometheus.GaugeOpts{
@@ -70,7 +70,7 @@ func gaugeOptsToPrometeusGaugeOpts(namespace string, opts metrics.GaugeOpts) pro
 }
 
 func histogramOptsToPrometeusHistogramOpts(namespace string, opts metrics.HistogramOpts) prometheus.HistogramOpts {
-	if len(namespace) > 0 {
+	if len(namespace) > 0 && len(opts.Namespace) > 0 {
 		namespace += "_"
 	}
 	return prometheus.HistogramOpts{

@@ -9,6 +9,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ type HashMapJoinStorage[K comparable] struct {
 	gaugeCount metrics.Gauge
 }
 
-func MakeHashMapJoinStorage[K comparable](m metrics.Metrics, ttl time.Duration, renewTTL bool) JoinStorage[K] {
+func MakeHashMapJoinStorage[K comparable](m metrics.Metrics, ttl time.Duration, renewTTL bool, streamName string) JoinStorage[K] {
 	joinStorage := &HashMapJoinStorage[K]{
 		storage1: make(map[K]*Item),
 		ttl:      ttl,
@@ -42,9 +43,8 @@ func MakeHashMapJoinStorage[K comparable](m metrics.Metrics, ttl time.Duration, 
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
-			Namespace: "HashMapJoinStorage",
-			Name:      "Count",
-			Help:      "Elements count stored",
+			Name: fmt.Sprintf("hashmap_join_storage_count{stream=\"%s\"}", streamName),
+			Help: "Elements count stored in a join storage",
 		},
 	}
 	joinStorage.gaugeCount = m.Gauge(gaugeOpts)
