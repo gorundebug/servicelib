@@ -149,7 +149,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
-		joinStorage: store.MakeJoinStorage[K](runtime.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL),
+		joinStorage: store.MakeJoinStorage[K](runtime.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
 	}
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
