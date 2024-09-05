@@ -36,7 +36,7 @@ func (s *MockService) StreamsInit(ctx context.Context) {
 
 func (s *MockService) SetConfig(config config.Config) {}
 
-func mockService() *MockService {
+func mockService(environment string) *MockService {
 	cfg := MockServiceConfig{
 		ServiceAppConfig: config.ServiceAppConfig{
 			Services: []config.ServiceConfig{
@@ -45,7 +45,7 @@ func mockService() *MockService {
 					MonitoringHost: "127.0.0.1",
 					MonitoringPort: 9000,
 					MetricsEngine:  api.Prometeus,
-					Environment:    "",
+					Environment:    environment,
 					DelayExecutors: 1,
 				},
 			},
@@ -62,7 +62,7 @@ func TestIsKeyValueType(t *testing.T) {
 }
 
 func TestArraySerde(t *testing.T) {
-	arraySer := MakeSerde[[]int](mockService())
+	arraySer := MakeSerde[[]int](mockService("TestArraySerde"))
 	arr := []int{1, 2, 3}
 	data, err := arraySer.Serialize(arr)
 	assert.Equal(t, err, nil, err)
@@ -72,7 +72,7 @@ func TestArraySerde(t *testing.T) {
 }
 
 func TestArrayArraySerde(t *testing.T) {
-	arraySer := MakeSerde[[][]int](mockService())
+	arraySer := MakeSerde[[][]int](mockService("TestArrayArraySerde"))
 	arr := [][]int{{1, 2, 3}, {1, 2, 3}}
 	data, err := arraySer.Serialize(arr)
 	assert.Equal(t, err, nil, err)
@@ -82,7 +82,7 @@ func TestArrayArraySerde(t *testing.T) {
 }
 
 func TestMapSerde(t *testing.T) {
-	mapSer := MakeSerde[map[int]int](mockService())
+	mapSer := MakeSerde[map[int]int](mockService("TestMapSerde"))
 	dict := map[int]int{1: 1, 2: 2, 3: 3}
 	data, err := mapSer.Serialize(dict)
 	assert.Equal(t, err, nil, err)
@@ -92,7 +92,7 @@ func TestMapSerde(t *testing.T) {
 }
 
 func TestMapMapSerde(t *testing.T) {
-	mapSer := MakeSerde[map[int]map[int]int](mockService())
+	mapSer := MakeSerde[map[int]map[int]int](mockService("TestMapMapSerde"))
 	dict := map[int]map[int]int{1: {1: 1, 2: 2}, 2: {3: 3, 4: 4}}
 	data, err := mapSer.Serialize(dict)
 	assert.Equal(t, err, nil, err)
