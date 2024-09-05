@@ -9,6 +9,7 @@ package store
 
 import (
 	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -20,10 +21,10 @@ type JoinStorage[K comparable] interface {
 	JoinValue(key K, index int, value interface{}, f JoinValueFunc)
 }
 
-func MakeJoinStorage[K comparable](storageType api.JoinStorageType, ttl time.Duration, renewTTL bool) JoinStorage[K] {
+func MakeJoinStorage[K comparable](m metrics.Metrics, storageType api.JoinStorageType, ttl time.Duration, renewTTL bool) JoinStorage[K] {
 	switch storageType {
 	case api.HashMap:
-		return MakeHashMapJoinStorage[K](ttl, renewTTL)
+		return MakeHashMapJoinStorage[K](m, ttl, renewTTL)
 	default:
 		log.Fatalf("Join storage type %d is not supported", storageType)
 		return nil
