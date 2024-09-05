@@ -26,6 +26,7 @@ services:
   programmingLanguage: 1
   shutdownTimeout: 30000
   metricsEngine: 1
+  environment: nethttp_test
 settings:
   golangVersion: 1.22.3
   modulePath: test.com

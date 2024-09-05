@@ -10,7 +10,6 @@ package runtime
 import (
 	"bytes"
 	"flag"
-	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
@@ -136,8 +135,7 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg config.Config](name string,
 	viper.AutomaticEnv()
 
 	if err := viper.ReadConfig(getConfigData(configPathArg, configValuesPathArg)); err != nil {
-		fmt.Println("fatal error config file:\n", err)
-		os.Exit(1)
+		log.Fatalf("fatal error config file: %s\n", err)
 	}
 
 	configType := serde.GetSerdeType[Cfg]()

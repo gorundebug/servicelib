@@ -8,12 +8,14 @@
 package prometeus
 
 import (
+	"fmt"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type Metrics struct {
+	Namespace string
 }
 
 func labelsToPrometeusLabels(labels metrics.Labels) prometheus.Labels {
@@ -24,9 +26,12 @@ func labelsToPrometeusLabels(labels metrics.Labels) prometheus.Labels {
 	return prometheusLabels
 }
 
-func counterOptsToPrometeusCounterOtps(opts metrics.CounterOpts) prometheus.CounterOpts {
+func counterOptsToPrometeusCounterOtps(namespace string, opts metrics.CounterOpts) prometheus.CounterOpts {
+	if len(namespace) > 0 {
+		namespace += "_"
+	}
 	return prometheus.CounterOpts{
-		Namespace:   opts.Namespace,
+		Namespace:   fmt.Sprintf("%s%s", namespace, opts.Namespace),
 		Name:        opts.Name,
 		Help:        opts.Help,
 		Subsystem:   opts.Subsystem,
@@ -34,9 +39,12 @@ func counterOptsToPrometeusCounterOtps(opts metrics.CounterOpts) prometheus.Coun
 	}
 }
 
-func summaryOptsToPrometeusSummaryOpts(opts metrics.SummaryOpts) prometheus.SummaryOpts {
+func summaryOptsToPrometeusSummaryOpts(namespace string, opts metrics.SummaryOpts) prometheus.SummaryOpts {
+	if len(namespace) > 0 {
+		namespace += "_"
+	}
 	return prometheus.SummaryOpts{
-		Namespace:   opts.Namespace,
+		Namespace:   fmt.Sprintf("%s%s", namespace, opts.Namespace),
 		Name:        opts.Name,
 		Help:        opts.Help,
 		Subsystem:   opts.Subsystem,
@@ -48,9 +56,12 @@ func summaryOptsToPrometeusSummaryOpts(opts metrics.SummaryOpts) prometheus.Summ
 	}
 }
 
-func gaugeOptsToPrometeusGaugeOpts(opts metrics.GaugeOpts) prometheus.GaugeOpts {
+func gaugeOptsToPrometeusGaugeOpts(namespace string, opts metrics.GaugeOpts) prometheus.GaugeOpts {
+	if len(namespace) > 0 {
+		namespace += "_"
+	}
 	return prometheus.GaugeOpts{
-		Namespace:   opts.Namespace,
+		Namespace:   fmt.Sprintf("%s%s", namespace, opts.Namespace),
 		Name:        opts.Name,
 		Help:        opts.Help,
 		Subsystem:   opts.Subsystem,
@@ -58,9 +69,12 @@ func gaugeOptsToPrometeusGaugeOpts(opts metrics.GaugeOpts) prometheus.GaugeOpts 
 	}
 }
 
-func histogramOptsToPrometeusHistogramOpts(opts metrics.HistogramOpts) prometheus.HistogramOpts {
+func histogramOptsToPrometeusHistogramOpts(namespace string, opts metrics.HistogramOpts) prometheus.HistogramOpts {
+	if len(namespace) > 0 {
+		namespace += "_"
+	}
 	return prometheus.HistogramOpts{
-		Namespace:                       opts.Namespace,
+		Namespace:                       fmt.Sprintf("%s%s", namespace, opts.Namespace),
 		Name:                            opts.Name,
 		Help:                            opts.Help,
 		Subsystem:                       opts.Subsystem,
@@ -77,7 +91,7 @@ func histogramOptsToPrometeusHistogramOpts(opts metrics.HistogramOpts) prometheu
 }
 
 func (mf Metrics) CounterVec(opts metrics.CounterOpts, labelNames []string) metrics.CounterVec {
-	return &CounterVec{counterVec: promauto.NewCounterVec(counterOptsToPrometeusCounterOtps(opts), labelNames)}
+	return &CounterVec{counterVec: promauto.NewCounterVec(counterOptsToPrometeusCounterOtps(mf.Namespace, opts), labelNames)}
 }
 
 type CounterVec struct {
@@ -89,7 +103,7 @@ func (p *CounterVec) WithLabelValues(lvs ...string) metrics.Counter {
 }
 
 func (mf Metrics) Counter(opts metrics.CounterOpts) metrics.Counter {
-	return promauto.NewCounter(counterOptsToPrometeusCounterOtps(opts))
+	return promauto.NewCounter(counterOptsToPrometeusCounterOtps(mf.Namespace, opts))
 }
 
 type SummaryVec struct {
@@ -101,19 +115,19 @@ func (p *SummaryVec) WithLabelValues(lvs ...string) metrics.Summary {
 }
 
 func (mf Metrics) SummaryVec(opts metrics.SummaryOpts, labelNames []string) metrics.SummaryVec {
-	return &SummaryVec{summaryVec: promauto.NewSummaryVec(summaryOptsToPrometeusSummaryOpts(opts), labelNames)}
+	return &SummaryVec{summaryVec: promauto.NewSummaryVec(summaryOptsToPrometeusSummaryOpts(mf.Namespace, opts), labelNames)}
 }
 
 func (mf Metrics) Summary(opts metrics.SummaryOpts) metrics.Summary {
-	return promauto.NewSummary(summaryOptsToPrometeusSummaryOpts(opts))
+	return promauto.NewSummary(summaryOptsToPrometeusSummaryOpts(mf.Namespace, opts))
 }
 
 func (mf Metrics) GaugeVec(opts metrics.GaugeOpts, labelNames []string) metrics.GaugeVec {
-	return &GaugeVec{gaugeVec: promauto.NewGaugeVec(gaugeOptsToPrometeusGaugeOpts(opts), labelNames)}
+	return &GaugeVec{gaugeVec: promauto.NewGaugeVec(gaugeOptsToPrometeusGaugeOpts(mf.Namespace, opts), labelNames)}
 }
 
 func (mf Metrics) Gauge(opts metrics.GaugeOpts) metrics.Gauge {
-	return promauto.NewGauge(gaugeOptsToPrometeusGaugeOpts(opts))
+	return promauto.NewGauge(gaugeOptsToPrometeusGaugeOpts(mf.Namespace, opts))
 }
 
 type GaugeVec struct {
@@ -125,11 +139,11 @@ func (p *GaugeVec) WithLabelValues(lvs ...string) metrics.Gauge {
 }
 
 func (mf Metrics) HistogramVec(opts metrics.HistogramOpts, labelNames []string) metrics.HistogramVec {
-	return &HistogramVec{histogramVec: promauto.NewHistogramVec(histogramOptsToPrometeusHistogramOpts(opts), labelNames)}
+	return &HistogramVec{histogramVec: promauto.NewHistogramVec(histogramOptsToPrometeusHistogramOpts(mf.Namespace, opts), labelNames)}
 }
 
 func (mf Metrics) Histogram(opts metrics.HistogramOpts) metrics.Histogram {
-	return promauto.NewHistogram(histogramOptsToPrometeusHistogramOpts(opts))
+	return promauto.NewHistogram(histogramOptsToPrometeusHistogramOpts(mf.Namespace, opts))
 }
 
 type HistogramVec struct {

@@ -175,7 +175,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		},
 		serdeIn:     stream.GetSerde(),
 		source:      stream,
-		joinStorage: store.MakeJoinStorage[K](*streamConfig.JoinStorage, ttl, renewTTL),
+		joinStorage: store.MakeJoinStorage[K](runtime.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL),
 		joinType:    *streamConfig.JoinType,
 	}
 	runtime.registerStorage(joinStream.joinStorage)

@@ -14,10 +14,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func CreateMetrics(metricsEngine api.MetricsEngine) metrics.Metrics {
+func CreateMetrics(metricsEngine api.MetricsEngine, namespace string) metrics.Metrics {
 	switch metricsEngine {
 	case api.Prometeus:
-		return &prometeus.Metrics{}
+		return &prometeus.Metrics{Namespace: namespace}
 	}
 	log.Fatalf("Unsupported metrics engine: %d", metricsEngine)
 	return nil

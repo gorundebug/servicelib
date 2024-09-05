@@ -11,6 +11,7 @@ import (
 	"container/heap"
 	"container/list"
 	"context"
+	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -59,25 +60,45 @@ func (pq *PriorityQueue) Pop() interface{} {
 }
 
 type DelayPoolImpl struct {
-	executorsCount int
-	pq             *PriorityQueue
-	tasks          *list.List
-	wg             sync.WaitGroup
-	timer          *time.Timer
-	lock           sync.Mutex
-	stopCh         chan struct{}
-	cond           *sync.Cond
-	tasksLock      sync.Mutex
-	done           bool
-	stop           bool
+	executorsCount          int
+	pq                      *PriorityQueue
+	tasks                   *list.List
+	wg                      sync.WaitGroup
+	timer                   *time.Timer
+	lock                    sync.Mutex
+	stopCh                  chan struct{}
+	cond                    *sync.Cond
+	tasksLock               sync.Mutex
+	done                    bool
+	stop                    bool
+	metrics                 metrics.Metrics
+	gaugeWaitQueueLength    metrics.Gauge
+	gaugeExecuteQueueLength metrics.Gauge
 }
 
-func makeDelayPool(executorsCount int) DelayPool {
+func makeDelayPool(m metrics.Metrics, executorsCount int) DelayPool {
 	pool := &DelayPoolImpl{
 		executorsCount: executorsCount,
 		tasks:          list.New(),
 		pq:             &PriorityQueue{},
+		metrics:        m,
 	}
+	gaugeOpts := metrics.GaugeOpts{
+		Opts: metrics.Opts{
+			Namespace: "DelayPool",
+			Name:      "WaitQueueLength",
+			Help:      "Delay pool wait queue length",
+		},
+	}
+	pool.gaugeWaitQueueLength = m.Gauge(gaugeOpts)
+	gaugeOpts = metrics.GaugeOpts{
+		Opts: metrics.Opts{
+			Namespace: "DelayPool",
+			Name:      "ExecuteQueueLength",
+			Help:      "Delay pool execute queue length",
+		},
+	}
+	pool.gaugeExecuteQueueLength = m.Gauge(gaugeOpts)
 	pool.cond = sync.NewCond(&pool.tasksLock)
 	return pool
 }
@@ -90,8 +111,10 @@ func (p *DelayPoolImpl) processTimer() {
 			task := heap.Pop(p.pq).(*DelayTask)
 			p.tasksLock.Lock()
 			p.tasks.PushBack(task)
+			p.gaugeExecuteQueueLength.Inc()
 			p.cond.Signal()
 			p.tasksLock.Unlock()
+			p.gaugeWaitQueueLength.Dec()
 		}
 	}
 	if p.pq.Len() > 0 {
@@ -118,6 +141,7 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 		}
 	}
 	heap.Push(p.pq, task)
+	p.gaugeWaitQueueLength.Inc()
 	return task
 }
 
@@ -138,6 +162,7 @@ func (p *DelayPoolImpl) Start(ctx context.Context) error {
 				task := p.tasks.Remove(p.tasks.Front()).(*DelayTask)
 				p.tasksLock.Unlock()
 				task.fn()
+				p.gaugeExecuteQueueLength.Dec()
 			}
 		}()
 	}

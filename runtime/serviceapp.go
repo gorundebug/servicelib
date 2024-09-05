@@ -98,7 +98,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
-	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine)
+	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
 	app.runtime = runtime
 	app.streams = make(map[int]ServiceStream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
@@ -107,7 +107,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.delayPool = store.MakeDelayTaskPool(app.serviceConfig.DelayExecutors)
+	app.delayPool = store.MakeDelayTaskPool(app.metrics, app.serviceConfig.DelayExecutors)
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),
