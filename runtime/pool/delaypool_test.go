@@ -15,7 +15,7 @@ import (
 )
 
 func Test_PriorityQueue(t *testing.T) {
-	pq := &PriorityQueue{}
+	pq := &DelayTaskPriorityQueue{}
 	heap.Push(pq, &DelayTask{deadline: time.Unix(1, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(7, 0)})
 	heap.Push(pq, &DelayTask{deadline: time.Unix(20, 0)})

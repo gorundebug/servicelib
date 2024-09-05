@@ -6,3 +6,13 @@
  */
 
 package pool
+
+type PriorityTask struct {
+	fn       func()
+	priority int
+}
+
+type PriorityTaskPool interface {
+	Pool
+	Execute(fn func()) *PriorityTask
+}

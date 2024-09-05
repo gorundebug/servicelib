@@ -6,3 +6,12 @@
  */
 
 package pool
+
+type Task struct {
+	fn func()
+}
+
+type TaskPool interface {
+	Pool
+	Execute(fn func()) *Task
+}

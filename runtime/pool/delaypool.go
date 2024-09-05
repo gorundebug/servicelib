@@ -28,28 +28,28 @@ type DelayTask struct {
 	index    int
 }
 
-type PriorityQueue []*DelayTask
+type DelayTaskPriorityQueue []*DelayTask
 
-func (pq *PriorityQueue) Len() int { return len(*pq) }
+func (pq *DelayTaskPriorityQueue) Len() int { return len(*pq) }
 
-func (pq *PriorityQueue) Less(i, j int) bool {
+func (pq *DelayTaskPriorityQueue) Less(i, j int) bool {
 	return (*pq)[i].deadline.Before((*pq)[j].deadline)
 }
 
-func (pq *PriorityQueue) Swap(i, j int) {
+func (pq *DelayTaskPriorityQueue) Swap(i, j int) {
 	(*pq)[i], (*pq)[j] = (*pq)[j], (*pq)[i]
 	(*pq)[i].index = i
 	(*pq)[j].index = j
 }
 
-func (pq *PriorityQueue) Push(x interface{}) {
+func (pq *DelayTaskPriorityQueue) Push(x interface{}) {
 	n := len(*pq)
 	item := x.(*DelayTask)
 	item.index = n
 	*pq = append(*pq, item)
 }
 
-func (pq *PriorityQueue) Pop() interface{} {
+func (pq *DelayTaskPriorityQueue) Pop() interface{} {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
@@ -61,7 +61,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 
 type DelayPoolImpl struct {
 	executorsCount          int
-	pq                      *PriorityQueue
+	pq                      *DelayTaskPriorityQueue
 	tasks                   *list.List
 	wg                      sync.WaitGroup
 	timer                   *time.Timer
@@ -80,7 +80,7 @@ func makeDelayPool(m metrics.Metrics, executorsCount int) DelayPool {
 	pool := &DelayPoolImpl{
 		executorsCount: executorsCount,
 		tasks:          list.New(),
-		pq:             &PriorityQueue{},
+		pq:             &DelayTaskPriorityQueue{},
 		metrics:        m,
 	}
 	gaugeOpts := metrics.GaugeOpts{
