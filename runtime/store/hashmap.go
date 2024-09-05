@@ -147,4 +147,9 @@ func (s *HashMapJoinStorage[K]) Start(ctx context.Context) error {
 }
 
 func (s *HashMapJoinStorage[K]) Stop(ctx context.Context) {
+	s.rotateLock.Lock()
+	defer s.rotateLock.Unlock()
+	if s.timer != nil {
+		s.timer.Stop()
+	}
 }

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"github.com/gorundebug/servicelib/telemetry"
@@ -47,7 +48,7 @@ type ServiceApp struct {
 	metrics           metrics.Metrics
 	consumeStatistics map[config.LinkId]ConsumeStatistics
 	storages          []store.Storage
-	delayPool         store.DelayPool
+	delayPool         pool.DelayPool
 }
 
 func (app *ServiceApp) reloadConfig(config config.Config) {
@@ -107,7 +108,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.delayPool = store.MakeDelayTaskPool(app.metrics, app.serviceConfig.DelayExecutors)
+	app.delayPool = pool.MakeDelayTaskPool(app.metrics, app.serviceConfig.DelayExecutors)
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),

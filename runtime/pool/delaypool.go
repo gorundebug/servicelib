@@ -5,7 +5,7 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package store
+package pool
 
 import (
 	"container/heap"
@@ -18,7 +18,7 @@ import (
 )
 
 type DelayPool interface {
-	Storage
+	Pool
 	Delay(deadline time.Duration, fn func()) *DelayTask
 }
 
