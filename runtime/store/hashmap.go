@@ -72,6 +72,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 	}
 	for {
 		item, storage := func() (*Item, map[K]*Item) {
+
 			item, storage := func() (*Item, map[K]*Item) {
 				s.lock.RLock()
 				defer s.lock.RUnlock()
@@ -87,6 +88,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 				}
 				return nil, nil
 			}()
+
 			if item != nil {
 				return item, storage
 			}

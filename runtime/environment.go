@@ -19,9 +19,8 @@ import (
 )
 
 type StreamExecutionEnvironment interface {
+	config.ServiceEnvironmentConfig
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
-	GetConfig() *config.ServiceAppConfig
-	GetServiceConfig() *config.ServiceConfig
 	StreamsInit(ctx context.Context)
 	SetConfig(config config.Config)
 	Start(context.Context) error

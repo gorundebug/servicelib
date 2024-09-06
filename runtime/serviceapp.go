@@ -108,7 +108,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.delayPool = pool.MakeDelayTaskPool(app.metrics, app.serviceConfig.DelayExecutors)
+	app.delayPool = pool.MakeDelayTaskPool(app, app.metrics)
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),

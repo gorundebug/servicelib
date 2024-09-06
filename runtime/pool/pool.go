@@ -9,6 +9,7 @@ package pool
 
 import (
 	"context"
+	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 )
 
@@ -17,6 +18,14 @@ type Pool interface {
 	Stop(ctx context.Context)
 }
 
-func MakeDelayTaskPool(m metrics.Metrics, executorsCount int) DelayPool {
-	return makeDelayPool(m, executorsCount)
+func MakeDelayTaskPool(cfg config.ServiceEnvironmentConfig, m metrics.Metrics) DelayPool {
+	return makeDelayPool(cfg, m)
+}
+
+func MakePriorityTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) PriorityTaskPool {
+	return makePriorityTaskPool(cfg, name, m)
+}
+
+func MakeTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) TaskPool {
+	return makeTaskPool(cfg, name, m)
 }
