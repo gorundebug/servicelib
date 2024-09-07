@@ -158,6 +158,7 @@ type DataType string
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
 	Delay           *int        `json:"delay,omitempty"`
+	Description     *string     `json:"description,omitempty"`
 	Format          *DataFormat `json:"format,omitempty"`
 	FunctionName    *string     `json:"functionName,omitempty"`
 	FunctionPackage *string     `json:"functionPackage,omitempty"`
@@ -226,6 +227,7 @@ type Service struct {
 
 // Stream defines model for Stream.
 type Stream struct {
+	Description     *string            `json:"description,omitempty"`
 	Duration        *int               `json:"duration,omitempty"`
 	FunctionName    *string            `json:"functionName,omitempty"`
 	FunctionPackage *string            `json:"functionPackage,omitempty"`
