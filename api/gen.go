@@ -178,15 +178,19 @@ type JoinType int
 
 // Link defines model for Link.
 type Link struct {
-	CallSemantics          CallSemantics          `json:"callSemantics"`
-	CommunicationProtocol  *CommunicationProtocol `json:"communicationProtocol,omitempty"`
-	From                   int                    `json:"from"`
-	InheritedCallSemantics bool                   `json:"inheritedCallSemantics"`
-	MethodName             *string                `json:"methodName,omitempty"`
-	PoolName               *string                `json:"poolName,omitempty"`
-	Priority               *int                   `json:"priority,omitempty"`
-	Timeout                *int                   `json:"timeout,omitempty"`
-	To                     int                    `json:"to"`
+	CallSemantics                CallSemantics          `json:"callSemantics"`
+	CommunicationProtocol        *CommunicationProtocol `json:"communicationProtocol,omitempty"`
+	From                         int                    `json:"from"`
+	IncomeCallSemantics          *CallSemantics         `json:"incomeCallSemantics,omitempty"`
+	IncomeInheritedCallSemantics *bool                  `json:"incomeInheritedCallSemantics,omitempty"`
+	IncomePoolName               *string                `json:"incomePoolName,omitempty"`
+	IncomePriority               *int                   `json:"incomePriority,omitempty"`
+	InheritedCallSemantics       bool                   `json:"inheritedCallSemantics"`
+	MethodName                   *string                `json:"methodName,omitempty"`
+	PoolName                     *string                `json:"poolName,omitempty"`
+	Priority                     *int                   `json:"priority,omitempty"`
+	Timeout                      *int                   `json:"timeout,omitempty"`
+	To                           int                    `json:"to"`
 }
 
 // MetricsEngine defines model for MetricsEngine.

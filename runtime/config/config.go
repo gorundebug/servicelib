@@ -84,19 +84,20 @@ func (s *StreamConfig) GetTransformationName() string {
 }
 
 type ServiceConfig struct {
-	Id                 int                    `yaml:"id"`
-	Name               string                 `yaml:"name"`
-	MonitoringPort     int                    `yaml:"monitoringPort"`
-	MonitoringHost     string                 `yaml:"monitoringHost"`
-	GrpcPort           int                    `yaml:"grpcPort"`
-	GrpcHost           string                 `yaml:"grpcHost"`
-	ShutdownTimeout    int                    `yaml:"shutdownTimeout"`
-	Color              string                 `yaml:"color"`
-	DefaultGrpcTimeout int                    `yaml:"defaultGrpcTimeout"`
-	Environment        string                 `yaml:"environment"`
-	MetricsEngine      api.MetricsEngine      `yaml:"metricsEngine"`
-	DelayExecutors     int                    `yaml:"delayExecutors"`
-	Properties         map[string]interface{} `mapstructure:",remain"`
+	Id                   int                    `yaml:"id"`
+	Name                 string                 `yaml:"name"`
+	MonitoringPort       int                    `yaml:"monitoringPort"`
+	MonitoringHost       string                 `yaml:"monitoringHost"`
+	GrpcPort             int                    `yaml:"grpcPort"`
+	GrpcHost             string                 `yaml:"grpcHost"`
+	ShutdownTimeout      int                    `yaml:"shutdownTimeout"`
+	Color                string                 `yaml:"color"`
+	DefaultGrpcTimeout   int                    `yaml:"defaultGrpcTimeout"`
+	Environment          string                 `yaml:"environment"`
+	MetricsEngine        api.MetricsEngine      `yaml:"metricsEngine"`
+	DelayExecutors       int                    `yaml:"delayExecutors"`
+	DefaultCallSemantics api.CallSemantics      `yaml:"defaultCallSemantics"`
+	Properties           map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ServiceConfig) GetProperty(name string) interface{} {
@@ -104,11 +105,16 @@ func (s *ServiceConfig) GetProperty(name string) interface{} {
 }
 
 type LinkConfig struct {
-	From          int                    `yaml:"from"`
-	To            int                    `yaml:"to"`
-	CallSemantics api.CallSemantics      `yaml:"callSemantics"`
-	Timeout       *int                   `yaml:"timeout"`
-	Properties    map[string]interface{} `mapstructure:",remain"`
+	From                int                    `yaml:"from"`
+	To                  int                    `yaml:"to"`
+	CallSemantics       api.CallSemantics      `yaml:"callSemantics"`
+	IncomeCallSemantics *api.CallSemantics     `yaml:"incomeCallSemantics"`
+	Timeout             *int                   `yaml:"timeout"`
+	PoolName            *string                `yaml:"poolName"`
+	IncomePoolName      *string                `yaml:"incomePoolName"`
+	Priority            *int                   `yaml:"priority"`
+	IncomePriority      *int                   `yaml:"incomePriority"`
+	Properties          map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *LinkConfig) GetProperty(name string) interface{} {

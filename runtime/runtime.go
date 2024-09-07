@@ -14,6 +14,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +48,8 @@ type StreamExecutionRuntime interface {
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(statistics ConsumeStatistics)
 	registerStorage(storage store.Storage)
+	getTaskPool(name string) pool.TaskPool
+	getPriorityTaskPool(name string) pool.PriorityTaskPool
 }
 
 func getPath(argPath *string) string {
@@ -316,15 +319,24 @@ func RegisterKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) 
 }
 
 func makeCaller[T any](runtime StreamExecutionRuntime, source TypedStream[T]) Caller[T] {
+	cfg := runtime.GetConfig()
+	serviceConfig := runtime.GetServiceConfig()
 	consumer := source.GetConsumer()
-	communicationType := api.FunctionCall
 	link := runtime.GetConfig().GetLink(source.GetId(), consumer.GetId())
-	if link != nil {
-		communicationType = link.CallSemantics
+	if link == nil {
+		log.Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
+		return nil
+	}
+	streamFrom := cfg.GetStreamConfigById(link.From)
+	var callSemantics api.CallSemantics
+	if streamFrom.IdService == serviceConfig.Id {
+		callSemantics = link.CallSemantics
+	} else {
+		callSemantics = *link.IncomeCallSemantics
 	}
 	var streamCaller Caller[T]
 	var consumeStat ConsumeStatistics
-	switch communicationType {
+	switch callSemantics {
 	case api.FunctionCall:
 		c := &directCaller[T]{
 			caller: caller[T]{
@@ -337,29 +349,47 @@ func makeCaller[T any](runtime StreamExecutionRuntime, source TypedStream[T]) Ca
 		streamCaller = c
 
 	case api.TaskPool:
+		var taskPool pool.TaskPool
+		if streamFrom.IdService == serviceConfig.Id {
+			taskPool = runtime.getTaskPool(*link.PoolName)
+		} else {
+			taskPool = runtime.getTaskPool(*link.IncomePoolName)
+		}
 		c := &taskPoolCaller[T]{
 			caller: caller[T]{
 				runtime:  runtime,
 				source:   source,
 				consumer: consumer,
 			},
+			pool: taskPool,
 		}
 		consumeStat = c
 		streamCaller = c
 
 	case api.PriorityTaskPool:
+		var priorityTaskPool pool.PriorityTaskPool
+		var priority int
+		if streamFrom.IdService == serviceConfig.Id {
+			priorityTaskPool = runtime.getPriorityTaskPool(*link.PoolName)
+			priority = *link.Priority
+		} else {
+			priorityTaskPool = runtime.getPriorityTaskPool(*link.IncomePoolName)
+			priority = *link.IncomePriority
+		}
 		c := &priorityTaskPoolCaller[T]{
 			caller: caller[T]{
 				runtime:  runtime,
 				source:   source,
 				consumer: consumer,
 			},
+			pool:     priorityTaskPool,
+			priority: priority,
 		}
 		consumeStat = c
 		streamCaller = c
 
 	default:
-		log.Fatalf("undefined CommunicationType [%d] ", communicationType)
+		log.Fatalf("undefined callSemantics [%d] ", callSemantics)
 	}
 
 	runtime.registerConsumeStatistics(consumeStat)
@@ -400,16 +430,25 @@ func (c *directCaller[T]) Consume(value T) {
 
 type taskPoolCaller[T any] struct {
 	caller[T]
+	pool pool.TaskPool
 }
 
 func (c *taskPoolCaller[T]) Consume(value T) {
 	c.Inc()
+	c.pool.AddTask(func() {
+		c.consumer.Consume(value)
+	})
 }
 
 type priorityTaskPoolCaller[T any] struct {
 	caller[T]
+	pool     pool.PriorityTaskPool
+	priority int
 }
 
 func (c *priorityTaskPoolCaller[T]) Consume(value T) {
 	c.Inc()
+	c.pool.AddTask(c.priority, func() {
+		c.consumer.Consume(value)
+	})
 }
