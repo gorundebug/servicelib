@@ -157,18 +157,18 @@ type DataType string
 
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
-	Delay           *int        `json:"delay,omitempty"`
-	Description     *string     `json:"description,omitempty"`
-	Format          *DataFormat `json:"format,omitempty"`
-	FunctionName    *string     `json:"functionName,omitempty"`
-	FunctionPackage *string     `json:"functionPackage,omitempty"`
-	Id              int         `json:"id"`
-	IdDataConnector int         `json:"idDataConnector"`
-	Method          *string     `json:"method,omitempty"`
-	Name            string      `json:"name"`
-	Param           *string     `json:"param,omitempty"`
-	Path            *string     `json:"path,omitempty"`
-	PublicFunction  *bool       `json:"publicFunction,omitempty"`
+	Delay               *int        `json:"delay,omitempty"`
+	Format              *DataFormat `json:"format,omitempty"`
+	FunctionDescription *string     `json:"functionDescription,omitempty"`
+	FunctionName        *string     `json:"functionName,omitempty"`
+	FunctionPackage     *string     `json:"functionPackage,omitempty"`
+	Id                  int         `json:"id"`
+	IdDataConnector     int         `json:"idDataConnector"`
+	Method              *string     `json:"method,omitempty"`
+	Name                string      `json:"name"`
+	Param               *string     `json:"param,omitempty"`
+	Path                *string     `json:"path,omitempty"`
+	PublicFunction      *bool       `json:"publicFunction,omitempty"`
 }
 
 // JoinStorageType defines model for JoinStorageType.
@@ -227,26 +227,26 @@ type Service struct {
 
 // Stream defines model for Stream.
 type Stream struct {
-	Description     *string            `json:"description,omitempty"`
-	Duration        *int               `json:"duration,omitempty"`
-	FunctionName    *string            `json:"functionName,omitempty"`
-	FunctionPackage *string            `json:"functionPackage,omitempty"`
-	Id              int                `json:"id"`
-	IdEndpoint      *int               `json:"idEndpoint,omitempty"`
-	IdService       int                `json:"idService"`
-	IdSource        int                `json:"idSource"`
-	IdSources       []int              `json:"idSources"`
-	JoinStorage     *JoinStorageType   `json:"joinStorage,omitempty"`
-	JoinType        *JoinType          `json:"joinType,omitempty"`
-	KeyType         *string            `json:"keyType,omitempty"`
-	Name            string             `json:"name"`
-	PublicFunction  *bool              `json:"publicFunction,omitempty"`
-	RenewTTL        *bool              `json:"renewTTL,omitempty"`
-	Ttl             *int               `json:"ttl,omitempty"`
-	Type            TransformationType `json:"type"`
-	ValueType       *string            `json:"valueType,omitempty"`
-	XPos            *int               `json:"xPos,omitempty"`
-	YPos            *int               `json:"yPos,omitempty"`
+	Duration            *int               `json:"duration,omitempty"`
+	FunctionDescription *string            `json:"functionDescription,omitempty"`
+	FunctionName        *string            `json:"functionName,omitempty"`
+	FunctionPackage     *string            `json:"functionPackage,omitempty"`
+	Id                  int                `json:"id"`
+	IdEndpoint          *int               `json:"idEndpoint,omitempty"`
+	IdService           int                `json:"idService"`
+	IdSource            int                `json:"idSource"`
+	IdSources           []int              `json:"idSources"`
+	JoinStorage         *JoinStorageType   `json:"joinStorage,omitempty"`
+	JoinType            *JoinType          `json:"joinType,omitempty"`
+	KeyType             *string            `json:"keyType,omitempty"`
+	Name                string             `json:"name"`
+	PublicFunction      *bool              `json:"publicFunction,omitempty"`
+	RenewTTL            *bool              `json:"renewTTL,omitempty"`
+	Ttl                 *int               `json:"ttl,omitempty"`
+	Type                TransformationType `json:"type"`
+	ValueType           *string            `json:"valueType,omitempty"`
+	XPos                *int               `json:"xPos,omitempty"`
+	YPos                *int               `json:"yPos,omitempty"`
 }
 
 // StreamApp defines model for StreamApp.

@@ -288,7 +288,7 @@ components:
           type: string
         publicFunction:
           type: boolean
-        description:
+        functionDescription:
           type: string
         ttl:
           type: integer
@@ -413,7 +413,7 @@ components:
           type: string
         publicFunction:
           type: boolean
-        description:
+        functionDescription:
           type: string
         delay:
           type: integer
