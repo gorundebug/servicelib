@@ -13,6 +13,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -87,6 +88,9 @@ func makeDelayPool(cfg config.ServiceEnvironmentConfig, m metrics.Metrics) Delay
 		pq:             &DelayTaskPriorityQueue{},
 		metrics:        m,
 		config:         cfg,
+	}
+	if pool.executorsCount == 0 {
+		pool.executorsCount = runtime.NumCPU()
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
