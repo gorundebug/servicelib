@@ -85,6 +85,7 @@ func (p *TaskPoolImpl) AddTask(fn func()) *Task {
 	}
 	p.tail = task
 	p.count++
+	p.cond.Signal()
 	p.gaugeQueueLength.Inc()
 	return task
 }
@@ -123,7 +124,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 
 func (p *TaskPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
-	if p.count == 0 {
+	if p.count > 0 {
 		p.done = true
 		p.cond.Broadcast()
 		p.lock.Unlock()
