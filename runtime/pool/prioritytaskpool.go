@@ -42,7 +42,7 @@ type PriorityTaskPoolImpl struct {
 }
 
 func makePriorityTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) PriorityTaskPool {
-	poolConfig := cfg.GetConfig().GetTaskPoolByName(name)
+	poolConfig := cfg.GetConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("priority task pool '%s' does not exist.", name)
 		return nil
