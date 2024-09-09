@@ -197,6 +197,12 @@ type Link struct {
 // MetricsEngine defines model for MetricsEngine.
 type MetricsEngine int
 
+// Pool defines model for Pool.
+type Pool struct {
+	ExecutorsCount int    `json:"executorsCount"`
+	Name           string `json:"name"`
+}
+
 // ProgrammingLanguage defines model for ProgrammingLanguage.
 type ProgrammingLanguage int
 
@@ -254,6 +260,7 @@ type StreamApp struct {
 	DataConnectors []DataConnector `json:"dataConnectors"`
 	Endpoints      []Endpoint      `json:"endpoints"`
 	Links          []Link          `json:"links"`
+	Pools          []Pool          `json:"pools"`
 	Services       []Service       `json:"services"`
 	Settings       ProjectSettings `json:"settings"`
 	Streams        []Stream        `json:"streams"`
