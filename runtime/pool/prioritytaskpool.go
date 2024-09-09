@@ -143,7 +143,7 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 
 func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
-	if p.pq.Len() == 0 {
+	if p.pq.Len() > 0 {
 		p.done = true
 		p.cond.Broadcast()
 		p.lock.Unlock()
