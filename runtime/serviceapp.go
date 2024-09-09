@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"github.com/gorundebug/servicelib/telemetry"
@@ -47,7 +48,9 @@ type ServiceApp struct {
 	metrics           metrics.Metrics
 	consumeStatistics map[config.LinkId]ConsumeStatistics
 	storages          []store.Storage
-	delayPool         store.DelayPool
+	delayPool         pool.DelayPool
+	taskPools         map[string]pool.TaskPool
+	priorityTaskPools map[string]pool.PriorityTaskPool
 }
 
 func (app *ServiceApp) reloadConfig(config config.Config) {
@@ -107,7 +110,9 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.delayPool = store.MakeDelayTaskPool(app.metrics, app.serviceConfig.DelayExecutors)
+	app.delayPool = pool.MakeDelayTaskPool(app, app.metrics)
+	app.taskPools = make(map[string]pool.TaskPool)
+	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),
@@ -116,6 +121,62 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
 	if app.serviceConfig.MetricsEngine == api.Prometeus {
 		app.mux.Handle("/metrics", promhttp.Handler())
+	}
+	for idx := range app.config.Links {
+		link := &app.config.Links[idx]
+		streamFrom := app.config.GetStreamConfigById(link.From)
+		streamTo := app.config.GetStreamConfigById(link.To)
+		if streamFrom.IdService == app.serviceConfig.Id || streamTo.IdService == app.serviceConfig.Id {
+			var callSemantics api.CallSemantics
+			if streamFrom.IdService == app.serviceConfig.Id {
+				callSemantics = link.CallSemantics
+			} else {
+				if link.IncomeCallSemantics == nil {
+					log.Fatalf("income call semantics does not defined for link{from=%d, to=%d}", link.From, link.To)
+				}
+				callSemantics = *link.IncomeCallSemantics
+			}
+			if callSemantics != api.FunctionCall &&
+				callSemantics != api.PriorityTaskPool &&
+				callSemantics != api.TaskPool {
+				log.Fatalf("invalid call semantics %d defined for link{from=%d, to=%d}", callSemantics, link.From, link.To)
+			}
+			if callSemantics != api.FunctionCall {
+				var poolName string
+				if streamFrom.IdService == app.serviceConfig.Id {
+					if link.PoolName == nil {
+						log.Fatalf("pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
+					}
+					if callSemantics == api.PriorityTaskPool && link.Priority == nil {
+						log.Fatalf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
+					}
+					poolName = *link.PoolName
+				} else {
+					if link.IncomePoolName == nil {
+						log.Fatalf("income pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
+					}
+					if callSemantics == api.PriorityTaskPool && link.IncomePriority == nil {
+						log.Fatalf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
+					}
+					poolName = *link.IncomePoolName
+				}
+				poolConfig := app.config.GetTaskPoolByName(poolName)
+				if poolConfig == nil {
+					log.Fatalf("task pool '%s' not found for link{from=%d, to=%d}", poolName, link.From, link.To)
+				}
+				if callSemantics == api.TaskPool {
+					if _, ok := app.taskPools[poolName]; !ok {
+						app.taskPools[poolName] = pool.MakeTaskPool(app, poolName, app.metrics)
+					}
+				} else if callSemantics == api.PriorityTaskPool {
+					if _, ok := app.priorityTaskPools[poolName]; !ok {
+						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(app, poolName, app.metrics)
+					}
+				} else {
+					log.Fatalf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)
+				}
+			}
+		}
 	}
 	runtime.SetConfig(cfg)
 }
@@ -333,16 +394,44 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 	if err := app.delayPool.Start(ctx); err != nil {
 		return err
 	}
+	for _, taskPool := range app.taskPools {
+		if err := taskPool.Start(ctx); err != nil {
+			return err
+		}
+	}
+	for _, priorityTaskPool := range app.priorityTaskPools {
+		if err := priorityTaskPool.Start(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
 	wg := sync.WaitGroup{}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		app.delayPool.Stop(ctx)
 	}()
+
+	for _, v := range app.taskPools {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
+	for _, v := range app.priorityTaskPools {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
 	for _, v := range app.dataSources {
 		wg.Add(1)
 		go func() {
@@ -350,13 +439,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 			v.Stop(ctx)
 		}()
 	}
-	for _, v := range app.dataSinks {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -378,10 +461,38 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		close(done)
 	}()
 
+	timeout := false
+
 	select {
 	case <-done:
 	case <-ctx.Done():
+		timeout = true
 		log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
+	}
+
+	if !timeout {
+		wg = sync.WaitGroup{}
+
+		for _, v := range app.dataSinks {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				v.Stop(ctx)
+			}()
+		}
+
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-ctx.Done():
+			timeout = true
+			log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
+		}
 	}
 }
 
@@ -397,4 +508,12 @@ func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 
 func (app *ServiceApp) Delay(duration time.Duration, f func()) {
 	_ = app.delayPool.Delay(duration, f)
+}
+
+func (app *ServiceApp) getTaskPool(name string) pool.TaskPool {
+	return app.taskPools[name]
+}
+
+func (app *ServiceApp) getPriorityTaskPool(name string) pool.PriorityTaskPool {
+	return app.priorityTaskPools[name]
 }

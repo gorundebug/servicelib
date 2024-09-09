@@ -59,6 +59,6 @@ types:
   type: struct
 links:
 - callSemantics: 1
-  from: 30
+  from: 1
   inheritedCallSemantics: true
   to: 2

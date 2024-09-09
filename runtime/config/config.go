@@ -11,6 +11,11 @@ import (
 	"github.com/gorundebug/servicelib/api"
 )
 
+type ServiceEnvironmentConfig interface {
+	GetConfig() *ServiceAppConfig
+	GetServiceConfig() *ServiceConfig
+}
+
 type Config interface {
 	GetServiceConfig() *ServiceAppConfig
 }
@@ -45,6 +50,17 @@ func (s *StreamConfig) GetProperty(name string) interface{} {
 	return s.Properties[name]
 }
 
+type TaskPoolConfig struct {
+	Id             int                    `yaml:"id"`
+	Name           string                 `yaml:"name"`
+	ExecutorsCount int                    `yaml:"executorsCount"`
+	Properties     map[string]interface{} `mapstructure:",remain"`
+}
+
+func (s *TaskPoolConfig) GetProperty(name string) interface{} {
+	return s.Properties[name]
+}
+
 var transformationNameMap = map[api.TransformationType]string{
 	api.TransformationTypeAppSink:         "appSink",
 	api.TransformationTypeCycleLink:       "cycleLink",
@@ -68,19 +84,20 @@ func (s *StreamConfig) GetTransformationName() string {
 }
 
 type ServiceConfig struct {
-	Id                 int                    `yaml:"id"`
-	Name               string                 `yaml:"name"`
-	MonitoringPort     int                    `yaml:"monitoringPort"`
-	MonitoringHost     string                 `yaml:"monitoringHost"`
-	GrpcPort           int                    `yaml:"grpcPort"`
-	GrpcHost           string                 `yaml:"grpcHost"`
-	ShutdownTimeout    int                    `yaml:"shutdownTimeout"`
-	Color              string                 `yaml:"color"`
-	DefaultGrpcTimeout int                    `yaml:"defaultGrpcTimeout"`
-	Environment        string                 `yaml:"environment"`
-	MetricsEngine      api.MetricsEngine      `yaml:"metricsEngine"`
-	DelayExecutors     int                    `yaml:"delayExecutors"`
-	Properties         map[string]interface{} `mapstructure:",remain"`
+	Id                   int                    `yaml:"id"`
+	Name                 string                 `yaml:"name"`
+	MonitoringPort       int                    `yaml:"monitoringPort"`
+	MonitoringHost       string                 `yaml:"monitoringHost"`
+	GrpcPort             int                    `yaml:"grpcPort"`
+	GrpcHost             string                 `yaml:"grpcHost"`
+	ShutdownTimeout      int                    `yaml:"shutdownTimeout"`
+	Color                string                 `yaml:"color"`
+	DefaultGrpcTimeout   int                    `yaml:"defaultGrpcTimeout"`
+	Environment          string                 `yaml:"environment"`
+	MetricsEngine        api.MetricsEngine      `yaml:"metricsEngine"`
+	DelayExecutors       int                    `yaml:"delayExecutors"`
+	DefaultCallSemantics api.CallSemantics      `yaml:"defaultCallSemantics"`
+	Properties           map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ServiceConfig) GetProperty(name string) interface{} {
@@ -88,11 +105,16 @@ func (s *ServiceConfig) GetProperty(name string) interface{} {
 }
 
 type LinkConfig struct {
-	From          int                    `yaml:"from"`
-	To            int                    `yaml:"to"`
-	CallSemantics api.CallSemantics      `yaml:"callSemantics"`
-	Timeout       *int                   `yaml:"timeout"`
-	Properties    map[string]interface{} `mapstructure:",remain"`
+	From                int                    `yaml:"from"`
+	To                  int                    `yaml:"to"`
+	CallSemantics       api.CallSemantics      `yaml:"callSemantics"`
+	IncomeCallSemantics *api.CallSemantics     `yaml:"incomeCallSemantics"`
+	Timeout             *int                   `yaml:"timeout"`
+	PoolName            *string                `yaml:"poolName"`
+	IncomePoolName      *string                `yaml:"incomePoolName"`
+	Priority            *int                   `yaml:"priority"`
+	IncomePriority      *int                   `yaml:"incomePriority"`
+	Properties          map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *LinkConfig) GetProperty(name string) interface{} {
@@ -156,6 +178,8 @@ type RuntimeConfig struct {
 	ServicesById         map[int]*ServiceConfig
 	DataConnectorsById   map[int]*DataConnectorConfig
 	EndpointsById        map[int]*EndpointConfig
+	TaskPoolById         map[int]*TaskPoolConfig
+	TaskPoolByName       map[string]*TaskPoolConfig
 }
 
 type ServiceAppConfig struct {
@@ -164,6 +188,7 @@ type ServiceAppConfig struct {
 	Links          []LinkConfig          `yaml:"links"`
 	DataConnectors []DataConnectorConfig `yaml:"dataConnectors"`
 	Endpoints      []EndpointConfig      `yaml:"endpoints"`
+	TaskPools      []TaskPoolConfig      `yaml:"taskPools"`
 	Settings       ProjectSettings       `yaml:"settings"`
 	runtimeConfig  *RuntimeConfig        `yaml:"-"`
 }
@@ -179,6 +204,8 @@ func (cfg *ServiceAppConfig) InitRuntimeConfig() {
 		EndpointsByName:      make(map[string]*EndpointConfig),
 		DataConnectorsByName: make(map[string]*DataConnectorConfig),
 		LinksById:            make(map[LinkId]*LinkConfig),
+		TaskPoolById:         make(map[int]*TaskPoolConfig),
+		TaskPoolByName:       make(map[string]*TaskPoolConfig),
 	}
 	for idx := range cfg.Streams {
 		cfg.runtimeConfig.StreamsByName[cfg.Streams[idx].Name] = &cfg.Streams[idx]
@@ -195,6 +222,10 @@ func (cfg *ServiceAppConfig) InitRuntimeConfig() {
 	for idx := range cfg.DataConnectors {
 		cfg.runtimeConfig.DataConnectorsById[cfg.DataConnectors[idx].Id] = &cfg.DataConnectors[idx]
 		cfg.runtimeConfig.DataConnectorsByName[cfg.DataConnectors[idx].Name] = &cfg.DataConnectors[idx]
+	}
+	for idx := range cfg.TaskPools {
+		cfg.runtimeConfig.TaskPoolById[cfg.TaskPools[idx].Id] = &cfg.TaskPools[idx]
+		cfg.runtimeConfig.TaskPoolByName[cfg.TaskPools[idx].Name] = &cfg.TaskPools[idx]
 	}
 	for idx := range cfg.Links {
 		cfg.runtimeConfig.LinksById[LinkId{From: cfg.Links[idx].From, To: cfg.Links[idx].To}] = &cfg.Links[idx]
@@ -231,6 +262,14 @@ func (cfg *ServiceAppConfig) GetServiceConfigById(id int) *ServiceConfig {
 
 func (cfg *ServiceAppConfig) GetStreamConfigById(id int) *StreamConfig {
 	return cfg.runtimeConfig.StreamsById[id]
+}
+
+func (cfg *ServiceAppConfig) GetTaskPoolById(id int) *TaskPoolConfig {
+	return cfg.runtimeConfig.TaskPoolById[id]
+}
+
+func (cfg *ServiceAppConfig) GetTaskPoolByName(name string) *TaskPoolConfig {
+	return cfg.runtimeConfig.TaskPoolByName[name]
 }
 
 func (cfg *ServiceAppConfig) GetLink(from int, to int) *LinkConfig {

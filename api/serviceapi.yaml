@@ -288,6 +288,8 @@ components:
           type: string
         publicFunction:
           type: boolean
+        functionDescription:
+          type: string
         ttl:
           type: integer
           minimum: 0
@@ -315,13 +317,21 @@ components:
           example: 2
         callSemantics:
           $ref: '#/components/schemas/CallSemantics'
-          example: 1
+        incomeCallSemantics:
+          $ref: '#/components/schemas/CallSemantics'
         inheritedCallSemantics:
+          type: boolean
+        incomeInheritedCallSemantics:
           type: boolean
         poolName:
           type: string
           example: default
+        incomePoolName:
+          type: string
+          example: default
         priority:
+          type: integer
+        incomePriority:
           type: integer
         methodName:
           type: string
@@ -403,6 +413,8 @@ components:
           type: string
         publicFunction:
           type: boolean
+        functionDescription:
+          type: string
         delay:
           type: integer
 
