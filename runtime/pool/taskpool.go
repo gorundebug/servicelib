@@ -85,6 +85,7 @@ func (p *TaskPoolImpl) AddTask(fn func()) *Task {
 	}
 	p.tail = task
 	p.count++
+	p.cond.Signal()
 	p.gaugeQueueLength.Inc()
 	return task
 }
