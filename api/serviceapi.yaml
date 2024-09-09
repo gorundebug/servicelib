@@ -89,6 +89,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Endpoint'
+        pools:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pool'
       required:
         - services
         - streams
@@ -96,6 +100,7 @@ components:
         - types
         - dataConnectors
         - endpoints
+        - pools
         - settings
 
     ProgrammingLanguage:
@@ -243,6 +248,19 @@ components:
       enum: [ 1 ]
       x-enum-varnames:
         - Prometeus
+
+    Pool:
+      type: object
+      properties:
+        name:
+          type: string
+        executorsCount:
+          type: integer
+          minimum: 80
+          maximum: 65535
+      required:
+        - name
+        - executorsCount
 
     Stream:
       type: object

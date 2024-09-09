@@ -160,7 +160,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 					}
 					poolName = *link.IncomePoolName
 				}
-				poolConfig := app.config.GetTaskPoolByName(poolName)
+				poolConfig := app.config.GetPoolByName(poolName)
 				if poolConfig == nil {
 					log.Fatalf("task pool '%s' not found for link{from=%d, to=%d}", poolName, link.From, link.To)
 				}

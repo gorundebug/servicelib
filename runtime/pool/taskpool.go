@@ -43,7 +43,7 @@ type TaskPoolImpl struct {
 }
 
 func makeTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) TaskPool {
-	poolConfig := cfg.GetConfig().GetTaskPoolByName(name)
+	poolConfig := cfg.GetConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("task pool '%s' does not exist.", name)
 		return nil
