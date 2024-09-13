@@ -1,7 +1,7 @@
 # Service Architect runtime library for GoLang
 
-**Service page**: https://www.gorundebug.com
-**How to use**:
+- **Service page**: https://www.gorundebug.com
+- **How to use**:
 https://youtu.be/KojRHofnFMY
 
 ## Features
