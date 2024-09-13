@@ -17,6 +17,6 @@ https://youtu.be/KojRHofnFMY
 ![ScreenShot](screen.png)
 
 ## Contacts
-Email: serlex777@gmail.com
-Telegram: https://t.me/+31qMliw-DeI3M2M6
+- Email: serlex777@gmail.com
+- Telegram: https://t.me/+31qMliw-DeI3M2M6
 
