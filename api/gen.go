@@ -276,6 +276,7 @@ type TransformationType int
 // Type defines model for Type.
 type Type struct {
 	DefinitionFormat    *TypeDefinitionFormat `json:"definitionFormat,omitempty"`
+	Description         *string               `json:"description,omitempty"`
 	KeyType             *string               `json:"keyType,omitempty"`
 	Name                string                `json:"name"`
 	Package             *string               `json:"package,omitempty"`

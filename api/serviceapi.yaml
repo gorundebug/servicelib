@@ -513,6 +513,8 @@ components:
           type: string
         publicType:
           type: boolean
+        description:
+          type: string
       required:
         - name
         - type
