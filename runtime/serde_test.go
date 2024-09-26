@@ -41,12 +41,14 @@ func mockService(environment string) *MockService {
 		ServiceAppConfig: config.ServiceAppConfig{
 			Services: []config.ServiceConfig{
 				{
-					Name:           "MockService",
-					MonitoringHost: "127.0.0.1",
-					MonitoringPort: 9000,
-					MetricsEngine:  api.Prometeus,
-					Environment:    environment,
-					DelayExecutors: 1,
+					Service: api.Service{
+						Name:           "MockService",
+						MonitoringHost: "127.0.0.1",
+						MonitoringPort: 9000,
+						MetricsEngine:  api.Prometeus,
+						Environment:    environment,
+						DelayExecutors: 1,
+					},
 				},
 			},
 		},

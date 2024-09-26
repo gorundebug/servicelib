@@ -2,7 +2,7 @@
 
 - **Service page**: https://www.gorundebug.com
 - **How to use**:
-  https://youtu.be/KojRHofnFMY
+https://youtu.be/KojRHofnFMY
 
 ## Features
 
@@ -15,4 +15,8 @@
 - **Time-Saving and Efficiency**: By automating repetitive tasks and generating consistent code, GoRunDebug accelerates the development process, allowing developers to focus more on the core business logic.
 
 ![ScreenShot](screen.png)
+
+## Contacts
+- Email: serlex777@gmail.com
+- Telegram: https://t.me/+31qMliw-DeI3M2M6
 

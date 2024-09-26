@@ -36,5 +36,5 @@ func MakeInputStream[T any](name string, streamExecutionRuntime StreamExecutionR
 }
 
 func (s *InputStream[T]) GetEndpointId() int {
-	return s.config.Properties["idendpoint"].(int)
+	return *s.config.IdEndpoint
 }

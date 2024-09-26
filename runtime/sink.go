@@ -53,5 +53,5 @@ func (s *SinkStream[T]) getConsumers() []Stream {
 }
 
 func (s *SinkStream[T]) GetEndpointId() int {
-	return s.config.Properties["idendpoint"].(int)
+	return *s.config.IdEndpoint
 }

@@ -215,7 +215,7 @@ type ProjectSettings struct {
 
 // Service defines model for Service.
 type Service struct {
-	Color                *string             `json:"color,omitempty"`
+	Color                string              `json:"color"`
 	DefaultCallSemantics CallSemantics       `json:"defaultCallSemantics"`
 	DefaultGrpcTimeout   int                 `json:"defaultGrpcTimeout"`
 	DelayExecutors       int                 `json:"delayExecutors"`
@@ -251,8 +251,8 @@ type Stream struct {
 	Ttl                 *int               `json:"ttl,omitempty"`
 	Type                TransformationType `json:"type"`
 	ValueType           *string            `json:"valueType,omitempty"`
-	XPos                *int               `json:"xPos,omitempty"`
-	YPos                *int               `json:"yPos,omitempty"`
+	XPos                int                `json:"xPos"`
+	YPos                int                `json:"yPos"`
 }
 
 // StreamApp defines model for StreamApp.
@@ -276,7 +276,6 @@ type TransformationType int
 // Type defines model for Type.
 type Type struct {
 	DefinitionFormat    *TypeDefinitionFormat `json:"definitionFormat,omitempty"`
-	Description         *string               `json:"description,omitempty"`
 	KeyType             *string               `json:"keyType,omitempty"`
 	Name                string                `json:"name"`
 	Package             *string               `json:"package,omitempty"`
