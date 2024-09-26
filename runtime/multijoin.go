@@ -129,8 +129,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		return nil
 	}
 	ttl := time.Duration(0)
-	if streamConfig.TTL != nil {
-		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	if streamConfig.Ttl != nil {
+		ttl = time.Duration(*streamConfig.Ttl) * time.Millisecond
 	}
 	renewTTL := false
 	if streamConfig.RenewTTL != nil {

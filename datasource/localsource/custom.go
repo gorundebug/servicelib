@@ -157,7 +157,7 @@ func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRunt
 	}
 	customEndpoint := &CustomEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
-		delay:              time.Duration(cfg.Properties["delay"].(int)) * time.Microsecond,
+		delay:              time.Duration(*cfg.Delay) * time.Microsecond,
 	}
 	var inputEndpoint CustomInputEndpoint = customEndpoint
 	dataSource.AddEndpoint(inputEndpoint)

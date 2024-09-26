@@ -155,8 +155,8 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		return nil
 	}
 	ttl := time.Duration(0)
-	if streamConfig.TTL != nil {
-		ttl = time.Duration(*streamConfig.TTL) * time.Millisecond
+	if streamConfig.Ttl != nil {
+		ttl = time.Duration(*streamConfig.Ttl) * time.Millisecond
 	}
 	renewTTL := false
 	if streamConfig.RenewTTL != nil {

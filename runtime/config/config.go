@@ -30,20 +30,8 @@ type ConfigProperties interface {
 }
 
 type StreamConfig struct {
-	Id          int                    `yaml:"id"`
-	Name        string                 `yaml:"name"`
-	Type        api.TransformationType `yaml:"type"`
-	IdService   int                    `yaml:"idService"`
-	IdSource    int                    `yaml:"idSource"`
-	IdSources   []int                  `yaml:"idSources"`
-	XPos        int                    `yaml:"xPos"`
-	YPos        int                    `yaml:"yPos"`
-	TTL         *int64                 `yaml:"ttl"`
-	RenewTTL    *bool                  `yaml:"renewTTL"`
-	Duration    *int64                 `yaml:"duration"`
-	JoinStorage *api.JoinStorageType   `yaml:"joinStorage"`
-	JoinType    *api.JoinType          `yaml:"joinType"`
-	Properties  map[string]interface{} `mapstructure:",remain"`
+	api.Stream `mapstructure:",squash"`
+	Properties map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *StreamConfig) GetProperty(name string) interface{} {
@@ -83,20 +71,8 @@ func (s *StreamConfig) GetTransformationName() string {
 }
 
 type ServiceConfig struct {
-	Id                   int                    `yaml:"id"`
-	Name                 string                 `yaml:"name"`
-	MonitoringPort       int                    `yaml:"monitoringPort"`
-	MonitoringHost       string                 `yaml:"monitoringHost"`
-	GrpcPort             int                    `yaml:"grpcPort"`
-	GrpcHost             string                 `yaml:"grpcHost"`
-	ShutdownTimeout      int                    `yaml:"shutdownTimeout"`
-	Color                string                 `yaml:"color"`
-	DefaultGrpcTimeout   int                    `yaml:"defaultGrpcTimeout"`
-	Environment          string                 `yaml:"environment"`
-	MetricsEngine        api.MetricsEngine      `yaml:"metricsEngine"`
-	DelayExecutors       int                    `yaml:"delayExecutors"`
-	DefaultCallSemantics api.CallSemantics      `yaml:"defaultCallSemantics"`
-	Properties           map[string]interface{} `mapstructure:",remain"`
+	api.Service `mapstructure:",squash"`
+	Properties  map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ServiceConfig) GetProperty(name string) interface{} {
@@ -104,16 +80,8 @@ func (s *ServiceConfig) GetProperty(name string) interface{} {
 }
 
 type LinkConfig struct {
-	From                int                    `yaml:"from"`
-	To                  int                    `yaml:"to"`
-	CallSemantics       api.CallSemantics      `yaml:"callSemantics"`
-	IncomeCallSemantics *api.CallSemantics     `yaml:"incomeCallSemantics"`
-	Timeout             *int                   `yaml:"timeout"`
-	PoolName            *string                `yaml:"poolName"`
-	IncomePoolName      *string                `yaml:"incomePoolName"`
-	Priority            *int                   `yaml:"priority"`
-	IncomePriority      *int                   `yaml:"incomePriority"`
-	Properties          map[string]interface{} `mapstructure:",remain"`
+	api.Link   `mapstructure:",squash"`
+	Properties map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *LinkConfig) GetProperty(name string) interface{} {
@@ -121,10 +89,8 @@ func (s *LinkConfig) GetProperty(name string) interface{} {
 }
 
 type DataConnectorConfig struct {
-	Id         int                    `yaml:"id"`
-	Name       string                 `yaml:"name"`
-	Type       api.DataConnectorType  `yaml:"type"`
-	Properties map[string]interface{} `mapstructure:",remain"`
+	api.DataConnector `mapstructure:",squash"`
+	Properties        map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *DataConnectorConfig) GetProperty(name string) interface{} {
@@ -132,10 +98,8 @@ func (s *DataConnectorConfig) GetProperty(name string) interface{} {
 }
 
 type EndpointConfig struct {
-	Id              int                    `yaml:"id"`
-	Name            string                 `yaml:"name"`
-	IdDataConnector int                    `yaml:"idDataConnector"`
-	Properties      map[string]interface{} `mapstructure:",remain"`
+	api.Endpoint `mapstructure:",squash"`
+	Properties   map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *EndpointConfig) GetProperty(name string) interface{} {
@@ -143,10 +107,8 @@ func (s *EndpointConfig) GetProperty(name string) interface{} {
 }
 
 type ProjectSettings struct {
-	GolangVersion string                 `yaml:"golangVersion"`
-	ModulePath    string                 `yaml:"modulePath"`
-	Name          string                 `yaml:"name"`
-	Properties    map[string]interface{} `mapstructure:",remain"`
+	api.ProjectSettings `mapstructure:",squash"`
+	Properties          map[string]interface{} `mapstructure:",remain"`
 }
 
 func (s *ProjectSettings) GetProperty(name string) interface{} {

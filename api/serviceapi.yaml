@@ -179,6 +179,7 @@ components:
         - metricsEngine
         - delayExecutors
         - environment
+        - color
 
     JoinStorageType:
       type: integer
@@ -323,6 +324,9 @@ components:
         - name
         - idSource
         - idSources
+        - xPos
+        - yPos
+
 
     Link:
       type: object
