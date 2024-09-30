@@ -34,6 +34,10 @@ type InputEndpoint interface {
 	GetEndpointConsumers() []InputEndpointConsumer
 }
 
+type InputEndpointConsumer interface {
+	Endpoint() InputEndpoint
+}
+
 type InputDataSource struct {
 	dataConnector *config.DataConnectorConfig
 	runtime       StreamExecutionRuntime
@@ -74,10 +78,6 @@ func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
 
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 	ds.endpoints[endpoint.GetId()] = endpoint
-}
-
-type InputEndpointConsumer interface {
-	Endpoint() InputEndpoint
 }
 
 type DataSourceEndpoint struct {

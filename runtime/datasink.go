@@ -34,6 +34,10 @@ type SinkEndpoint interface {
 	GetEndpointConsumers() []OutputEndpointConsumer
 }
 
+type OutputEndpointConsumer interface {
+	Endpoint() SinkEndpoint
+}
+
 type OutputDataSink struct {
 	dataConnector *config.DataConnectorConfig
 	runtime       StreamExecutionRuntime
@@ -122,10 +126,6 @@ func (ep *DataSinkEndpoint) AddEndpointConsumer(endpointConsumer OutputEndpointC
 
 func (ep *DataSinkEndpoint) GetEndpointConsumers() []OutputEndpointConsumer {
 	return ep.endpointConsumers
-}
-
-type OutputEndpointConsumer interface {
-	Endpoint() SinkEndpoint
 }
 
 type DataSinkEndpointConsumer[T any] struct {
