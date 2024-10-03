@@ -297,8 +297,8 @@ type NetworkData struct {
 
 func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	networkData := NetworkData{
-		Nodes: make([]*Node, 0),
-		Edges: make([]*Edge, 0),
+		Nodes: make([]*Node, 0, len(app.streams)),
+		Edges: make([]*Edge, 0, len(app.streams)*2),
 	}
 	for _, stream := range app.streams {
 		networkData.Nodes = append(networkData.Nodes, app.makeNode(stream))
