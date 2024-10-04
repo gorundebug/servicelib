@@ -119,18 +119,18 @@ type NetHTTPEndpointGorillaSchemaConsumer[T any] struct {
 	decoder *schema.Decoder
 }
 
-func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSource {
-	dataSource := execRuntime.GetDataSource(id)
+func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSource {
+	dataSource := env.GetDataSource(id)
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
+	cfg := env.GetConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
 	if cfg.Host == nil || cfg.Port == nil {
 		log.Fatalf("no host or port specified for data connector with id %d", id)
 	}
 	netHTTPDataSource := &NetHTTPDataSource{
-		InputDataSource: runtime.MakeInputDataSource(cfg, execRuntime),
+		InputDataSource: runtime.MakeInputDataSource(cfg, env),
 		mux:             mux,
 		server: http.Server{
 			Addr:    fmt.Sprintf("%s:%d", *cfg.Host, *cfg.Port),
@@ -139,13 +139,13 @@ func getNetHTTPDataSource(id int, execRuntime runtime.StreamExecutionRuntime) ru
 		done: make(chan struct{}),
 	}
 	var inputDataSource NetHTTPInputDataSource = netHTTPDataSource
-	execRuntime.AddDataSource(inputDataSource)
+	env.AddDataSource(inputDataSource)
 	return netHTTPDataSource
 }
 
-func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.InputEndpoint {
-	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
-	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, execRuntime)
+func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
+	cfg := env.GetConfig().GetEndpointConfigById(id)
+	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
@@ -154,7 +154,7 @@ func getNetHTTPDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRun
 		log.Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {
@@ -322,8 +322,8 @@ func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData N
 }
 
 func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runtime.Consumer[T] {
-	execRuntime := stream.GetRuntime()
-	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
+	env := stream.GetEnvironment()
+	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), env)
 	cfg := endpoint.GetConfig()
 
 	var consumer runtime.Consumer[T]

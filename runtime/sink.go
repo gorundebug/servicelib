@@ -20,8 +20,9 @@ type SinkStream[T any] struct {
 }
 
 func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -29,8 +30,8 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 	}
 	sinkStream := &SinkStream[T]{
 		StreamBase: &StreamBase[T]{
-			runtime: runtime,
-			config:  streamConfig,
+			environment: env,
+			config:      streamConfig,
 		},
 		serde:  stream.GetSerde(),
 		source: stream,

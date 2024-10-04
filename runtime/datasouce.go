@@ -19,7 +19,7 @@ type DataSource interface {
 	Start(context.Context) error
 	Stop(context.Context)
 	GetDataConnector() *config.DataConnectorConfig
-	GetRuntime() StreamExecutionRuntime
+	GetEnvironment() ServiceExecutionEnvironment
 	AddEndpoint(InputEndpoint)
 	GetEndpoint(id int) InputEndpoint
 	GetEndpoints() []InputEndpoint
@@ -28,7 +28,7 @@ type DataSource interface {
 type InputEndpoint interface {
 	Endpoint
 	GetConfig() *config.EndpointConfig
-	GetRuntime() StreamExecutionRuntime
+	GetEnvironment() ServiceExecutionEnvironment
 	GetDataSource() DataSource
 	AddEndpointConsumer(consumer InputEndpointConsumer)
 	GetEndpointConsumers() []InputEndpointConsumer
@@ -40,14 +40,14 @@ type InputEndpointConsumer interface {
 
 type InputDataSource struct {
 	dataConnector *config.DataConnectorConfig
-	runtime       StreamExecutionRuntime
+	environment   ServiceExecutionEnvironment
 	endpoints     map[int]InputEndpoint
 }
 
-func MakeInputDataSource(dataConnector *config.DataConnectorConfig, runtime StreamExecutionRuntime) *InputDataSource {
+func MakeInputDataSource(dataConnector *config.DataConnectorConfig, environment ServiceExecutionEnvironment) *InputDataSource {
 	return &InputDataSource{
 		dataConnector: dataConnector,
-		runtime:       runtime,
+		environment:   environment,
 		endpoints:     make(map[int]InputEndpoint),
 	}
 }
@@ -64,8 +64,8 @@ func (ds *InputDataSource) GetId() int {
 	return ds.dataConnector.Id
 }
 
-func (ds *InputDataSource) GetRuntime() StreamExecutionRuntime {
-	return ds.runtime
+func (ds *InputDataSource) GetEnvironment() ServiceExecutionEnvironment {
+	return ds.environment
 }
 
 func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
@@ -82,16 +82,16 @@ func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 
 type DataSourceEndpoint struct {
 	config            *config.EndpointConfig
-	runtime           StreamExecutionRuntime
+	environment       ServiceExecutionEnvironment
 	dataSource        DataSource
 	endpointConsumers []InputEndpointConsumer
 }
 
-func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig, runtime StreamExecutionRuntime) *DataSourceEndpoint {
+func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSourceEndpoint {
 	return &DataSourceEndpoint{
 		dataSource:        dataSource,
 		config:            config,
-		runtime:           runtime,
+		environment:       environment,
 		endpointConsumers: make([]InputEndpointConsumer, 0),
 	}
 }
@@ -108,8 +108,8 @@ func (ep *DataSourceEndpoint) GetId() int {
 	return ep.config.Id
 }
 
-func (ep *DataSourceEndpoint) GetRuntime() StreamExecutionRuntime {
-	return ep.runtime
+func (ep *DataSourceEndpoint) GetEnvironment() ServiceExecutionEnvironment {
+	return ep.environment
 }
 
 func (ep *DataSourceEndpoint) GetDataSource() DataSource {
@@ -147,7 +147,7 @@ func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream T
 		inputStream: inputStream,
 		endpoint:    endpoint,
 	}
-	reader := endpoint.GetRuntime().GetEndpointReader(endpoint, inputStream, serde.GetSerdeType[T]())
+	reader := endpoint.GetEnvironment().GetEndpointReader(endpoint, inputStream, serde.GetSerdeType[T]())
 	if reader != nil {
 		ec.reader = reader.(TypedEndpointReader[T])
 	}

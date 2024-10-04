@@ -15,8 +15,8 @@ import (
 )
 
 type StreamBase[T any] struct {
-	runtime StreamExecutionRuntime
-	config  *config.StreamConfig
+	environment ServiceExecutionEnvironment
+	config      *config.StreamConfig
 }
 
 func (s *StreamBase[T]) GetTypeName() string {
@@ -36,8 +36,8 @@ func (s *StreamBase[T]) GetConfig() *config.StreamConfig {
 	return s.config
 }
 
-func (s *StreamBase[T]) GetRuntime() StreamExecutionRuntime {
-	return s.runtime
+func (s *StreamBase[T]) GetEnvironment() ServiceExecutionEnvironment {
+	return s.environment
 }
 
 func (s *StreamBase[T]) GetTransformationName() string {
@@ -67,7 +67,7 @@ func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 		log.Fatalf("consumer already assigned to the stream %d", s.StreamBase.config.Id)
 	}
 	s.consumer = consumer
-	s.caller = makeCaller[T](s.runtime, s)
+	s.caller = makeCaller[T](s.environment, s)
 }
 
 func (s *ConsumedStream[T]) Consume(value T) {

@@ -37,7 +37,7 @@ var englishUpperCaser = cases.Upper(language.English)
 type ServiceApp struct {
 	config            *config.ServiceAppConfig
 	serviceConfig     *config.ServiceConfig
-	runtime           StreamExecutionRuntime
+	environment       ServiceExecutionEnvironment
 	streams           map[int]ServiceStream
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
@@ -53,10 +53,14 @@ type ServiceApp struct {
 	priorityTaskPools map[string]pool.PriorityTaskPool
 }
 
+func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
+	return app
+}
+
 func (app *ServiceApp) reloadConfig(config config.Config) {
 	app.config = config.GetServiceConfig()
 	app.config.InitRuntimeConfig()
-	app.runtime.SetConfig(config)
+	app.environment.SetConfig(config)
 }
 
 func (app *ServiceApp) GetConfig() *config.ServiceAppConfig {
@@ -94,7 +98,7 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, cfg config.Config) {
+func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, cfg config.Config) {
 	app.config = cfg.GetServiceConfig()
 	app.config.InitRuntimeConfig()
 	app.serviceConfig = cfg.GetServiceConfig().GetServiceConfigByName(name)
@@ -102,7 +106,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 		log.Fatalf("Cannot find service config for %s", name)
 	}
 	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
-	app.runtime = runtime
+	app.environment = env
 	app.streams = make(map[int]ServiceStream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
@@ -178,7 +182,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 			}
 		}
 	}
-	runtime.SetConfig(cfg)
+	env.SetConfig(cfg)
 }
 
 //go:embed status.html
@@ -343,7 +347,7 @@ func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 }
 
 func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error) {
-	if ser, err := app.runtime.GetSerde(valueType); err != nil {
+	if ser, err := app.environment.GetSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
 	} else if ser != nil {
 		return ser, nil

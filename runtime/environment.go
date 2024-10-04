@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-type StreamExecutionEnvironment interface {
+type ServiceExecutionEnvironment interface {
 	config.ServiceEnvironmentConfig
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	StreamsInit(ctx context.Context)
@@ -34,6 +34,7 @@ type StreamExecutionEnvironment interface {
 	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
 	GetMetrics() metrics.Metrics
 	Delay(duration time.Duration, f func())
+	GetRuntime() ServiceExecutionRuntime
 }
 
 type DelayFunc[T any] func(T) error
@@ -71,7 +72,7 @@ type Stream interface {
 	GetTypeName() string
 	GetId() int
 	GetConfig() *config.StreamConfig
-	GetRuntime() StreamExecutionRuntime
+	GetEnvironment() ServiceExecutionEnvironment
 }
 
 type ServiceStream interface {

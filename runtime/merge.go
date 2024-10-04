@@ -44,8 +44,8 @@ func (s *MergeLink[T]) GetName() string {
 	return s.mergeStream.GetName()
 }
 
-func (s *MergeLink[T]) GetRuntime() StreamExecutionRuntime {
-	return s.mergeStream.GetRuntime()
+func (s *MergeLink[T]) GetEnvironment() ServiceExecutionEnvironment {
+	return s.mergeStream.GetEnvironment()
 }
 
 func (s *MergeLink[T]) GetConfig() *config.StreamConfig {
@@ -65,8 +65,9 @@ func (s *MergeLink[T]) GetTypeName() string {
 }
 
 func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
-	runtime := streams[0].GetRuntime()
-	cfg := runtime.GetConfig()
+	env := streams[0].GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -79,8 +80,8 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: ser,
 		},

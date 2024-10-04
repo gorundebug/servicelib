@@ -34,8 +34,9 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 		log.Fatalf("Element type %s is not rune or byte", tpR.Name())
 	}
 
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -44,8 +45,8 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},

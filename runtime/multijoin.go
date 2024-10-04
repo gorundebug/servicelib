@@ -84,8 +84,8 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetName() string {
 	return s.multiJoinStream.GetName()
 }
 
-func (s *MultiJoinLinkStream[K, T1, T2, R]) GetRuntime() StreamExecutionRuntime {
-	return s.multiJoinStream.GetRuntime()
+func (s *MultiJoinLinkStream[K, T1, T2, R]) GetEnvironment() ServiceExecutionEnvironment {
+	return s.multiJoinStream.GetEnvironment()
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) GetConfig() *config.StreamConfig {
@@ -117,8 +117,9 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	name string, leftStream TypedStream[datastruct.KeyValue[K, T]],
 	f MultiJoinFunction[K, T, R]) *MultiJoinStream[K, T, R] {
 
-	runtime := leftStream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := leftStream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -139,8 +140,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},
@@ -149,7 +150,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
-		joinStorage: store.MakeJoinStorage[K](runtime.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
+		joinStorage: store.MakeJoinStorage[K](env.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
 	}
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream

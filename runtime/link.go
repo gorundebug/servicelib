@@ -16,8 +16,9 @@ type LinkStream[T any] struct {
 	source TypedConsumedStream[T]
 }
 
-func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStream[T] {
-	cfg := runtime.GetConfig()
+func MakeLinkStream[T any](name string, env ServiceExecutionEnvironment) *LinkStream[T] {
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -26,8 +27,8 @@ func MakeLinkStream[T any](name string, runtime StreamExecutionRuntime) *LinkStr
 	linkStream := &LinkStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 		},
 	}

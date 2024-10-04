@@ -29,8 +29,8 @@ func (s *SplitLink[T]) GetName() string {
 	return s.splitStream.GetName() + "SplitLink" + strconv.Itoa(s.index)
 }
 
-func (s *SplitLink[T]) GetRuntime() StreamExecutionRuntime {
-	return s.splitStream.GetRuntime()
+func (s *SplitLink[T]) GetEnvironment() ServiceExecutionEnvironment {
+	return s.splitStream.GetEnvironment()
 }
 
 func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
@@ -39,7 +39,7 @@ func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
 
 func (s *SplitLink[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
-	s.caller = makeCaller[T](s.splitStream.runtime, s)
+	s.caller = makeCaller[T](s.splitStream.environment, s)
 }
 
 func (s *SplitLink[T]) GetTransformationName() string {
@@ -110,8 +110,9 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 }
 
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -120,8 +121,8 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 	splitStream := &SplitStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},
@@ -133,8 +134,9 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 	return splitStream
 }
 
-func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputSplitStream[T] {
-	cfg := runtime.GetConfig()
+func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *InputSplitStream[T] {
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -144,8 +146,8 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: &ConsumedStream[T]{
 				StreamBase: &StreamBase[T]{
-					runtime: runtime,
-					config:  streamConfig,
+					environment: env,
+					config:      streamConfig,
 				},
 				serde: MakeSerde[T](runtime),
 			},
@@ -156,8 +158,9 @@ func MakeInputSplitStream[T any](name string, runtime StreamExecutionRuntime) *I
 	return inputSplitStream
 }
 
-func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) *InputKVSplitStream[T] {
-	cfg := runtime.GetConfig()
+func MakeInputKVSplitStream[T any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[T] {
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -168,8 +171,8 @@ func MakeInputKVSplitStream[T any](name string, runtime StreamExecutionRuntime) 
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: &ConsumedStream[T]{
 				StreamBase: &StreamBase[T]{
-					runtime: runtime,
-					config:  streamConfig,
+					environment: env,
+					config:      streamConfig,
 				},
 				serde: serdeKV,
 			},

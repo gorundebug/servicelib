@@ -36,8 +36,8 @@ func ForEach[T any](name string, stream runtime.TypedStream[T], f runtime.ForEac
 	return runtime.MakeForEachStream[T](name, stream, f)
 }
 
-func Input[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedInputStream[T] {
-	return runtime.MakeInputStream[T](name, streamExecutionRuntime)
+func Input[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedInputStream[T] {
+	return runtime.MakeInputStream[T](name, env)
 }
 
 func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[datastruct.KeyValue[K, T1]],
@@ -51,8 +51,8 @@ func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T
 	return runtime.MakeKeyByStream[T, K, V](name, stream, f)
 }
 
-func Link[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedLinkStream[T] {
-	return runtime.MakeLinkStream[T](name, streamExecutionRuntime)
+func Link[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedLinkStream[T] {
+	return runtime.MakeLinkStream[T](name, env)
 }
 
 func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
@@ -83,22 +83,22 @@ func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplit
 	return runtime.MakeSplitStream[T](name, stream)
 }
 
-func SplitInStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinarySplitStream[T] {
-	return runtime.MakeInputSplitStream[T](name, streamExecutionRuntime)
+func SplitInStub[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinarySplitStream[T] {
+	return runtime.MakeInputSplitStream[T](name, env)
 }
 
-func InStub[T any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryConsumedStream[T] {
-	return runtime.MakeInStubStream[T](name, streamExecutionRuntime)
+func InStub[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryConsumedStream[T] {
+	return runtime.MakeInStubStream[T](name, env)
 }
 
-func SplitInStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVSplitStream[datastruct.KeyValue[K, V]] {
-	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInputKVSplitStream[datastruct.KeyValue[K, V]](name, streamExecutionRuntime)
+func SplitInStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVSplitStream[datastruct.KeyValue[K, V]] {
+	runtime.RegisterKeyValueSerde[K, V](env.GetRuntime())
+	return runtime.MakeInputKVSplitStream[datastruct.KeyValue[K, V]](name, env)
 }
 
-func InStubKV[K comparable, V any](name string, streamExecutionRuntime runtime.StreamExecutionRuntime) runtime.TypedBinaryKVConsumedStream[datastruct.KeyValue[K, V]] {
-	runtime.RegisterKeyValueSerde[K, V](streamExecutionRuntime)
-	return runtime.MakeInStubKVStream[datastruct.KeyValue[K, V]](name, streamExecutionRuntime)
+func InStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVConsumedStream[datastruct.KeyValue[K, V]] {
+	runtime.RegisterKeyValueSerde[K, V](env.GetRuntime())
+	return runtime.MakeInStubKVStream[datastruct.KeyValue[K, V]](name, env)
 }
 
 func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
