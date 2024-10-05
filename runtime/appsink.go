@@ -46,6 +46,6 @@ func (s *AppSinkStream[T]) Consume(value T) {
 	_ = s.consumer(value)
 }
 
-func (s *AppSinkStream[T]) getConsumers() []Stream {
+func (s *AppSinkStream[T]) GetConsumers() []Stream {
 	return []Stream{}
 }

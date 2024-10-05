@@ -42,7 +42,7 @@ type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
 	serviceInit(name string, env ServiceExecutionEnvironment, config config.Config)
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
-	registerStream(stream ServiceStream)
+	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(statistics ConsumeStatistics)

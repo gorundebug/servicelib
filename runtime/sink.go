@@ -49,7 +49,7 @@ func (s *SinkStream[T]) SetConsumer(consumer Consumer[T]) {
 	s.consumer = consumer
 }
 
-func (s *SinkStream[T]) getConsumers() []Stream {
+func (s *SinkStream[T]) GetConsumers() []Stream {
 	return []Stream{}
 }
 

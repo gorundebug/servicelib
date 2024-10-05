@@ -70,8 +70,8 @@ func (s *JoinLink[K, T1, T2, R]) GetConfig() *config.StreamConfig {
 	return s.joinStream.GetConfig()
 }
 
-func (s *JoinLink[K, T1, T2, R]) getConsumers() []Stream {
-	return s.joinStream.getConsumers()
+func (s *JoinLink[K, T1, T2, R]) GetConsumers() []Stream {
+	return s.joinStream.GetConsumers()
 }
 
 func (s *JoinLink[K, T1, T2, R]) GetTransformationName() string {

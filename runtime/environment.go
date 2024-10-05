@@ -73,11 +73,7 @@ type Stream interface {
 	GetId() int
 	GetConfig() *config.StreamConfig
 	GetEnvironment() ServiceExecutionEnvironment
-}
-
-type ServiceStream interface {
-	Stream
-	getConsumers() []Stream
+	GetConsumers() []Stream
 }
 
 type TypedStream[T any] interface {

@@ -52,8 +52,8 @@ func (s *MergeLink[T]) GetConfig() *config.StreamConfig {
 	return s.mergeStream.GetConfig()
 }
 
-func (s *MergeLink[T]) getConsumers() []Stream {
-	return s.mergeStream.getConsumers()
+func (s *MergeLink[T]) GetConsumers() []Stream {
+	return s.mergeStream.GetConsumers()
 }
 
 func (s *MergeLink[T]) GetTransformationName() string {

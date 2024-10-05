@@ -38,7 +38,7 @@ type ServiceApp struct {
 	config            *config.ServiceAppConfig
 	serviceConfig     *config.ServiceConfig
 	environment       ServiceExecutionEnvironment
-	streams           map[int]ServiceStream
+	streams           map[int]Stream
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
@@ -78,7 +78,7 @@ func (app *ServiceApp) GetMetrics() metrics.Metrics {
 	return app.metrics
 }
 
-func (app *ServiceApp) registerStream(stream ServiceStream) {
+func (app *ServiceApp) registerStream(stream Stream) {
 	app.streams[stream.GetId()] = stream
 }
 
@@ -107,7 +107,7 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 	}
 	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
 	app.environment = env
-	app.streams = make(map[int]ServiceStream)
+	app.streams = make(map[int]Stream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
@@ -254,10 +254,10 @@ func (app *ServiceApp) makeNode(stream Stream) *Node {
 	}
 }
 
-func (app *ServiceApp) makeEdges(stream ServiceStream) []*Edge {
+func (app *ServiceApp) makeEdges(stream Stream) []*Edge {
 	edges := make([]*Edge, 0)
 
-	for _, consumer := range stream.getConsumers() {
+	for _, consumer := range stream.GetConsumers() {
 		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
 		label, _ = strings.CutPrefix(label, "types.")
 		if stat, ok := app.consumeStatistics[config.LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {

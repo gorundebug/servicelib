@@ -54,8 +54,8 @@ func (s *SplitLink[T]) GetSerde() serde.StreamSerde[T] {
 	return s.splitStream.GetSerde()
 }
 
-func (s *SplitLink[T]) getConsumers() []Stream {
-	return s.splitStream.getConsumers()
+func (s *SplitLink[T]) GetConsumers() []Stream {
+	return s.splitStream.GetConsumers()
 }
 
 func (s *SplitLink[T]) Consume(value T) {
@@ -197,7 +197,7 @@ func (s *SplitStream[T]) Consume(value T) {
 	}
 }
 
-func (s *SplitStream[T]) getConsumers() []Stream {
+func (s *SplitStream[T]) GetConsumers() []Stream {
 	var consumers = make([]Stream, len(s.links))
 	for i := 0; i < len(s.links); i++ {
 		consumers[i] = s.links[i].GetConsumer()

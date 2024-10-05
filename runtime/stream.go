@@ -51,7 +51,7 @@ type ConsumedStream[T any] struct {
 	consumer TypedStreamConsumer[T]
 }
 
-func (s *ConsumedStream[T]) getConsumers() []Stream {
+func (s *ConsumedStream[T]) GetConsumers() []Stream {
 	if s.consumer != nil {
 		return []Stream{s.consumer}
 	}
