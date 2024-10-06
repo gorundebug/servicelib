@@ -70,12 +70,6 @@ func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	s.caller = makeCaller[T](s.environment, s)
 }
 
-func (s *ConsumedStream[T]) Consume(value T) {
-	if s.caller != nil {
-		s.caller.Consume(value)
-	}
-}
-
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {
 	return s.consumer
 }

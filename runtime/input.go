@@ -39,3 +39,9 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 func (s *InputStream[T]) GetEndpointId() int {
 	return *s.config.IdEndpoint
 }
+
+func (s *InputStream[T]) Consume(value T) {
+	if s.caller != nil {
+		s.caller.Consume(value)
+	}
+}

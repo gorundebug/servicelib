@@ -16,11 +16,6 @@ type InStubStream[T any] struct {
 	*ConsumedStream[T]
 }
 
-type InStubKVStream[T any] struct {
-	*ConsumedStream[T]
-	serdeKV serde.StreamKeyValueSerde[T]
-}
-
 func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InStubStream[T] {
 	runtime := env.GetRuntime()
 	cfg := env.GetConfig()
@@ -40,6 +35,17 @@ func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InSt
 	}
 	runtime.registerStream(inStubStream)
 	return inStubStream
+}
+
+func (s *InStubStream[T]) Consume(value T) {
+	if s.caller != nil {
+		s.caller.Consume(value)
+	}
+}
+
+type InStubKVStream[T any] struct {
+	*ConsumedStream[T]
+	serdeKV serde.StreamKeyValueSerde[T]
 }
 
 func MakeInStubKVStream[T any](name string, env ServiceExecutionEnvironment) *InStubKVStream[T] {
@@ -63,6 +69,12 @@ func MakeInStubKVStream[T any](name string, env ServiceExecutionEnvironment) *In
 	}
 	runtime.registerStream(inStubStream)
 	return inStubStream
+}
+
+func (s *InStubKVStream[T]) Consume(value T) {
+	if s.caller != nil {
+		s.caller.Consume(value)
+	}
 }
 
 func (s *InStubStream[T]) ConsumeBinary(data []byte) {

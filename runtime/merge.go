@@ -93,3 +93,9 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	}
 	return mergeStream
 }
+
+func (s *MergeStream[T]) Consume(value T) {
+	if s.caller != nil {
+		s.caller.Consume(value)
+	}
+}
