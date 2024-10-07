@@ -62,16 +62,16 @@ func (s *JoinLink[K, T1, T2, R]) GetName() string {
 	return s.joinStream.GetName()
 }
 
-func (s *JoinLink[K, T1, T2, R]) GetRuntime() StreamExecutionRuntime {
-	return s.joinStream.GetRuntime()
+func (s *JoinLink[K, T1, T2, R]) GetEnvironment() ServiceExecutionEnvironment {
+	return s.joinStream.GetEnvironment()
 }
 
 func (s *JoinLink[K, T1, T2, R]) GetConfig() *config.StreamConfig {
 	return s.joinStream.GetConfig()
 }
 
-func (s *JoinLink[K, T1, T2, R]) getConsumers() []Stream {
-	return s.joinStream.getConsumers()
+func (s *JoinLink[K, T1, T2, R]) GetConsumers() []Stream {
+	return s.joinStream.GetConsumers()
 }
 
 func (s *JoinLink[K, T1, T2, R]) GetTransformationName() string {
@@ -143,8 +143,9 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	streamRight TypedStream[datastruct.KeyValue[K, T2]],
 	f JoinFunction[K, T1, T2, R]) *JoinStream[K, T1, T2, R] {
 
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -165,8 +166,8 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: &ConsumedStream[R]{
 			StreamBase: &StreamBase[R]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: MakeSerde[R](runtime),
 		},
@@ -175,7 +176,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		},
 		serdeIn:     stream.GetSerde(),
 		source:      stream,
-		joinStorage: store.MakeJoinStorage[K](runtime.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
+		joinStorage: store.MakeJoinStorage[K](env.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
 		joinType:    *streamConfig.JoinType,
 	}
 	runtime.registerStorage(joinStream.joinStorage)

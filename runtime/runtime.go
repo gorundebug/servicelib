@@ -30,7 +30,7 @@ import (
 )
 
 type Caller[T any] interface {
-	Consume(value T)
+	Consumer[T]
 }
 
 type ConsumeStatistics interface {
@@ -38,12 +38,11 @@ type ConsumeStatistics interface {
 	LinkId() config.LinkId
 }
 
-type StreamExecutionRuntime interface {
-	StreamExecutionEnvironment
+type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
-	serviceInit(name string, runtime StreamExecutionRuntime, config config.Config)
+	serviceInit(name string, env ServiceExecutionEnvironment, config config.Config)
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
-	registerStream(stream ServiceStream)
+	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(statistics ConsumeStatistics)
@@ -129,7 +128,7 @@ func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader
 	return bytes.NewReader(output)
 }
 
-func MakeService[Runtime StreamExecutionRuntime, Cfg config.Config](name string, configSettings *config.ConfigSettings) Runtime {
+func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string, configSettings *config.ConfigSettings) Environment {
 	configValuesPathArg := flag.String("values", "./values.yaml", "service config values path")
 	configPathArg := flag.String("config", "./config.yaml", "service config path")
 	flag.Parse()
@@ -147,8 +146,8 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg config.Config](name string,
 	if err := viper.Unmarshal(cfg); err != nil {
 		log.Fatalf("fatal error config file: %s", err)
 	}
-	appType := serde.GetSerdeType[Runtime]()
-	runtime := reflect.New(appType).Interface().(Runtime)
+	serviceType := serde.GetSerdeType[Environment]()
+	service := reflect.New(serviceType).Interface().(Environment)
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		configType := serde.GetSerdeType[Cfg]()
@@ -156,15 +155,15 @@ func MakeService[Runtime StreamExecutionRuntime, Cfg config.Config](name string,
 		if err := viper.Unmarshal(cfg); err != nil {
 			log.Println("error config update:\n", err)
 		} else {
-			runtime.reloadConfig(cfg)
+			service.GetRuntime().reloadConfig(cfg)
 		}
 	})
 	viper.WatchConfig()
-	runtime.serviceInit(name, runtime, cfg)
-	return runtime
+	service.GetRuntime().serviceInit(name, service, cfg)
+	return service
 }
 
-func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (serde.Serializer, error) {
+func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.Serializer, error) {
 	var err error
 	var ser serde.Serializer
 	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
@@ -189,7 +188,7 @@ func makeSerdeForType(tp reflect.Type, runtime StreamExecutionRuntime) (serde.Se
 	return ser, err
 }
 
-func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (serde.Serializer, error) {
+func makeTypedArraySerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	elementType := v.Type().Elem()
@@ -207,7 +206,7 @@ func makeTypedArraySerde[T any](runtime StreamExecutionRuntime) (serde.Serialize
 	return serde.MakeTypedArraySerde[T](serElm), nil
 }
 
-func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (serde.Serializer, error) {
+func makeTypedMapSerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	mapType := v.Type()
@@ -238,18 +237,18 @@ func makeTypedMapSerde[T any](runtime StreamExecutionRuntime) (serde.Serializer,
 	return serde.MakeTypedMapSerde[T](serKey, serValue), nil
 }
 
-func registerSerde[T any](runtime StreamExecutionRuntime, ser serde.StreamSerde[T]) {
+func registerSerde[T any](runtime ServiceExecutionRuntime, ser serde.StreamSerde[T]) {
 	runtime.registerSerde(serde.GetSerdeType[T](), ser)
 }
 
-func getRegisteredSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+func getRegisteredSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	if ser := runtime.getRegisteredSerde(serde.GetSerdeType[T]()); ser != nil {
 		return ser.(serde.StreamSerde[T])
 	}
 	return nil
 }
 
-func MakeSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	if ser := getRegisteredSerde[T](runtime); ser != nil {
 		return ser
 	}
@@ -275,7 +274,7 @@ func MakeSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
 	return streamSer
 }
 
-func MakeKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
+func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
 	if ser := getRegisteredSerde[datastruct.KeyValue[K, V]](runtime); ser != nil {
 		return ser.(serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]])
 	}
@@ -310,19 +309,20 @@ func IsKeyValueType[T any]() bool {
 	return tp.PkgPath() == "github.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
 }
 
-func RegisterSerde[T any](runtime StreamExecutionRuntime) serde.StreamSerde[T] {
+func RegisterSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	return MakeSerde[T](runtime)
 }
 
-func RegisterKeyValueSerde[K comparable, V any](runtime StreamExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
+func RegisterKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
 	return MakeKeyValueSerde[K, V](runtime)
 }
 
-func makeCaller[T any](runtime StreamExecutionRuntime, source TypedStream[T]) Caller[T] {
-	cfg := runtime.GetConfig()
-	serviceConfig := runtime.GetServiceConfig()
+func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) Caller[T] {
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
+	serviceConfig := env.GetServiceConfig()
 	consumer := source.GetConsumer()
-	link := runtime.GetConfig().GetLink(source.GetId(), consumer.GetId())
+	link := cfg.GetLink(source.GetId(), consumer.GetId())
 	if link == nil {
 		log.Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
 		return nil
@@ -410,7 +410,7 @@ func (s *consumeStatistics) Inc() {
 
 type caller[T any] struct {
 	consumeStatistics
-	runtime  StreamExecutionRuntime
+	runtime  ServiceExecutionRuntime
 	source   TypedStream[T]
 	consumer TypedStreamConsumer[T]
 }

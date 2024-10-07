@@ -19,7 +19,7 @@ type DataSink interface {
 	Start(context.Context) error
 	Stop(context.Context)
 	GetDataConnector() *config.DataConnectorConfig
-	GetRuntime() StreamExecutionRuntime
+	GetEnvironment() ServiceExecutionEnvironment
 	AddEndpoint(SinkEndpoint)
 	GetEndpoint(id int) SinkEndpoint
 	GetEndpoints() []SinkEndpoint
@@ -28,22 +28,26 @@ type DataSink interface {
 type SinkEndpoint interface {
 	Endpoint
 	GetConfig() *config.EndpointConfig
-	GetRuntime() StreamExecutionRuntime
+	GetEnvironment() ServiceExecutionEnvironment
 	GetDataSink() DataSink
 	AddEndpointConsumer(consumer OutputEndpointConsumer)
 	GetEndpointConsumers() []OutputEndpointConsumer
 }
 
+type OutputEndpointConsumer interface {
+	Endpoint() SinkEndpoint
+}
+
 type OutputDataSink struct {
 	dataConnector *config.DataConnectorConfig
-	runtime       StreamExecutionRuntime
+	environment   ServiceExecutionEnvironment
 	endpoints     map[int]SinkEndpoint
 }
 
-func MakeOutputDataSink(dataConnector *config.DataConnectorConfig, runtime StreamExecutionRuntime) *OutputDataSink {
+func MakeOutputDataSink(dataConnector *config.DataConnectorConfig, environment ServiceExecutionEnvironment) *OutputDataSink {
 	return &OutputDataSink{
 		dataConnector: dataConnector,
-		runtime:       runtime,
+		environment:   environment,
 		endpoints:     make(map[int]SinkEndpoint),
 	}
 }
@@ -60,8 +64,8 @@ func (ds *OutputDataSink) GetId() int {
 	return ds.dataConnector.Id
 }
 
-func (ds *OutputDataSink) GetRuntime() StreamExecutionRuntime {
-	return ds.runtime
+func (ds *OutputDataSink) GetEnvironment() ServiceExecutionEnvironment {
+	return ds.environment
 }
 
 func (ds *OutputDataSink) GetEndpoint(id int) SinkEndpoint {
@@ -78,16 +82,16 @@ func (ds *OutputDataSink) AddEndpoint(endpoint SinkEndpoint) {
 
 type DataSinkEndpoint struct {
 	config            *config.EndpointConfig
-	runtime           StreamExecutionRuntime
+	environment       ServiceExecutionEnvironment
 	dataSink          DataSink
 	endpointConsumers []OutputEndpointConsumer
 }
 
-func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, runtime StreamExecutionRuntime) *DataSinkEndpoint {
+func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
 	return &DataSinkEndpoint{
 		dataSink:          dataSink,
 		config:            config,
-		runtime:           runtime,
+		environment:       environment,
 		endpointConsumers: make([]OutputEndpointConsumer, 0),
 	}
 }
@@ -104,8 +108,8 @@ func (ep *DataSinkEndpoint) GetId() int {
 	return ep.config.Id
 }
 
-func (ep *DataSinkEndpoint) GetRuntime() StreamExecutionRuntime {
-	return ep.runtime
+func (ep *DataSinkEndpoint) GetEnvironment() ServiceExecutionEnvironment {
+	return ep.environment
 }
 
 func (ep *DataSinkEndpoint) GetDataSink() DataSink {
@@ -124,10 +128,6 @@ func (ep *DataSinkEndpoint) GetEndpointConsumers() []OutputEndpointConsumer {
 	return ep.endpointConsumers
 }
 
-type OutputEndpointConsumer interface {
-	Endpoint() SinkEndpoint
-}
-
 type DataSinkEndpointConsumer[T any] struct {
 	endpoint SinkEndpoint
 	stream   TypedSinkStream[T]
@@ -143,7 +143,7 @@ func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSink
 		endpoint: endpoint,
 		stream:   stream,
 	}
-	writer := endpoint.GetRuntime().GetEndpointReader(endpoint, stream, serde.GetSerdeType[T]())
+	writer := endpoint.GetEnvironment().GetEndpointReader(endpoint, stream, serde.GetSerdeType[T]())
 	if writer != nil {
 		ec.writer = writer.(TypedEndpointWriter[T])
 	}

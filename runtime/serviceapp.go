@@ -37,8 +37,8 @@ var englishUpperCaser = cases.Upper(language.English)
 type ServiceApp struct {
 	config            *config.ServiceAppConfig
 	serviceConfig     *config.ServiceConfig
-	runtime           StreamExecutionRuntime
-	streams           map[int]ServiceStream
+	environment       ServiceExecutionEnvironment
+	streams           map[int]Stream
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
@@ -53,10 +53,14 @@ type ServiceApp struct {
 	priorityTaskPools map[string]pool.PriorityTaskPool
 }
 
+func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
+	return app
+}
+
 func (app *ServiceApp) reloadConfig(config config.Config) {
 	app.config = config.GetServiceConfig()
 	app.config.InitRuntimeConfig()
-	app.runtime.SetConfig(config)
+	app.environment.SetConfig(config)
 }
 
 func (app *ServiceApp) GetConfig() *config.ServiceAppConfig {
@@ -74,7 +78,7 @@ func (app *ServiceApp) GetMetrics() metrics.Metrics {
 	return app.metrics
 }
 
-func (app *ServiceApp) registerStream(stream ServiceStream) {
+func (app *ServiceApp) registerStream(stream Stream) {
 	app.streams[stream.GetId()] = stream
 }
 
@@ -94,7 +98,7 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, cfg config.Config) {
+func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, cfg config.Config) {
 	app.config = cfg.GetServiceConfig()
 	app.config.InitRuntimeConfig()
 	app.serviceConfig = cfg.GetServiceConfig().GetServiceConfigByName(name)
@@ -102,8 +106,8 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 		log.Fatalf("Cannot find service config for %s", name)
 	}
 	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
-	app.runtime = runtime
-	app.streams = make(map[int]ServiceStream)
+	app.environment = env
+	app.streams = make(map[int]Stream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
@@ -178,7 +182,7 @@ func (app *ServiceApp) serviceInit(name string, runtime StreamExecutionRuntime, 
 			}
 		}
 	}
-	runtime.SetConfig(cfg)
+	env.SetConfig(cfg)
 }
 
 //go:embed status.html
@@ -250,10 +254,10 @@ func (app *ServiceApp) makeNode(stream Stream) *Node {
 	}
 }
 
-func (app *ServiceApp) makeEdges(stream ServiceStream) []*Edge {
+func (app *ServiceApp) makeEdges(stream Stream) []*Edge {
 	edges := make([]*Edge, 0)
 
-	for _, consumer := range stream.getConsumers() {
+	for _, consumer := range stream.GetConsumers() {
 		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
 		label, _ = strings.CutPrefix(label, "types.")
 		if stat, ok := app.consumeStatistics[config.LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {
@@ -297,8 +301,8 @@ type NetworkData struct {
 
 func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	networkData := NetworkData{
-		Nodes: make([]*Node, 0),
-		Edges: make([]*Edge, 0),
+		Nodes: make([]*Node, 0, len(app.streams)),
+		Edges: make([]*Edge, 0, len(app.streams)*2),
 	}
 	for _, stream := range app.streams {
 		networkData.Nodes = append(networkData.Nodes, app.makeNode(stream))
@@ -343,7 +347,7 @@ func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 }
 
 func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error) {
-	if ser, err := app.runtime.GetSerde(valueType); err != nil {
+	if ser, err := app.environment.GetSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
 	} else if ser != nil {
 		return ser, nil
@@ -498,12 +502,10 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 
 func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
 	link := app.config.GetLink(from, to)
-	if link != nil {
-		if link.Timeout != nil {
-			return time.Duration(*link.Timeout) * time.Millisecond
-		}
+	if link == nil || link.Timeout == nil {
+		return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond
 	}
-	return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond
+	return time.Duration(*link.Timeout) * time.Millisecond
 }
 
 func (app *ServiceApp) Delay(duration time.Duration, f func()) {

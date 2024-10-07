@@ -34,8 +34,9 @@ type ForEachStream[T any] struct {
 }
 
 func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunction[T]) *ForEachStream[T] {
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -44,8 +45,8 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 	forEachStream := &ForEachStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},

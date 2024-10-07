@@ -134,29 +134,29 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	}
 }
 
-func getCustomDataSource(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSource {
-	dataSource := execRuntime.GetDataSource(id)
+func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSource {
+	dataSource := env.GetDataSource(id)
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
+	cfg := env.GetConfig().GetDataConnectorById(id)
 	customDataSource := &CustomDataSource{
-		InputDataSource: runtime.MakeInputDataSource(cfg, execRuntime),
+		InputDataSource: runtime.MakeInputDataSource(cfg, env),
 	}
 	var inputDataSource CustomInputDataSource = customDataSource
-	execRuntime.AddDataSource(inputDataSource)
+	env.AddDataSource(inputDataSource)
 	return customDataSource
 }
 
-func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.InputEndpoint {
-	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
-	dataSource := getCustomDataSource(cfg.IdDataConnector, execRuntime)
+func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
+	cfg := env.GetConfig().GetEndpointConfigById(id)
+	dataSource := getCustomDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, execRuntime),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
 		delay:              time.Duration(*cfg.Delay) * time.Microsecond,
 	}
 	var inputEndpoint CustomInputEndpoint = customEndpoint
@@ -165,8 +165,8 @@ func getCustomDataSourceEndpoint(id int, execRuntime runtime.StreamExecutionRunt
 }
 
 func MakeCustomEndpointConsumer[T any](stream runtime.TypedInputStream[T], dataProducer DataProducer[T]) runtime.Consumer[T] {
-	execRuntime := stream.GetRuntime()
-	endpoint := getCustomDataSourceEndpoint(stream.GetEndpointId(), execRuntime)
+	env := stream.GetEnvironment()
+	endpoint := getCustomDataSourceEndpoint(stream.GetEndpointId(), env)
 	var consumer runtime.Consumer[T]
 	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{

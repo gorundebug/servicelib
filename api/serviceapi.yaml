@@ -257,8 +257,7 @@ components:
           type: string
         executorsCount:
           type: integer
-          minimum: 80
-          maximum: 65535
+          minimum: 1
       required:
         - name
         - executorsCount
@@ -371,7 +370,8 @@ components:
     DataConnectorImplementation:
       type: string
       enum: [ 'net/http',
-              'FastHTTP'
+              'FastHTTP',
+              'function'
       ]
 
     DataConnector:
@@ -400,7 +400,6 @@ components:
         - id
         - name
         - type
-        - programmingLanguage
         - implementation
 
     DataFormat:

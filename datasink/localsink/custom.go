@@ -109,7 +109,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 	ep.dataConsumer.Stop(ctx)
 }
 
-func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) runtime.DataSink {
+func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) runtime.DataSink {
 	dataSink := execRuntime.GetDataSink(id)
 	if dataSink != nil {
 		return dataSink
@@ -123,15 +123,15 @@ func getCustomDataSink(id int, execRuntime runtime.StreamExecutionRuntime) runti
 	return customDataSink
 }
 
-func getCustomSinkEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) runtime.SinkEndpoint {
-	cfg := execRuntime.GetConfig().GetEndpointConfigById(id)
-	dataSink := getCustomDataSink(cfg.IdDataConnector, execRuntime)
+func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.SinkEndpoint {
+	cfg := env.GetConfig().GetEndpointConfigById(id)
+	dataSink := getCustomDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
-		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, cfg, execRuntime),
+		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, cfg, env),
 	}
 	var sinkEndpoint CustomSinkEndpoint = customEndpoint
 	dataSink.AddEndpoint(sinkEndpoint)
@@ -139,8 +139,8 @@ func getCustomSinkEndpoint(id int, execRuntime runtime.StreamExecutionRuntime) r
 }
 
 func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer DataConsumer[T]) runtime.Consumer[T] {
-	execRuntime := stream.GetRuntime()
-	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), execRuntime)
+	env := stream.GetEnvironment()
+	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), env)
 	var consumer runtime.Consumer[T]
 	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{

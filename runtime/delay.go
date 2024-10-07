@@ -36,8 +36,9 @@ type DelayStream[T any] struct {
 }
 
 func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[T]) *DelayStream[T] {
-	runtime := stream.GetRuntime()
-	cfg := runtime.GetConfig()
+	env := stream.GetEnvironment()
+	runtime := env.GetRuntime()
+	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -46,8 +47,8 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 	delayStream := &DelayStream[T]{
 		ConsumedStream: &ConsumedStream[T]{
 			StreamBase: &StreamBase[T]{
-				runtime: runtime,
-				config:  streamConfig,
+				environment: env,
+				config:      streamConfig,
 			},
 			serde: stream.GetSerde(),
 		},
@@ -66,7 +67,7 @@ func (s *DelayStream[T]) Consume(value T) {
 	if s.caller != nil {
 		duration := s.f.call(value)
 		if duration > 0 {
-			s.runtime.Delay(duration, func() {
+			s.environment.Delay(duration, func() {
 				s.caller.Consume(value)
 			})
 		} else {

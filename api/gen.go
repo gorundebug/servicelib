@@ -28,6 +28,7 @@ const (
 // Defines values for DataConnectorImplementation.
 const (
 	FastHTTP DataConnectorImplementation = "FastHTTP"
+	Function DataConnectorImplementation = "function"
 	Nethttp  DataConnectorImplementation = "net/http"
 )
 
@@ -139,7 +140,7 @@ type DataConnector struct {
 	Implementation      DataConnectorImplementation `json:"implementation"`
 	Name                string                      `json:"name"`
 	Port                *int                        `json:"port,omitempty"`
-	ProgrammingLanguage ProgrammingLanguage         `json:"programmingLanguage"`
+	ProgrammingLanguage *ProgrammingLanguage        `json:"programmingLanguage,omitempty"`
 	Type                DataConnectorType           `json:"type"`
 }
 
