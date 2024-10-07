@@ -30,7 +30,7 @@ import (
 )
 
 type Caller[T any] interface {
-	Consume(value T)
+	Consumer[T]
 }
 
 type ConsumeStatistics interface {
