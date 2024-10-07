@@ -92,7 +92,7 @@ type TypedConsumedStream[T any] interface {
 	Consumer[T]
 }
 
-type TypedTransformConsumedStream[T any, R any] interface {
+type TypedTransformConsumedStream[T, R any] interface {
 	TypedStream[R]
 	Consumer[T]
 }
