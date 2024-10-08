@@ -45,7 +45,7 @@ func (s *StreamBase[T]) GetTransformationName() string {
 }
 
 type ConsumedStream[T any] struct {
-	*StreamBase[T]
+	StreamBase[T]
 	caller   Caller[T]
 	serde    serde.StreamSerde[T]
 	consumer TypedStreamConsumer[T]

@@ -105,7 +105,7 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTypeName() string {
 }
 
 type MultiJoinStream[K comparable, T, R any] struct {
-	*ConsumedStream[R]
+	ConsumedStream[R]
 	f           MultiJoinFunctionContext[K, T, R]
 	links       []multiJoinLinkStream
 	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T]]
@@ -138,8 +138,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		renewTTL = *streamConfig.RenewTTL
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
-		ConsumedStream: &ConsumedStream[R]{
-			StreamBase: &StreamBase[R]{
+		ConsumedStream: ConsumedStream[R]{
+			StreamBase: StreamBase[R]{
 				environment: env,
 				config:      streamConfig,
 			},

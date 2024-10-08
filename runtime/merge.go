@@ -14,7 +14,7 @@ import (
 )
 
 type MergeStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 }
 
 type MergeLink[T any] struct {
@@ -78,8 +78,8 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		ser = streams[0].GetSerde()
 	}
 	mergeStream := &MergeStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

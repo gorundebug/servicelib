@@ -12,7 +12,7 @@ import (
 )
 
 type LinkStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source TypedConsumedStream[T]
 }
 
@@ -25,8 +25,8 @@ func MakeLinkStream[T any](name string, env ServiceExecutionEnvironment) *LinkSt
 		return nil
 	}
 	linkStream := &LinkStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

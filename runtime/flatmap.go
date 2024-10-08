@@ -29,7 +29,7 @@ func (f FlatMapFunctionContext[T, R]) call(value T, out Collect[R]) {
 }
 
 type FlatMapStream[T, R any] struct {
-	*ConsumedStream[R]
+	ConsumedStream[R]
 	serdeIn serde.StreamSerde[T]
 	source  TypedStream[T]
 	f       FlatMapFunctionContext[T, R]
@@ -45,8 +45,8 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 		return nil
 	}
 	flatMapStream := &FlatMapStream[T, R]{
-		ConsumedStream: &ConsumedStream[R]{
-			StreamBase: &StreamBase[R]{
+		ConsumedStream: ConsumedStream[R]{
+			StreamBase: StreamBase[R]{
 				environment: env,
 				config:      streamConfig,
 			},

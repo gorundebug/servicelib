@@ -29,7 +29,7 @@ func (f *FilterFunctionContext[T]) call(value T) bool {
 }
 
 type FilterStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source TypedStream[T]
 	f      FilterFunctionContext[T]
 }
@@ -44,8 +44,8 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 		return nil
 	}
 	filterStream := &FilterStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

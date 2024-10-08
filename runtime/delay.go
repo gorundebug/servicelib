@@ -30,7 +30,7 @@ func (f *DelayFunctionContext[T]) call(value T) time.Duration {
 }
 
 type DelayStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source TypedStream[T]
 	f      DelayFunctionContext[T]
 }
@@ -45,8 +45,8 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 		return nil
 	}
 	delayStream := &DelayStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

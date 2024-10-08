@@ -13,7 +13,7 @@ import (
 )
 
 type InStubStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 }
 
 func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InStubStream[T] {
@@ -25,8 +25,8 @@ func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InSt
 		return nil
 	}
 	inStubStream := &InStubStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},
@@ -44,7 +44,7 @@ func (s *InStubStream[T]) Consume(value T) {
 }
 
 type InStubKVStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	serdeKV serde.StreamKeyValueSerde[T]
 }
 
@@ -58,8 +58,8 @@ func MakeInStubKVStream[T any](name string, env ServiceExecutionEnvironment) *In
 	}
 	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
 	inStubStream := &InStubKVStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},
@@ -96,7 +96,7 @@ func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 }
 
 type OutStubStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	consumer ConsumerFunc[T]
 	source   TypedStream[T]
 }
@@ -109,7 +109,7 @@ func (s *OutStubStream[T]) Consume(value T) {
 }
 
 type OutStubBinaryStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source   TypedStream[T]
 	consumer BinaryConsumerFunc
 }
@@ -126,7 +126,7 @@ func (s *OutStubBinaryStream[T]) Consume(value T) {
 }
 
 type OutStubBinaryKVStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source   TypedStream[T]
 	serdeKV  serde.StreamKeyValueSerde[T]
 	consumer BinaryKVConsumerFunc
@@ -157,8 +157,8 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 		return nil
 	}
 	outStubStream := &OutStubStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},
@@ -182,8 +182,8 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 		return nil
 	}
 	outStubBinaryStream := &OutStubBinaryStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},
@@ -208,8 +208,8 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 	}
 	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
 	outStubBinaryKVStream := &OutStubBinaryKVStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

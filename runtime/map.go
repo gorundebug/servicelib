@@ -30,7 +30,7 @@ func (f *MapFunctionContext[T, R]) call(value T) R {
 }
 
 type MapStream[T, R any] struct {
-	*ConsumedStream[R]
+	ConsumedStream[R]
 	serdeIn serde.StreamSerde[T]
 	source  TypedStream[T]
 	f       MapFunctionContext[T, R]
@@ -46,8 +46,8 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 		return nil
 	}
 	mapStream := &MapStream[T, R]{
-		ConsumedStream: &ConsumedStream[R]{
-			StreamBase: &StreamBase[R]{
+		ConsumedStream: ConsumedStream[R]{
+			StreamBase: StreamBase[R]{
 				environment: env,
 				config:      streamConfig,
 			},

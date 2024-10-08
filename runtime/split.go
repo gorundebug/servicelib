@@ -77,7 +77,7 @@ func splitLink[T any](index int, splitStream *SplitStream[T]) *SplitLink[T] {
 }
 
 type SplitStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	links  []*SplitLink[T]
 	source TypedStream[T]
 }
@@ -119,8 +119,8 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 		return nil
 	}
 	splitStream := &SplitStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},
@@ -144,8 +144,8 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 	}
 	inputSplitStream := &InputSplitStream[T]{
 		SplitStream: &SplitStream[T]{
-			ConsumedStream: &ConsumedStream[T]{
-				StreamBase: &StreamBase[T]{
+			ConsumedStream: ConsumedStream[T]{
+				StreamBase: StreamBase[T]{
 					environment: env,
 					config:      streamConfig,
 				},
@@ -169,8 +169,8 @@ func MakeInputKVSplitStream[T any](name string, env ServiceExecutionEnvironment)
 	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
 	inputKVSplitStream := &InputKVSplitStream[T]{
 		SplitStream: &SplitStream[T]{
-			ConsumedStream: &ConsumedStream[T]{
-				StreamBase: &StreamBase[T]{
+			ConsumedStream: ConsumedStream[T]{
+				StreamBase: StreamBase[T]{
 					environment: env,
 					config:      streamConfig,
 				},
