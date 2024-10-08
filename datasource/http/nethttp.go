@@ -261,10 +261,9 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
-	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var t T
-	if endpointRequestData.GetMethod() == http.MethodPost || ec.param == nil || len(*ec.param) == 0 {
-		if reader, err := endpointRequestData.GetBody(); err != nil {
+	if requestData.GetMethod() == http.MethodPost || ec.param == nil || len(*ec.param) == 0 {
+		if reader, err := requestData.GetBody(); err != nil {
 			return fmt.Errorf("unable to read request: %s", err.Error())
 		} else {
 			t, err = func(reader io.ReadCloser) (T, error) {
@@ -280,7 +279,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 			}
 		}
 	} else {
-		query := endpointRequestData.GetQuery()
+		query := requestData.GetQuery()
 		data := query.Get(*ec.param)
 		if data == "" {
 			return fmt.Errorf("missing '%s' parameter", *ec.param)
@@ -296,10 +295,9 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 }
 
 func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
-	endpointRequestData := requestData.(NetHTTPEndpointRequestData)
 	var form url.Values
 	var err error
-	if form, err = endpointRequestData.GetForm(); err != nil {
+	if form, err = requestData.GetForm(); err != nil {
 		return fmt.Errorf("unable to parse request: %s", err.Error())
 	}
 

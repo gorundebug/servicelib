@@ -274,9 +274,6 @@ func (app *ServiceApp) makeEdges(stream Stream) []*Edge {
 				label = label + " (R)"
 			}
 		}
-		if stream.GetConfig().IdService != app.serviceConfig.Id ||
-			cfg.IdService != app.serviceConfig.Id {
-		}
 
 		edges = append(edges, &Edge{
 			From:   stream.GetId(),
@@ -494,7 +491,6 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			timeout = true
 			log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
 		}
 	}

@@ -147,7 +147,6 @@ func (s *MockService) sendRequest() error {
 func TestNetHTTPEndpointConsumer(t *testing.T) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
-	signal.Notify(stop, os.Kill)
 	signal.Notify(stop, syscall.SIGTERM)
 
 	mainCtx := context.Background()

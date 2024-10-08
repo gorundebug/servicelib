@@ -88,7 +88,7 @@ func (s *streamKeyValueSerde[K, V]) DeserializeKeyValue(key []byte, value []byte
 	if err != nil {
 		return datastruct.KeyValue[K, V]{}, err
 	}
-	return datastruct.KeyValue[K, V]{k, v}, nil
+	return datastruct.KeyValue[K, V]{Key: k, Value: v}, nil
 }
 
 func (s *streamKeyValueSerde[K, V]) Serialize(kv datastruct.KeyValue[K, V]) ([]byte, error) {
@@ -162,10 +162,7 @@ func (s *streamKeyValueSerde[K, V]) IsKeyValue() bool {
 
 func IsTypePtr[T any]() bool {
 	tp := reflect.TypeOf((*T)(nil)).Elem()
-	if tp.Kind() == reflect.Ptr {
-		return true
-	}
-	return false
+	return tp.Kind() == reflect.Ptr
 }
 
 type StringSerde struct {
