@@ -70,8 +70,7 @@ func (s *FlatMapIterableStream[T, R]) Consume(value T) {
 	if s.caller != nil {
 		val := reflect.ValueOf(value)
 		if val.Kind() == reflect.String && isRuneType(r) {
-			var intf interface{}
-			intf = value
+			var intf interface{} = value
 			str := intf.(string)
 			for _, v := range str {
 				s.caller.Consume(reflect.ValueOf(v).Interface().(R))
