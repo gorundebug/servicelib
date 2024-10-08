@@ -12,7 +12,7 @@ import (
 )
 
 type InputStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 }
 
 func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *InputStream[T] {
@@ -24,8 +24,8 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 		return nil
 	}
 	inputStream := &InputStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

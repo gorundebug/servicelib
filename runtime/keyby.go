@@ -31,7 +31,7 @@ func (f *KeyByFunctionContext[T, K, V]) call(value T) datastruct.KeyValue[K, V] 
 }
 
 type KeyByStream[T any, K comparable, V any] struct {
-	*ConsumedStream[datastruct.KeyValue[K, V]]
+	ConsumedStream[datastruct.KeyValue[K, V]]
 	serdeIn serde.StreamSerde[T]
 	source  TypedStream[T]
 	f       KeyByFunctionContext[T, K, V]
@@ -47,8 +47,8 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 		return nil
 	}
 	keyByStream := &KeyByStream[T, K, V]{
-		ConsumedStream: &ConsumedStream[datastruct.KeyValue[K, V]]{
-			StreamBase: &StreamBase[datastruct.KeyValue[K, V]]{
+		ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
+			StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
 				environment: env,
 				config:      streamConfig,
 			},

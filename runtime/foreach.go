@@ -28,7 +28,7 @@ func (f *ForEachFunctionContext[T]) call(value T) {
 }
 
 type ForEachStream[T any] struct {
-	*ConsumedStream[T]
+	ConsumedStream[T]
 	source TypedStream[T]
 	f      ForEachFunctionContext[T]
 }
@@ -43,8 +43,8 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 		return nil
 	}
 	forEachStream := &ForEachStream[T]{
-		ConsumedStream: &ConsumedStream[T]{
-			StreamBase: &StreamBase[T]{
+		ConsumedStream: ConsumedStream[T]{
+			StreamBase: StreamBase[T]{
 				environment: env,
 				config:      streamConfig,
 			},

@@ -14,7 +14,7 @@ import (
 )
 
 type FlatMapIterableStream[T, R any] struct {
-	*ConsumedStream[R]
+	ConsumedStream[R]
 	serdeIn serde.StreamSerde[T]
 	source  TypedStream[T]
 }
@@ -43,8 +43,8 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 		return nil
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
-		ConsumedStream: &ConsumedStream[R]{
-			StreamBase: &StreamBase[R]{
+		ConsumedStream: ConsumedStream[R]{
+			StreamBase: StreamBase[R]{
 				environment: env,
 				config:      streamConfig,
 			},

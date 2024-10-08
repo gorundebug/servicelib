@@ -13,7 +13,7 @@ import (
 )
 
 type SinkStream[T any] struct {
-	*StreamBase[T]
+	StreamBase[T]
 	source   TypedStream[T]
 	consumer Consumer[T]
 	serde    serde.StreamSerde[T]
@@ -29,7 +29,7 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 		return nil
 	}
 	sinkStream := &SinkStream[T]{
-		StreamBase: &StreamBase[T]{
+		StreamBase: StreamBase[T]{
 			environment: env,
 			config:      streamConfig,
 		},
