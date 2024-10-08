@@ -55,12 +55,14 @@ paths:
           content:
             application/zip:
               schema:
-                $ref: '#/components/schemas/StringBinary'
+                type: string
+                format: binary
 
 components:
   schemas:
     StreamApp:
       type: object
+      additionalProperties: false
       properties:
         settings:
           $ref: '#/components/schemas/ProjectSettings'
@@ -72,7 +74,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Service'
-            minItems: 1
         links:
           type: array
           items:
@@ -113,6 +114,7 @@ components:
 
     ProjectSettings:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -127,6 +129,7 @@ components:
 
     Service:
       type: object
+      additionalProperties: false
       properties:
         id:
           type: integer
@@ -252,6 +255,7 @@ components:
 
     Pool:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -264,6 +268,7 @@ components:
 
     Stream:
       type: object
+      additionalProperties: false
       properties:
         id:
           type: integer
@@ -329,6 +334,7 @@ components:
 
     Link:
       type: object
+      additionalProperties: false
       properties:
         from:
           type: integer
@@ -376,6 +382,7 @@ components:
 
     DataConnector:
       type: object
+      additionalProperties: false
       properties:
         id:
           type: integer
@@ -387,7 +394,6 @@ components:
           $ref: '#/components/schemas/ProgrammingLanguage'
         type:
           $ref: '#/components/schemas/DataConnectorType'
-          example: 1
         implementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
         host:
@@ -410,6 +416,7 @@ components:
 
     Endpoint:
       type: object
+      additionalProperties: false
       properties:
         id:
           type: integer
@@ -479,12 +486,9 @@ components:
               'custom'
       ]
 
-    StringBinary:
-      type: string
-      format: binary
-
     Type:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string

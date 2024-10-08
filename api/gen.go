@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for CallSemantics.
@@ -267,9 +266,6 @@ type StreamApp struct {
 	Streams        []Stream        `json:"streams"`
 	Types          []Type          `json:"types"`
 }
-
-// StringBinary defines model for StringBinary.
-type StringBinary = openapi_types.File
 
 // TransformationType defines model for TransformationType.
 type TransformationType int

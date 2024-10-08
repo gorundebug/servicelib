@@ -40,8 +40,7 @@ type CustomEndpointConsumer interface {
 
 type CustomDataSource struct {
 	*runtime.InputDataSource
-	wg   sync.WaitGroup
-	stop bool
+	wg sync.WaitGroup
 }
 
 type CustomEndpoint struct {
