@@ -219,6 +219,62 @@ func (s *BytesSerde) Deserialize(data []byte) ([]byte, error) {
 	return data[uintSize : uintSize+length], nil
 }
 
+type BaseType interface {
+	int | int32 | int64 | int16 | uint | uint32 | uint64 | uint16 | float32 | float64
+}
+
+type BaseTypeArraySerde[T BaseType] struct {
+}
+
+func (s *BaseTypeArraySerde[T]) SerializeObj(value interface{}) ([]byte, error) {
+	v, ok := value.([]T)
+	if !ok {
+		return nil, fmt.Errorf("value is not []T")
+	}
+	return s.Serialize(v)
+}
+
+func (s *BaseTypeArraySerde[T]) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *BaseTypeArraySerde[T]) Serialize(value []T) ([]byte, error) {
+	result := bytes.Buffer{}
+	if uintSize == 4 {
+		if err := binary.Write(&result, binary.LittleEndian, uint32(len(value))); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := binary.Write(&result, binary.LittleEndian, uint64(len(value))); err != nil {
+			return nil, err
+		}
+	}
+	if err := binary.Write(&result, binary.LittleEndian, value); err != nil {
+		return nil, err
+	}
+	return result.Bytes(), nil
+}
+
+func (s *BaseTypeArraySerde[T]) Deserialize(data []byte) ([]T, error) {
+	if len(data) < uintSize {
+		return nil, fmt.Errorf("deserialization error []T.Deserialize")
+	}
+	var length int
+	if uintSize == 4 {
+		length = int(binary.LittleEndian.Uint32(data))
+	} else {
+		length = int(binary.LittleEndian.Uint64(data))
+	}
+	if len(data) < uintSize+length {
+		return nil, fmt.Errorf("deserialization error []T.Deserialize")
+	}
+	values := make([]T, length)
+	if err := binary.Read(bytes.NewReader(data[uintSize:]), binary.LittleEndian, &values); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
 type StringSerde struct {
 }
 
@@ -723,6 +779,56 @@ func makeDefaultSerde(valueType reflect.Type) (Serializer, error) {
 	case GetSerdeType[[]byte]():
 		{
 			var ser Serde[[]byte] = &BytesSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int]():
+		{
+			var ser Serde[[]int] = &BaseTypeArraySerde[int]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int32]():
+		{
+			var ser Serde[[]int32] = &BaseTypeArraySerde[int32]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int64]():
+		{
+			var ser Serde[[]int64] = &BaseTypeArraySerde[int64]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int16]():
+		{
+			var ser Serde[[]int16] = &BaseTypeArraySerde[int16]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint]():
+		{
+			var ser Serde[[]uint] = &BaseTypeArraySerde[uint]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint32]():
+		{
+			var ser Serde[[]uint32] = &BaseTypeArraySerde[uint32]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint64]():
+		{
+			var ser Serde[[]uint64] = &BaseTypeArraySerde[uint64]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint16]():
+		{
+			var ser Serde[[]uint16] = &BaseTypeArraySerde[uint16]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]float32]():
+		{
+			var ser Serde[[]float32] = &BaseTypeArraySerde[float32]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]float64]():
+		{
+			var ser Serde[[]float64] = &BaseTypeArraySerde[float64]{}
 			return ser, nil
 		}
 	case GetSerdeType[string]():
