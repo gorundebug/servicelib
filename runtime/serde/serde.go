@@ -75,8 +75,8 @@ func GetSerdeType[T any]() reflect.Type {
 	return tp
 }
 
-func MakeStubSerde[T any]() *SerdeStub[T] {
-	return &SerdeStub[T]{}
+func MakeStubSerde[T any]() *StubSerde[T] {
+	return &StubSerde[T]{}
 }
 
 func MakeArraySerde(arrayType reflect.Type, valueSerde Serializer) Serializer {
