@@ -16,6 +16,7 @@ import (
 type Serializer interface {
 	SerializeObj(interface{}) ([]byte, error)
 	DeserializeObj([]byte) (interface{}, error)
+	IsStubSerde() bool
 }
 
 type Serde[T any] interface {
@@ -30,6 +31,7 @@ type StreamSerializer interface {
 
 type StreamSerde[T any] interface {
 	StreamSerializer
+	ValueSerializer() Serializer
 	Serialize(T) ([]byte, error)
 	Deserialize([]byte) (T, error)
 }
@@ -39,7 +41,6 @@ type StreamKeyValueSerde[T any] interface {
 	SerializeKey(T) ([]byte, error)
 	SerializeValue(T) ([]byte, error)
 	KeySerializer() Serializer
-	ValueSerializer() Serializer
 	DeserializeKeyValue([]byte, []byte) (T, error)
 }
 
