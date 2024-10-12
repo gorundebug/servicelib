@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
+	log "github.com/sirupsen/logrus"
 	"math"
 	"math/bits"
 	"reflect"
@@ -19,8 +20,36 @@ import (
 
 const uintSize = bits.UintSize / 8
 
+func writeSize(buf *bytes.Buffer, size int) error {
+	if uintSize == 4 {
+		if err := binary.Write(buf, binary.LittleEndian, int32(size)); err != nil {
+			return err
+		}
+	} else {
+		if err := binary.Write(buf, binary.LittleEndian, int64(size)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readSize(data []byte) (int, error) {
+	if len(data) < uintSize {
+		return 0, fmt.Errorf("invalid data length")
+	}
+	if uintSize == 4 {
+		return int(binary.LittleEndian.Uint32(data)), nil
+	} else {
+		return int(binary.LittleEndian.Uint64(data)), nil
+	}
+}
+
 type streamSerde[T any] struct {
 	serde Serde[T]
+}
+
+func (s *streamSerde[T]) ValueSerializer() Serializer {
+	return s.serde
 }
 
 func (s *streamSerde[T]) SerializeObj(value interface{}) ([]byte, error) {
@@ -95,27 +124,15 @@ func (s *streamKeyValueSerde[K, V]) DeserializeKeyValue(key []byte, value []byte
 func (s *streamKeyValueSerde[K, V]) Serialize(kv datastruct.KeyValue[K, V]) ([]byte, error) {
 	if keyBytes, err := s.serdeKey.Serialize(kv.Key); err == nil {
 		result := bytes.Buffer{}
-		if uintSize == 4 {
-			if err := binary.Write(&result, binary.LittleEndian, uint32(len(keyBytes))); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := binary.Write(&result, binary.LittleEndian, uint64(len(keyBytes))); err != nil {
-				return nil, err
-			}
+		if err := writeSize(&result, len(keyBytes)); err != nil {
+			return nil, err
 		}
 		if _, err := result.Write(keyBytes); err != nil {
 			return nil, err
 		}
 		if valueBytes, err := s.serdeValue.Serialize(kv.Value); err == nil {
-			if uintSize == 4 {
-				if err := binary.Write(&result, binary.LittleEndian, uint32(len(valueBytes))); err != nil {
-					return nil, err
-				}
-			} else {
-				if err := binary.Write(&result, binary.LittleEndian, uint64(len(valueBytes))); err != nil {
-					return nil, err
-				}
+			if err := writeSize(&result, len(valueBytes)); err != nil {
+				return nil, err
 			}
 			if _, err := result.Write(valueBytes); err != nil {
 				return nil, err
@@ -131,33 +148,27 @@ func (s *streamKeyValueSerde[K, V]) Serialize(kv datastruct.KeyValue[K, V]) ([]b
 
 func (s *streamKeyValueSerde[K, V]) Deserialize(data []byte) (datastruct.KeyValue[K, V], error) {
 	var kv datastruct.KeyValue[K, V]
+
 	var keyLen int
-	if len(data) < uintSize {
-		return kv, fmt.Errorf("deserialize key len error streamKeyValueSerde")
-	}
-	if uintSize == 4 {
-		keyLen = int(binary.LittleEndian.Uint32(data))
-	} else {
-		keyLen = int(binary.LittleEndian.Uint64(data))
+	var err error
+
+	if keyLen, err = readSize(data); err != nil {
+		return kv, fmt.Errorf("deserialize key len error streamKeyValueSerde: %s", err.Error())
 	}
 	data = data[uintSize:]
 	if len(data) < keyLen {
 		return kv, fmt.Errorf("deserialize key error streamKeyValueSerde")
 	}
-	var err error
+
 	kv.Key, err = s.serdeKey.Deserialize(data[:keyLen])
 	if err != nil {
 		return kv, err
 	}
 	data = data[keyLen:]
+
 	var valueLen int
-	if len(data) < uintSize {
-		return kv, fmt.Errorf("deserialize value len error streamKeyValueSerde")
-	}
-	if uintSize == 4 {
-		valueLen = int(binary.LittleEndian.Uint32(data))
-	} else {
-		valueLen = int(binary.LittleEndian.Uint64(data))
+	if valueLen, err = readSize(data); err != nil {
+		return kv, fmt.Errorf("deserialize value len error streamKeyValueSerde: %s", err.Error())
 	}
 	data = data[uintSize:]
 	if len(data) < valueLen {
@@ -177,6 +188,10 @@ func IsTypePtr[T any]() bool {
 }
 
 type BytesSerde struct {
+}
+
+func (s *BytesSerde) IsStubSerde() bool {
+	return false
 }
 
 func (s *BytesSerde) SerializeObj(value interface{}) ([]byte, error) {
@@ -224,6 +239,10 @@ type BaseType interface {
 }
 
 type BaseTypeArraySerde[T BaseType] struct {
+}
+
+func (s *BaseTypeArraySerde[T]) IsStubSerde() bool {
+	return false
 }
 
 func (s *BaseTypeArraySerde[T]) SerializeObj(value interface{}) ([]byte, error) {
@@ -278,6 +297,10 @@ func (s *BaseTypeArraySerde[T]) Deserialize(data []byte) ([]T, error) {
 type StringSerde struct {
 }
 
+func (s *StringSerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *StringSerde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(string)
 	if !ok {
@@ -321,6 +344,10 @@ func (s *StringSerde) Deserialize(data []byte) (string, error) {
 type UIntSerde struct {
 }
 
+func (s *UIntSerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *UIntSerde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(uint)
 	if !ok {
@@ -357,6 +384,10 @@ func (s *UIntSerde) Deserialize(data []byte) (uint, error) {
 type UInt8Serde struct {
 }
 
+func (s *UInt8Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *UInt8Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(uint8)
 	if !ok {
@@ -381,6 +412,10 @@ func (s *UInt8Serde) Deserialize(data []byte) (uint8, error) {
 }
 
 type UInt16Serde struct {
+}
+
+func (s *UInt16Serde) IsStubSerde() bool {
+	return false
 }
 
 func (s *UInt16Serde) SerializeObj(value interface{}) ([]byte, error) {
@@ -411,6 +446,10 @@ func (s *UInt16Serde) Deserialize(data []byte) (uint16, error) {
 type UInt32Serde struct {
 }
 
+func (s *UInt32Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *UInt32Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(uint32)
 	if !ok {
@@ -439,6 +478,10 @@ func (s *UInt32Serde) Deserialize(data []byte) (uint32, error) {
 type UInt64Serde struct {
 }
 
+func (s *UInt64Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *UInt64Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(uint64)
 	if !ok {
@@ -465,6 +508,10 @@ func (s *UInt64Serde) Deserialize(data []byte) (uint64, error) {
 }
 
 type IntSerde struct {
+}
+
+func (s *IntSerde) IsStubSerde() bool {
+	return false
 }
 
 func (s *IntSerde) SerializeObj(value interface{}) ([]byte, error) {
@@ -503,6 +550,10 @@ func (s *IntSerde) Deserialize(data []byte) (int, error) {
 type Int8Serde struct {
 }
 
+func (s *Int8Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *Int8Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(int8)
 	if !ok {
@@ -527,6 +578,10 @@ func (s *Int8Serde) Deserialize(data []byte) (int8, error) {
 }
 
 type Int16Serde struct {
+}
+
+func (s *Int16Serde) IsStubSerde() bool {
+	return false
 }
 
 func (s *Int16Serde) SerializeObj(value interface{}) ([]byte, error) {
@@ -557,6 +612,10 @@ func (s *Int16Serde) Deserialize(data []byte) (int16, error) {
 type Int32Serde struct {
 }
 
+func (s *Int32Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *Int32Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(int32)
 	if !ok {
@@ -585,6 +644,10 @@ func (s *Int32Serde) Deserialize(data []byte) (int32, error) {
 type Int64Serde struct {
 }
 
+func (s *Int64Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *Int64Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(int64)
 	if !ok {
@@ -611,6 +674,10 @@ func (s *Int64Serde) Deserialize(data []byte) (int64, error) {
 }
 
 type BoolSerde struct {
+}
+
+func (s *BoolSerde) IsStubSerde() bool {
+	return false
 }
 
 func (s *BoolSerde) SerializeObj(value interface{}) ([]byte, error) {
@@ -643,6 +710,10 @@ func (s *BoolSerde) Deserialize(data []byte) (bool, error) {
 type RuneSerde struct {
 }
 
+func (s *RuneSerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *RuneSerde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(rune)
 	if !ok {
@@ -671,6 +742,10 @@ func (s *RuneSerde) Deserialize(data []byte) (rune, error) {
 type Float32Serde struct {
 }
 
+func (s *Float32Serde) IsStubSerde() bool {
+	return false
+}
+
 func (s *Float32Serde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(float32)
 	if !ok {
@@ -697,6 +772,10 @@ func (s *Float32Serde) Deserialize(data []byte) (float32, error) {
 }
 
 type Float64Serde struct {
+}
+
+func (s *Float64Serde) IsStubSerde() bool {
+	return false
 }
 
 func (s *Float64Serde) SerializeObj(value interface{}) ([]byte, error) {
@@ -863,6 +942,10 @@ func makeDefaultSerde(valueType reflect.Type) (Serializer, error) {
 type StubSerde[T any] struct {
 }
 
+func (s *StubSerde[T]) IsStubSerde() bool {
+	return true
+}
+
 func (s *StubSerde[T]) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(T)
 	if !ok {
@@ -876,10 +959,12 @@ func (s *StubSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
 }
 
 func (s *StubSerde[T]) Serialize(T) ([]byte, error) {
+	log.Fatalf("serde for type '%s' is not implemented", GetSerdeType[T]().Name())
 	return []byte{}, nil
 }
 
 func (s *StubSerde[T]) Deserialize([]byte) (T, error) {
+	log.Fatalf("serde for type '%s' is not implemented", GetSerdeType[T]().Name())
 	var t T
 	return t, nil
 }
@@ -889,6 +974,10 @@ type arraySerde struct {
 	valueSerde Serializer
 }
 
+func (s *arraySerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *arraySerde) SerializeObj(value interface{}) ([]byte, error) {
 	valueType := reflect.TypeOf(value)
 	if !valueType.AssignableTo(s.arrayType) {
@@ -896,14 +985,8 @@ func (s *arraySerde) SerializeObj(value interface{}) ([]byte, error) {
 	}
 	v := reflect.ValueOf(value)
 	result := bytes.Buffer{}
-	if uintSize == 4 {
-		if err := binary.Write(&result, binary.LittleEndian, int32(v.Len())); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := binary.Write(&result, binary.LittleEndian, int64(v.Len())); err != nil {
-			return nil, err
-		}
+	if err := writeSize(&result, v.Len()); err != nil {
+		return nil, err
 	}
 	for i := 0; i < v.Len(); i++ {
 		element := v.Index(i)
@@ -911,14 +994,8 @@ func (s *arraySerde) SerializeObj(value interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if uintSize == 4 {
-			if err := binary.Write(&result, binary.LittleEndian, int32(len(elementBytes))); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := binary.Write(&result, binary.LittleEndian, int64(len(elementBytes))); err != nil {
-				return nil, err
-			}
+		if err := writeSize(&result, len(elementBytes)); err != nil {
+			return nil, err
 		}
 		if _, err := result.Write(elementBytes); err != nil {
 			return nil, err
@@ -929,31 +1006,24 @@ func (s *arraySerde) SerializeObj(value interface{}) ([]byte, error) {
 
 func (s *arraySerde) DeserializeObj(data []byte) (interface{}, error) {
 	v := reflect.MakeSlice(s.arrayType, 0, 0)
-	if len(data) < uintSize {
-		return v, fmt.Errorf("DeserializeObj arraySerde error (invalid count data)")
-	}
+
 	var count int
-	if uintSize == 4 {
-		count = int(binary.LittleEndian.Uint32(data))
-	} else {
-		count = int(binary.LittleEndian.Uint64(data))
+	var err error
+	if count, err = readSize(data); err != nil {
+		return nil, fmt.Errorf("DeserializeObj arraySerde error (invalid count data): %s", err.Error())
 	}
 	data = data[uintSize:]
 	for i := 0; i < count; i++ {
-		if len(data) < uintSize {
-			return v, fmt.Errorf("DeserializeObj arraySerde error (invalid element length data)")
-		}
 		var length int
-		if uintSize == 4 {
-			length = int(binary.LittleEndian.Uint32(data))
-		} else {
-			length = int(binary.LittleEndian.Uint64(data))
+		if length, err = readSize(data); err != nil {
+			return nil, fmt.Errorf("DeserializeObj arraySerde error (invalid element length data): %s", err.Error())
 		}
 		data = data[uintSize:]
 		if len(data) < length {
 			return v, fmt.Errorf("DeserializeObj arraySerde error (invalid element data)")
 		}
-		element, err := s.valueSerde.DeserializeObj(data[:length])
+		var element interface{}
+		element, err = s.valueSerde.DeserializeObj(data[:length])
 		if err != nil {
 			return v, err
 		}
@@ -986,31 +1056,23 @@ type mapSerde struct {
 	valueSerde Serializer
 }
 
+func (s *mapSerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *mapSerde) SerializeObj(value interface{}) ([]byte, error) {
 	v := reflect.ValueOf(value)
 	result := bytes.Buffer{}
-	if uintSize == 4 {
-		if err := binary.Write(&result, binary.LittleEndian, int32(v.Len())); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := binary.Write(&result, binary.LittleEndian, int64(v.Len())); err != nil {
-			return nil, err
-		}
+	if err := writeSize(&result, v.Len()); err != nil {
+		return nil, err
 	}
 	for _, key := range v.MapKeys() {
 		keyBytes, err := s.keySerde.SerializeObj(key.Interface())
 		if err != nil {
 			return nil, err
 		}
-		if uintSize == 4 {
-			if err := binary.Write(&result, binary.LittleEndian, int32(len(keyBytes))); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := binary.Write(&result, binary.LittleEndian, int64(len(keyBytes))); err != nil {
-				return nil, err
-			}
+		if err := writeSize(&result, len(keyBytes)); err != nil {
+			return nil, err
 		}
 		if _, err := result.Write(keyBytes); err != nil {
 			return nil, err
@@ -1020,14 +1082,8 @@ func (s *mapSerde) SerializeObj(value interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if uintSize == 4 {
-			if err := binary.Write(&result, binary.LittleEndian, int32(len(valueBytes))); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := binary.Write(&result, binary.LittleEndian, int64(len(valueBytes))); err != nil {
-				return nil, err
-			}
+		if err := writeSize(&result, len(valueBytes)); err != nil {
+			return nil, err
 		}
 		if _, err := result.Write(valueBytes); err != nil {
 			return nil, err
@@ -1038,54 +1094,39 @@ func (s *mapSerde) SerializeObj(value interface{}) ([]byte, error) {
 
 func (s *mapSerde) DeserializeObj(data []byte) (interface{}, error) {
 	v := reflect.MakeMap(s.mapType)
-	if len(data) < uintSize {
-		return v, fmt.Errorf("mapSerde DeserializeObj error (invalid count data)")
-	}
 	var count int
-	if uintSize == 4 {
-		count = int(binary.LittleEndian.Uint32(data))
-	} else {
-		count = int(binary.LittleEndian.Uint64(data))
+	var err error
+	if count, err = readSize(data); err != nil {
+		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid count data): %s", err.Error())
 	}
 	data = data[uintSize:]
 	for i := 0; i < count; i++ {
-		if len(data) < uintSize {
-			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid key length data)")
-		}
-
 		var keyLength int
-		if uintSize == 4 {
-			keyLength = int(binary.LittleEndian.Uint32(data))
-		} else {
-			keyLength = int(binary.LittleEndian.Uint64(data))
+		if keyLength, err = readSize(data); err != nil {
+			return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid key length data): %s", err.Error())
 		}
 		data = data[uintSize:]
 
 		if len(data) < keyLength {
 			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid key data)")
 		}
-		key, err := s.keySerde.DeserializeObj(data[:keyLength])
-		if err != nil {
+		var key interface{}
+		if key, err = s.keySerde.DeserializeObj(data[:keyLength]); err != nil {
 			return v, err
 		}
 		data = data[keyLength:]
 
-		if len(data) < uintSize {
-			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid value length data)")
-		}
 		var valueLength int
-		if uintSize == 4 {
-			valueLength = int(binary.LittleEndian.Uint32(data))
-		} else {
-			valueLength = int(binary.LittleEndian.Uint64(data))
+		if valueLength, err = readSize(data); err != nil {
+			return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid value length data): %s", err.Error())
 		}
 		data = data[uintSize:]
 
 		if len(data) < valueLength {
 			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid value data)")
 		}
-		value, err := s.valueSerde.DeserializeObj(data[:valueLength])
-		if err != nil {
+		var value interface{}
+		if value, err = s.valueSerde.DeserializeObj(data[:valueLength]); err != nil {
 			return v, err
 		}
 		data = data[valueLength:]

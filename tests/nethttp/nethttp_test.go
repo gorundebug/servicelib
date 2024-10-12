@@ -34,6 +34,10 @@ type RequestData struct {
 
 type RequestDataSerde struct{}
 
+func (s *RequestDataSerde) IsStubSerde() bool {
+	return false
+}
+
 func (s *RequestDataSerde) SerializeObj(value interface{}) ([]byte, error) {
 	v, ok := value.(*RequestData)
 	if !ok {

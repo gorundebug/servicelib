@@ -263,7 +263,7 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 		ser, err = makeSerdeForType(tp, runtime)
 	}
 	if err != nil {
-		log.Fatalln(err)
+		ser = serde.MakeStubSerde[T]()
 	}
 	serT, ok := ser.(serde.Serde[T])
 	if !ok {
