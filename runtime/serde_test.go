@@ -74,8 +74,8 @@ func TestArraySerde(t *testing.T) {
 }
 
 func TestArrayArraySerde(t *testing.T) {
-	arraySer := MakeSerde[[][]int](mockService("TestArrayArraySerde"))
-	arr := [][]int{{1, 2, 3}, {1, 2, 3}}
+	arraySer := MakeSerde[[][]int32](mockService("TestArrayArraySerde"))
+	arr := [][]int32{{1, 2, 3}, {1, 2, 3}}
 	data, err := arraySer.Serialize(arr)
 	assert.Equal(t, err, nil, err)
 	arrCopy, err := arraySer.Deserialize(data)

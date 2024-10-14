@@ -166,24 +166,26 @@ func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](nam
 func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.Serializer, error) {
 	var err error
 	var ser serde.Serializer
-	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-		ser, err = makeSerdeForType(tp.Elem(), runtime)
-		if err != nil {
-			return nil, err
+
+	ser, err = runtime.getSerde(tp)
+	if err != nil {
+		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+			ser, err = makeSerdeForType(tp.Elem(), runtime)
+			if err != nil {
+				return nil, err
+			}
+			return serde.MakeArraySerde(tp, ser), nil
+		} else if tp.Kind() == reflect.Map {
+			serKey, err := makeSerdeForType(tp.Key(), runtime)
+			if err != nil {
+				return nil, err
+			}
+			serValue, err := makeSerdeForType(tp.Elem(), runtime)
+			if err != nil {
+				return nil, err
+			}
+			return serde.MakeMapSerde(tp, serKey, serValue), nil
 		}
-		return serde.MakeArraySerde(tp, ser), nil
-	} else if tp.Kind() == reflect.Map {
-		serKey, err := makeSerdeForType(tp.Key(), runtime)
-		if err != nil {
-			return nil, err
-		}
-		serValue, err := makeSerdeForType(tp.Elem(), runtime)
-		if err != nil {
-			return nil, err
-		}
-		return serde.MakeMapSerde(tp, serKey, serValue), nil
-	} else {
-		ser, err = runtime.getSerde(tp)
 	}
 	return ser, err
 }
@@ -253,14 +255,16 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 		return ser
 	}
 	tp := serde.GetSerdeType[T]()
+
 	var err error
 	var ser serde.Serializer
-	if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-		ser, err = makeTypedArraySerde[T](runtime)
-	} else if tp.Kind() == reflect.Map {
-		ser, err = makeTypedMapSerde[T](runtime)
-	} else {
-		ser, err = makeSerdeForType(tp, runtime)
+
+	if ser, err = runtime.getSerde(tp); err != nil {
+		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+			ser, err = makeTypedArraySerde[T](runtime)
+		} else if tp.Kind() == reflect.Map {
+			ser, err = makeTypedMapSerde[T](runtime)
+		}
 	}
 	if err != nil {
 		ser = serde.MakeStubSerde[T]()
@@ -279,9 +283,19 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 		return ser.(serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]])
 	}
 	tp := serde.GetSerdeType[K]()
-	ser, err := runtime.getSerde(tp)
+
+	var err error
+	var ser serde.Serializer
+
+	if ser, err = runtime.getSerde(tp); err != nil {
+		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+			ser, err = makeTypedArraySerde[K](runtime)
+		} else if tp.Kind() == reflect.Map {
+			ser, err = makeTypedMapSerde[K](runtime)
+		}
+	}
 	if err != nil {
-		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
+		ser = serde.MakeStubSerde[K]()
 	}
 	serdeK, ok := ser.(serde.Serde[K])
 	if !ok {
@@ -289,9 +303,15 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	}
 
 	tp = serde.GetSerdeType[V]()
-	ser, err = runtime.getSerde(tp)
+	if ser, err = runtime.getSerde(tp); err != nil {
+		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
+			ser, err = makeTypedArraySerde[V](runtime)
+		} else if tp.Kind() == reflect.Map {
+			ser, err = makeTypedMapSerde[V](runtime)
+		}
+	}
 	if err != nil {
-		log.Fatalf("Serializer for type %s not found. %s", tp.Name(), err)
+		ser = serde.MakeStubSerde[V]()
 	}
 	serdeV, ok := ser.(serde.Serde[V])
 	if !ok {
