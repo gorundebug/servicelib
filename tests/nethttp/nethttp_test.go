@@ -38,20 +38,20 @@ func (s *RequestDataSerde) IsStubSerde() bool {
 	return false
 }
 
-func (s *RequestDataSerde) SerializeObj(value interface{}) ([]byte, error) {
+func (s *RequestDataSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
 	v, ok := value.(*RequestData)
 	if !ok {
 		return nil, fmt.Errorf("value is not *RequestData")
 	}
-	return s.Serialize(v)
+	return s.Serialize(v, b)
 }
 
 func (s *RequestDataSerde) DeserializeObj(data []byte) (interface{}, error) {
 	return s.Deserialize(data)
 }
 
-func (s *RequestDataSerde) Serialize(value *RequestData) ([]byte, error) {
-	return []byte{}, nil
+func (s *RequestDataSerde) Serialize(value *RequestData, b []byte) ([]byte, error) {
+	return b, nil
 }
 
 func (s *RequestDataSerde) Deserialize(data []byte) (*RequestData, error) {

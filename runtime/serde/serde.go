@@ -14,14 +14,14 @@ import (
 )
 
 type Serializer interface {
-	SerializeObj(interface{}) ([]byte, error)
+	SerializeObj(interface{}, []byte) ([]byte, error)
 	DeserializeObj([]byte) (interface{}, error)
 	IsStubSerde() bool
 }
 
 type Serde[T any] interface {
 	Serializer
-	Serialize(T) ([]byte, error)
+	Serialize(T, []byte) ([]byte, error)
 	Deserialize([]byte) (T, error)
 }
 

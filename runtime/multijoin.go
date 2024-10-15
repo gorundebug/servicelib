@@ -65,7 +65,7 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) serializeValue(value interface{}) ([]byte, error) {
 	v := value.(T2)
-	return s.serdeValue.Serialize(v)
+	return s.serdeValue.Serialize(v, nil)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) deserializeValue(data []byte) (interface{}, error) {
