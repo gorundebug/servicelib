@@ -140,12 +140,10 @@ func (s *streamKeyValueSerde[K, V]) Serialize(kv datastruct.KeyValue[K, V]) ([]b
 		if n != maxSizeLength {
 			copy(keyData[n:n+keyBytesLength], keyData[maxSizeLength:maxSizeLength+keyBytesLength])
 		}
-		data = data[:n+keyBytesLength]
-		buf := bytes.NewBuffer(data)
+		buf := bytes.NewBuffer(keyData[:n+keyBytesLength])
 		length := buf.Len()
 		buf.Grow(length + maxSizeLength)
-		data = buf.Bytes()[:length+maxSizeLength]
-		if valueBytes, err := s.serdeValue.Serialize(kv.Value, data); err == nil {
+		if valueBytes, err := s.serdeValue.Serialize(kv.Value, buf.Bytes()[:length+maxSizeLength]); err == nil {
 			valueBytesLength := len(valueBytes) - length - maxSizeLength
 			n = setSize(valueBytes[length:length+maxSizeLength], valueBytesLength)
 			if n != maxSizeLength {
