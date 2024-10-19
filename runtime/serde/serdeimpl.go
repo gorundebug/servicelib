@@ -1220,9 +1220,9 @@ func (s *ArraySerde[T]) Deserialize(data []byte) (T, error) {
 }
 
 type mapSerde struct {
-	mapType    reflect.Type
-	keySerde   Serializer
-	valueSerde Serializer
+	mapType         reflect.Type
+	keyArraySerde   Serializer
+	valueArraySerde Serializer
 }
 
 func (s *mapSerde) IsStubSerde() bool {
@@ -1231,82 +1231,74 @@ func (s *mapSerde) IsStubSerde() bool {
 
 func (s *mapSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
 	v := reflect.ValueOf(value)
+
+	keys := v.MapKeys()
+	keyArray := reflect.MakeSlice(reflect.SliceOf(v.Type().Key()), v.Len(), v.Len())
+	valueArray := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), v.Len(), v.Len())
+
+	for i, key := range keys {
+		keyArray.Index(i).Set(key)
+		valueArray.Index(i).Set(v.MapIndex(key))
+	}
+
 	buf := bytes.NewBuffer(b)
 	length := buf.Len()
 	buf.Grow(length + maxSizeLength)
-	data := buf.Bytes()[:length+maxSizeLength]
-	n := setSize(data[length:length+maxSizeLength], v.Len())
-	data = data[:length+n]
-	for _, key := range v.MapKeys() {
-		buf = bytes.NewBuffer(data)
-		length = buf.Len()
-		buf.Grow(length + maxSizeLength)
-		keyBytes, err := s.keySerde.SerializeObj(key.Interface(), buf.Bytes()[:length+maxSizeLength])
-		if err != nil {
-			return nil, err
-		}
-		keyBytesLength := len(keyBytes) - length - maxSizeLength
-		n = setSize(keyBytes[length:length+maxSizeLength], keyBytesLength)
-		if n != maxSizeLength {
-			copy(keyBytes[length+n:length+n+keyBytesLength], keyBytes[length+maxSizeLength:length+maxSizeLength+keyBytesLength])
-		}
-		buf = bytes.NewBuffer(keyBytes[:length+n+keyBytesLength])
-		length = buf.Len()
-		buf.Grow(length + maxSizeLength)
-		valueBytes, err := s.valueSerde.SerializeObj(v.MapIndex(key).Interface(), buf.Bytes()[:length+maxSizeLength])
-		if err != nil {
-			return nil, err
-		}
-		valueBytesLength := len(valueBytes) - length - maxSizeLength
-		n = setSize(valueBytes[length:length+maxSizeLength], valueBytesLength)
-		if n != maxSizeLength {
-			copy(valueBytes[length+n:length+n+valueBytesLength], valueBytes[length+maxSizeLength:length+maxSizeLength+valueBytesLength])
-		}
-		data = valueBytes[:length+n+valueBytesLength]
+	keyBytes, err := s.keyArraySerde.SerializeObj(keyArray.Interface(), buf.Bytes()[:length+maxSizeLength])
+	if err != nil {
+		return nil, err
 	}
-	return data, nil
+	keyBytesLength := len(keyBytes) - length - maxSizeLength
+	n := setSize(keyBytes[length:length+maxSizeLength], keyBytesLength)
+	if n != maxSizeLength {
+		copy(keyBytes[length+n:length+n+keyBytesLength], keyBytes[length+maxSizeLength:length+maxSizeLength+keyBytesLength])
+	}
+	buf = bytes.NewBuffer(keyBytes[:length+n+keyBytesLength])
+	length = buf.Len()
+	buf.Grow(length + maxSizeLength)
+	valueBytes, err := s.valueArraySerde.SerializeObj(valueArray.Interface(), buf.Bytes()[:length+maxSizeLength])
+	if err != nil {
+		return nil, err
+	}
+	valueBytesLength := len(valueBytes) - length - maxSizeLength
+	n = setSize(valueBytes[length:length+maxSizeLength], valueBytesLength)
+	if n != maxSizeLength {
+		copy(valueBytes[length+n:length+n+valueBytesLength], valueBytes[length+maxSizeLength:length+maxSizeLength+valueBytesLength])
+	}
+	return valueBytes[:length+n+valueBytesLength], nil
 }
 
 func (s *mapSerde) DeserializeObj(data []byte) (interface{}, error) {
 	v := reflect.MakeMap(s.mapType)
-	var count int
+
+	var keysLength int
 	var n int
-	if count, n = getSize(data); n == 0 {
-		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid count data)")
+	if keysLength, n = getSize(data); n == 0 {
+		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid keys length data)")
 	}
 	data = data[n:]
-	for i := 0; i < count; i++ {
-		var keyLength int
-		if keyLength, n = getSize(data); n == 0 {
-			return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid key length data)")
-		}
-		data = data[n:]
+	keys, err := s.keyArraySerde.DeserializeObj(data[:keysLength])
+	if err != nil {
+		return nil, err
+	}
+	data = data[keysLength:]
 
-		if len(data) < keyLength {
-			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid key data)")
-		}
-		var key interface{}
-		var err error
-		if key, err = s.keySerde.DeserializeObj(data[:keyLength]); err != nil {
-			return v, err
-		}
-		data = data[keyLength:]
+	var valuesLength int
+	if valuesLength, n = getSize(data); n == 0 {
+		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid values length data)")
+	}
+	data = data[n:]
+	values, err := s.valueArraySerde.DeserializeObj(data[:valuesLength])
+	if err != nil {
+		return nil, err
+	}
 
-		var valueLength int
-		if valueLength, n = getSize(data); n == 0 {
-			return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid value length data)")
-		}
-		data = data[n:]
-
-		if len(data) < valueLength {
-			return v, fmt.Errorf("mapSerde DeserializeObj error (invalid value data)")
-		}
-		var value interface{}
-		if value, err = s.valueSerde.DeserializeObj(data[:valueLength]); err != nil {
-			return v, err
-		}
-		data = data[valueLength:]
-		v.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
+	keySlice := reflect.ValueOf(keys)
+	valueSlice := reflect.ValueOf(values)
+	for i := 0; i < keySlice.Len(); i++ {
+		key := keySlice.Index(i)
+		value := valueSlice.Index(i)
+		v.SetMapIndex(key, value)
 	}
 	return v.Interface(), nil
 }

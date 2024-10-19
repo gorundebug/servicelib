@@ -87,20 +87,28 @@ func MakeArraySerde(arrayType reflect.Type, valueSerde Serializer) Serializer {
 	}
 }
 
-func MakeTypedMapSerde[T any](keySerde Serializer, valueSerde Serializer) Serde[T] {
+func MakeTypedMapSerde[T any](keyArraySerde Serializer, valueArraySerde Serializer) Serde[T] {
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Map {
 		log.Fatalf("expected map, got %d", v.Kind())
 	}
-	return &MapSerde[T]{mapSerde: mapSerde{keySerde: keySerde, valueSerde: valueSerde, mapType: GetSerdeType[T]()}}
+	return &MapSerde[T]{
+		mapSerde: mapSerde{
+			keyArraySerde:   keyArraySerde,
+			valueArraySerde: valueArraySerde,
+			mapType:         GetSerdeType[T](),
+		},
+	}
 }
 
-func MakeMapSerde(mapType reflect.Type, keySerde Serializer, valueSerde Serializer) Serializer {
+func MakeMapSerde(mapType reflect.Type,
+	keyArraySerde Serializer,
+	valueArraySerde Serializer) Serializer {
 	return &mapSerde{
-		mapType:    mapType,
-		keySerde:   keySerde,
-		valueSerde: valueSerde,
+		mapType:         mapType,
+		keyArraySerde:   keyArraySerde,
+		valueArraySerde: valueArraySerde,
 	}
 }
 
