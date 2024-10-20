@@ -140,17 +140,17 @@ func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](nam
 		log.Fatalf("fatal error config file: %s\n", err)
 	}
 
-	configType := serde.GetSerdeType[Cfg]()
+	configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
 	cfg := reflect.New(configType).Interface().(Cfg)
 
 	if err := viper.Unmarshal(cfg); err != nil {
 		log.Fatalf("fatal error config file: %s", err)
 	}
-	serviceType := serde.GetSerdeType[Environment]()
+	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
 	service := reflect.New(serviceType).Interface().(Environment)
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		configType := serde.GetSerdeType[Cfg]()
+		configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
 		cfg := reflect.New(configType).Interface().(Cfg)
 		if err := viper.Unmarshal(cfg); err != nil {
 			log.Println("error config update:\n", err)
@@ -313,14 +313,6 @@ var keyValuePattern = regexp.MustCompile(`^KeyValue\[\w+,\w+]$`)
 func IsKeyValueType[T any]() bool {
 	tp := serde.GetSerdeType[T]()
 	return tp.PkgPath() == "github.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
-}
-
-func RegisterSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
-	return MakeSerde[T](runtime)
-}
-
-func RegisterKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
-	return MakeKeyValueSerde[K, V](runtime)
 }
 
 func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) Caller[T] {

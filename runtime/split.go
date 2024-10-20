@@ -9,6 +9,7 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	log "github.com/sirupsen/logrus"
 	"strconv"
@@ -158,7 +159,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 	return inputSplitStream
 }
 
-func MakeInputKVSplitStream[T any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[T] {
+func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[datastruct.KeyValue[K, V]] {
 	runtime := env.GetRuntime()
 	cfg := env.GetConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
@@ -166,17 +167,17 @@ func MakeInputKVSplitStream[T any](name string, env ServiceExecutionEnvironment)
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
-	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
-	inputKVSplitStream := &InputKVSplitStream[T]{
-		SplitStream: &SplitStream[T]{
-			ConsumedStream: ConsumedStream[T]{
-				StreamBase: StreamBase[T]{
+	serdeKV := MakeKeyValueSerde[K, V](runtime)
+	inputKVSplitStream := &InputKVSplitStream[datastruct.KeyValue[K, V]]{
+		SplitStream: &SplitStream[datastruct.KeyValue[K, V]]{
+			ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
+				StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
 					environment: env,
 					config:      streamConfig,
 				},
 				serde: serdeKV,
 			},
-			links: make([]*SplitLink[T], 0),
+			links: make([]*SplitLink[datastruct.KeyValue[K, V]], 0),
 		},
 		serdeKV: serdeKV,
 	}
