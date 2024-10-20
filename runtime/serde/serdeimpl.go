@@ -1122,12 +1122,13 @@ func (s *StubSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
 }
 
 func (s *StubSerde[T]) Serialize(T, []byte) ([]byte, error) {
-	log.Fatalf("serde for type '%s' is not implemented", GetSerdeType[T]().Name())
+
+	log.Fatalf("serde for type '%s' is not implemented", GetSerdeTypeName[T]())
 	return []byte{}, nil
 }
 
 func (s *StubSerde[T]) Deserialize([]byte) (T, error) {
-	log.Fatalf("serde for type '%s' is not implemented", GetSerdeType[T]().Name())
+	log.Fatalf("serde for type '%s' is not implemented", GetSerdeTypeName[T]())
 	var t T
 	return t, nil
 }
@@ -1165,7 +1166,8 @@ func (s *arraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
 		elementBytesLength := len(elementBytes) - length - maxSizeLength
 		n = setSize(elementBytes[length:length+maxSizeLength], elementBytesLength)
 		if n != maxSizeLength {
-			copy(elementBytes[length+n:length+n+elementBytesLength], elementBytes[length+maxSizeLength:length+maxSizeLength+elementBytesLength])
+			copy(elementBytes[length+n:length+n+elementBytesLength],
+				elementBytes[length+maxSizeLength:length+maxSizeLength+elementBytesLength])
 		}
 		data = elementBytes[:length+n+elementBytesLength]
 	}
@@ -1251,19 +1253,22 @@ func (s *mapSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
 	keyBytesLength := len(keyBytes) - length - maxSizeLength
 	n := setSize(keyBytes[length:length+maxSizeLength], keyBytesLength)
 	if n != maxSizeLength {
-		copy(keyBytes[length+n:length+n+keyBytesLength], keyBytes[length+maxSizeLength:length+maxSizeLength+keyBytesLength])
+		copy(keyBytes[length+n:length+n+keyBytesLength],
+			keyBytes[length+maxSizeLength:length+maxSizeLength+keyBytesLength])
 	}
 	buf = bytes.NewBuffer(keyBytes[:length+n+keyBytesLength])
 	length = buf.Len()
 	buf.Grow(length + maxSizeLength)
-	valueBytes, err := s.valueArraySerde.SerializeObj(valueArray.Interface(), buf.Bytes()[:length+maxSizeLength])
+	valueBytes, err := s.valueArraySerde.SerializeObj(valueArray.Interface(),
+		buf.Bytes()[:length+maxSizeLength])
 	if err != nil {
 		return nil, err
 	}
 	valueBytesLength := len(valueBytes) - length - maxSizeLength
 	n = setSize(valueBytes[length:length+maxSizeLength], valueBytesLength)
 	if n != maxSizeLength {
-		copy(valueBytes[length+n:length+n+valueBytesLength], valueBytes[length+maxSizeLength:length+maxSizeLength+valueBytesLength])
+		copy(valueBytes[length+n:length+n+valueBytesLength],
+			valueBytes[length+maxSizeLength:length+maxSizeLength+valueBytesLength])
 	}
 	return valueBytes[:length+n+valueBytesLength], nil
 }
