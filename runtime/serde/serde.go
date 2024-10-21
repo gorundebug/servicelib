@@ -16,7 +16,7 @@ import (
 type Serializer interface {
 	SerializeObj(interface{}, []byte) ([]byte, error)
 	DeserializeObj([]byte) (interface{}, error)
-	IsStubSerde() bool
+	IsStub() bool
 }
 
 type Serde[T any] interface {
@@ -65,6 +65,10 @@ func MakeStreamKeyValueSerde[K comparable, V any](serdeKey Serde[K], serdeValue 
 }
 
 func GetSerdeType[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+func GetSerdeTypeWithoutPtr[T any]() reflect.Type {
 	tp := reflect.TypeOf((*T)(nil)).Elem()
 	for {
 		if tp.Kind() == reflect.Ptr {
@@ -74,6 +78,21 @@ func GetSerdeType[T any]() reflect.Type {
 		}
 	}
 	return tp
+}
+
+func GetSerdeTypeName[T any]() string {
+	name := ""
+	tp := reflect.TypeOf((*T)(nil)).Elem()
+	for {
+		if tp.Kind() == reflect.Ptr {
+			tp = tp.Elem()
+			name = "*" + name
+		} else {
+			name = name + tp.Name()
+			break
+		}
+	}
+	return name
 }
 
 func MakeStubSerde[T any]() *StubSerde[T] {

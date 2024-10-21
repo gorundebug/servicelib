@@ -337,7 +337,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 				isTypePtr:                  serde.IsTypePtr[T](),
 			},
 			param: cfg.Param,
-			tType: serde.GetSerdeType[T](),
+			tType: serde.GetSerdeTypeWithoutPtr[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
@@ -349,7 +349,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 				isTypePtr:                  serde.IsTypePtr[T](),
 			},
 			decoder: schema.NewDecoder(),
-			tType:   serde.GetSerdeType[T](),
+			tType:   serde.GetSerdeTypeWithoutPtr[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer

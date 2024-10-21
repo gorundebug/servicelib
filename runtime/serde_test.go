@@ -83,6 +83,17 @@ func TestArrayArraySerde(t *testing.T) {
 	assert.Equal(t, arr, arrCopy)
 }
 
+func TestIntPtrSerde(t *testing.T) {
+	t.Skip()
+	mapSer := MakeSerde[*int](mockService("TestMapSerde"))
+	v := 1
+	data, err := mapSer.Serialize(&v)
+	assert.Equal(t, err, nil, err)
+	vCopy, err := mapSer.Deserialize(data)
+	assert.Equal(t, err, nil, err)
+	assert.Equal(t, v, vCopy)
+}
+
 func TestMapSerde(t *testing.T) {
 	mapSer := MakeSerde[map[int]int](mockService("TestMapSerde"))
 	dict := map[int]int{1: 1, 2: 2, 3: 3}

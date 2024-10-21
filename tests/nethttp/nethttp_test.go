@@ -34,7 +34,7 @@ type RequestData struct {
 
 type RequestDataSerde struct{}
 
-func (s *RequestDataSerde) IsStubSerde() bool {
+func (s *RequestDataSerde) IsStub() bool {
 	return false
 }
 
@@ -75,12 +75,11 @@ type MockService struct {
 
 func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error) {
 	switch valueType {
-	case serde.GetSerdeType[RequestData]():
+	case serde.GetSerdeType[RequestData](), serde.GetSerdeType[*RequestData]():
 		{
 			var ser serde.Serde[*RequestData] = &RequestDataSerde{}
 			return ser, nil
 		}
-
 	}
 	return nil, nil
 }

@@ -92,13 +92,11 @@ func InStub[T any](name string, env runtime.ServiceExecutionEnvironment) runtime
 }
 
 func SplitInStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVSplitStream[datastruct.KeyValue[K, V]] {
-	runtime.RegisterKeyValueSerde[K, V](env.GetRuntime())
-	return runtime.MakeInputKVSplitStream[datastruct.KeyValue[K, V]](name, env)
+	return runtime.MakeInputKVSplitStream[K, V](name, env)
 }
 
 func InStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVConsumedStream[datastruct.KeyValue[K, V]] {
-	runtime.RegisterKeyValueSerde[K, V](env.GetRuntime())
-	return runtime.MakeInStubKVStream[datastruct.KeyValue[K, V]](name, env)
+	return runtime.MakeInStubKVStream[K, V](name, env)
 }
 
 func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
