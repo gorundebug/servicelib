@@ -32,7 +32,7 @@ func fixedSizeTypeDataSize(data any) int {
 	case int64, uint64, float64:
 		return 8
 	}
-	return 8
+	return 0
 }
 
 func setSize(data []byte, size int) int {
@@ -202,7 +202,7 @@ func IsTypePtr[T any]() bool {
 type BytesSerde struct {
 }
 
-func (s *BytesSerde) IsStubSerde() bool {
+func (s *BytesSerde) IsStub() bool {
 	return false
 }
 
@@ -247,7 +247,7 @@ type BaseType interface {
 type FixedSizeTypeArraySerde[T BaseType] struct {
 }
 
-func (s *FixedSizeTypeArraySerde[T]) IsStubSerde() bool {
+func (s *FixedSizeTypeArraySerde[T]) IsStub() bool {
 	return false
 }
 
@@ -300,7 +300,7 @@ func (s *FixedSizeTypeArraySerde[T]) Deserialize(data []byte) ([]T, error) {
 type IntArraySerde struct {
 }
 
-func (s *IntArraySerde) IsStubSerde() bool {
+func (s *IntArraySerde) IsStub() bool {
 	return false
 }
 
@@ -363,7 +363,7 @@ func (s *IntArraySerde) Deserialize(data []byte) ([]int, error) {
 type UIntArraySerde struct {
 }
 
-func (s *UIntArraySerde) IsStubSerde() bool {
+func (s *UIntArraySerde) IsStub() bool {
 	return false
 }
 
@@ -426,7 +426,7 @@ func (s *UIntArraySerde) Deserialize(data []byte) ([]uint, error) {
 type StringSerde struct {
 }
 
-func (s *StringSerde) IsStubSerde() bool {
+func (s *StringSerde) IsStub() bool {
 	return false
 }
 
@@ -467,7 +467,7 @@ func (s *StringSerde) Deserialize(data []byte) (string, error) {
 type UIntSerde struct {
 }
 
-func (s *UIntSerde) IsStubSerde() bool {
+func (s *UIntSerde) IsStub() bool {
 	return false
 }
 
@@ -510,7 +510,7 @@ func (s *UIntSerde) Deserialize(data []byte) (uint, error) {
 type UInt8Serde struct {
 }
 
-func (s *UInt8Serde) IsStubSerde() bool {
+func (s *UInt8Serde) IsStub() bool {
 	return false
 }
 
@@ -540,7 +540,7 @@ func (s *UInt8Serde) Deserialize(data []byte) (uint8, error) {
 type UInt16Serde struct {
 }
 
-func (s *UInt16Serde) IsStubSerde() bool {
+func (s *UInt16Serde) IsStub() bool {
 	return false
 }
 
@@ -575,7 +575,7 @@ func (s *UInt16Serde) Deserialize(data []byte) (uint16, error) {
 type UInt32Serde struct {
 }
 
-func (s *UInt32Serde) IsStubSerde() bool {
+func (s *UInt32Serde) IsStub() bool {
 	return false
 }
 
@@ -610,7 +610,7 @@ func (s *UInt32Serde) Deserialize(data []byte) (uint32, error) {
 type UInt64Serde struct {
 }
 
-func (s *UInt64Serde) IsStubSerde() bool {
+func (s *UInt64Serde) IsStub() bool {
 	return false
 }
 
@@ -645,7 +645,7 @@ func (s *UInt64Serde) Deserialize(data []byte) (uint64, error) {
 type IntSerde struct {
 }
 
-func (s *IntSerde) IsStubSerde() bool {
+func (s *IntSerde) IsStub() bool {
 	return false
 }
 
@@ -688,7 +688,7 @@ func (s *IntSerde) Deserialize(data []byte) (int, error) {
 type Int8Serde struct {
 }
 
-func (s *Int8Serde) IsStubSerde() bool {
+func (s *Int8Serde) IsStub() bool {
 	return false
 }
 
@@ -718,7 +718,7 @@ func (s *Int8Serde) Deserialize(data []byte) (int8, error) {
 type Int16Serde struct {
 }
 
-func (s *Int16Serde) IsStubSerde() bool {
+func (s *Int16Serde) IsStub() bool {
 	return false
 }
 
@@ -753,7 +753,7 @@ func (s *Int16Serde) Deserialize(data []byte) (int16, error) {
 type Int32Serde struct {
 }
 
-func (s *Int32Serde) IsStubSerde() bool {
+func (s *Int32Serde) IsStub() bool {
 	return false
 }
 
@@ -788,7 +788,7 @@ func (s *Int32Serde) Deserialize(data []byte) (int32, error) {
 type Int64Serde struct {
 }
 
-func (s *Int64Serde) IsStubSerde() bool {
+func (s *Int64Serde) IsStub() bool {
 	return false
 }
 
@@ -823,7 +823,7 @@ func (s *Int64Serde) Deserialize(data []byte) (int64, error) {
 type BoolSerde struct {
 }
 
-func (s *BoolSerde) IsStubSerde() bool {
+func (s *BoolSerde) IsStub() bool {
 	return false
 }
 
@@ -859,7 +859,7 @@ func (s *BoolSerde) Deserialize(data []byte) (bool, error) {
 type RuneSerde struct {
 }
 
-func (s *RuneSerde) IsStubSerde() bool {
+func (s *RuneSerde) IsStub() bool {
 	return false
 }
 
@@ -894,7 +894,7 @@ func (s *RuneSerde) Deserialize(data []byte) (rune, error) {
 type Float32Serde struct {
 }
 
-func (s *Float32Serde) IsStubSerde() bool {
+func (s *Float32Serde) IsStub() bool {
 	return false
 }
 
@@ -929,7 +929,7 @@ func (s *Float32Serde) Deserialize(data []byte) (float32, error) {
 type Float64Serde struct {
 }
 
-func (s *Float64Serde) IsStubSerde() bool {
+func (s *Float64Serde) IsStub() bool {
 	return false
 }
 
@@ -1105,7 +1105,7 @@ func makeDefaultSerde(valueType reflect.Type) (Serializer, error) {
 type StubSerde[T any] struct {
 }
 
-func (s *StubSerde[T]) IsStubSerde() bool {
+func (s *StubSerde[T]) IsStub() bool {
 	return true
 }
 
@@ -1138,7 +1138,7 @@ type arraySerde struct {
 	valueSerde Serializer
 }
 
-func (s *arraySerde) IsStubSerde() bool {
+func (s *arraySerde) IsStub() bool {
 	return false
 }
 
@@ -1227,7 +1227,7 @@ type mapSerde struct {
 	valueArraySerde Serializer
 }
 
-func (s *mapSerde) IsStubSerde() bool {
+func (s *mapSerde) IsStub() bool {
 	return false
 }
 

@@ -16,7 +16,7 @@ import (
 type Serializer interface {
 	SerializeObj(interface{}, []byte) ([]byte, error)
 	DeserializeObj([]byte) (interface{}, error)
-	IsStubSerde() bool
+	IsStub() bool
 }
 
 type Serde[T any] interface {

@@ -194,13 +194,6 @@ func makeTypedArraySerde[T any](runtime ServiceExecutionRuntime) (serde.Serializ
 	var t T
 	v := reflect.ValueOf(t)
 	elementType := v.Type().Elem()
-	for {
-		if elementType.Kind() == reflect.Ptr {
-			elementType = elementType.Elem()
-		} else {
-			break
-		}
-	}
 	serElm, err := makeSerdeForType(elementType, runtime)
 	if err != nil {
 		return nil, err

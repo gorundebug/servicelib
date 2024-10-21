@@ -26,7 +26,7 @@ func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InSt
 		return nil
 	}
 	ser := MakeSerde[T](runtime)
-	if ser.ValueSerializer().IsStubSerde() {
+	if ser.ValueSerializer().IsStub() {
 		log.Fatalf("Serializer for the type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 	inStubStream := &InStubStream[T]{
@@ -62,10 +62,10 @@ func MakeInStubKVStream[K comparable, V any](name string, env ServiceExecutionEn
 		return nil
 	}
 	serdeKV := MakeKeyValueSerde[K, V](runtime)
-	if serdeKV.KeySerializer().IsStubSerde() {
+	if serdeKV.KeySerializer().IsStub() {
 		log.Fatalf("Serializer for the key type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[K]().Name(), name)
 	}
-	if serdeKV.ValueSerializer().IsStubSerde() {
+	if serdeKV.ValueSerializer().IsStub() {
 		log.Fatalf("Serializer for the value type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[V]().Name(), name)
 	}
 
@@ -198,7 +198,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 	}
 
 	ser := MakeSerde[T](runtime)
-	if ser.ValueSerializer().IsStubSerde() {
+	if ser.ValueSerializer().IsStub() {
 		log.Fatalf("Serializer for the type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 
@@ -228,10 +228,10 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 		return nil
 	}
 	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
-	if serdeKV.KeySerializer().IsStubSerde() {
+	if serdeKV.KeySerializer().IsStub() {
 		log.Fatalf("Serializer for the key type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
-	if serdeKV.ValueSerializer().IsStubSerde() {
+	if serdeKV.ValueSerializer().IsStub() {
 		log.Fatalf("Serializer for the value type '%s' in the stream '%s' can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 	outStubBinaryKVStream := &OutStubBinaryKVStream[T]{

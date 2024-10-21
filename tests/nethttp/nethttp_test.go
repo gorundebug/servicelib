@@ -34,7 +34,7 @@ type RequestData struct {
 
 type RequestDataSerde struct{}
 
-func (s *RequestDataSerde) IsStubSerde() bool {
+func (s *RequestDataSerde) IsStub() bool {
 	return false
 }
 
