@@ -1139,7 +1139,7 @@ type arraySerde struct {
 }
 
 func (s *arraySerde) IsStub() bool {
-	return false
+	return s.valueSerde.IsStub()
 }
 
 func (s *arraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
@@ -1228,7 +1228,7 @@ type mapSerde struct {
 }
 
 func (s *mapSerde) IsStub() bool {
-	return false
+	return s.valueArraySerde.IsStub() || s.keyArraySerde.IsStub()
 }
 
 func (s *mapSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {

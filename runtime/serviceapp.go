@@ -51,6 +51,7 @@ type ServiceApp struct {
 	delayPool         pool.DelayPool
 	taskPools         map[string]pool.TaskPool
 	priorityTaskPools map[string]pool.PriorityTaskPool
+	loader            ServiceLoader
 }
 
 func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
@@ -98,13 +99,14 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, cfg config.Config) {
+func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) {
 	app.config = cfg.GetServiceConfig()
 	app.config.InitRuntimeConfig()
 	app.serviceConfig = cfg.GetServiceConfig().GetServiceConfigByName(name)
 	if app.serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 	}
+	app.loader = loader
 	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
 	app.environment = env
 	app.streams = make(map[int]Stream)
@@ -410,6 +412,12 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 
 func (app *ServiceApp) Stop(ctx context.Context) {
 	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.loader.Stop()
+	}()
 
 	wg.Add(1)
 	go func() {

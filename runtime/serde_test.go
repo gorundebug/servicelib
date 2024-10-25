@@ -27,6 +27,12 @@ type MockService struct {
 	serviceConfig *MockServiceConfig
 }
 
+type MockServiceLoader struct {
+}
+
+func (s *MockServiceLoader) Stop() {
+}
+
 func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error) {
 	return nil, nil
 }
@@ -54,7 +60,7 @@ func mockService(environment string) *MockService {
 		},
 	}
 	service := MockService{}
-	service.serviceInit("MockService", &service, &cfg)
+	service.serviceInit("MockService", &service, &MockServiceLoader{}, &cfg)
 	return &service
 }
 
