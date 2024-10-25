@@ -44,7 +44,7 @@ type PriorityTaskPoolImpl struct {
 func makePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) PriorityTaskPool {
 	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
-		log.Fatalf("priority task pool '%s' does not exist.", name)
+		log.Fatalf("priority task pool %q does not exist.", name)
 		return nil
 	}
 	pool := &PriorityTaskPoolImpl{
@@ -158,7 +158,7 @@ func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 			p.lock.Lock()
 			tasksCount := p.pq.Len()
 			p.lock.Unlock()
-			log.Warnf("priority task pool '%s' stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+			log.Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()

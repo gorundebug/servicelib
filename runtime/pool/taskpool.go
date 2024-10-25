@@ -45,7 +45,7 @@ type TaskPoolImpl struct {
 func makeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) TaskPool {
 	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
-		log.Fatalf("task pool '%s' does not exist.", name)
+		log.Fatalf("task pool %q does not exist.", name)
 		return nil
 	}
 
@@ -139,7 +139,7 @@ func (p *TaskPoolImpl) Stop(ctx context.Context) {
 			p.lock.Lock()
 			tasksCount := p.count
 			p.lock.Unlock()
-			log.Warnf("task pool '%s' stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+			log.Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()
