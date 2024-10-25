@@ -36,11 +36,9 @@ import (
 var englishUpperCaser = cases.Upper(language.English)
 
 type ServiceApp struct {
-	id            int
-	config        atomic.Value
-	serviceConfig atomic.Value
-	//config            *config.ServiceAppConfig
-	//serviceConfig     *config.ServiceConfig
+	id                int
+	config            atomic.Pointer[config.ServiceAppConfig]
+	serviceConfig     atomic.Pointer[config.ServiceConfig]
 	environment       ServiceExecutionEnvironment
 	streams           map[int]Stream
 	dataSources       map[int]DataSource
@@ -59,7 +57,7 @@ type ServiceApp struct {
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
-	return app.config.Load().(*config.ServiceAppConfig)
+	return app.config.Load()
 }
 
 func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
@@ -79,7 +77,7 @@ func (app *ServiceApp) GetAppConfig() *config.ServiceAppConfig {
 }
 
 func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
-	return app.serviceConfig.Load().(*config.ServiceConfig)
+	return app.serviceConfig.Load()
 }
 
 func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
