@@ -38,7 +38,6 @@ var englishUpperCaser = cases.Upper(language.English)
 type ServiceApp struct {
 	id                int
 	config            atomic.Pointer[config.ServiceAppConfig]
-	serviceConfig     atomic.Pointer[config.ServiceConfig]
 	environment       ServiceExecutionEnvironment
 	streams           map[int]Stream
 	dataSources       map[int]DataSource
@@ -68,7 +67,6 @@ func (app *ServiceApp) reloadConfig(cfg config.Config) {
 	appConfig := cfg.GetAppConfig()
 	appConfig.InitRuntimeConfig()
 	app.config.Store(appConfig)
-	app.serviceConfig.Store(appConfig.GetServiceConfigById(app.id))
 	app.environment.SetConfig(cfg)
 }
 
@@ -77,7 +75,7 @@ func (app *ServiceApp) GetAppConfig() *config.ServiceAppConfig {
 }
 
 func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
-	return app.serviceConfig.Load()
+	return app.getConfig().GetServiceConfigById(app.id)
 }
 
 func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
@@ -114,13 +112,12 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) {
 	appConfig := cfg.GetAppConfig()
 	appConfig.InitRuntimeConfig()
-	app.config.Store(appConfig)
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
 		return
 	}
-	app.serviceConfig.Store(serviceConfig)
+	app.config.Store(appConfig)
 	app.id = serviceConfig.Id
 	app.loader = loader
 	app.metrics = telemetry.CreateMetrics(serviceConfig.MetricsEngine, serviceConfig.Environment)
