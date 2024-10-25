@@ -39,29 +39,29 @@ type OutputEndpointConsumer interface {
 }
 
 type OutputDataSink struct {
-	dataConnector *config.DataConnectorConfig
-	environment   ServiceExecutionEnvironment
-	endpoints     map[int]SinkEndpoint
+	id          int
+	environment ServiceExecutionEnvironment
+	endpoints   map[int]SinkEndpoint
 }
 
 func MakeOutputDataSink(dataConnector *config.DataConnectorConfig, environment ServiceExecutionEnvironment) *OutputDataSink {
 	return &OutputDataSink{
-		dataConnector: dataConnector,
-		environment:   environment,
-		endpoints:     make(map[int]SinkEndpoint),
+		id:          dataConnector.Id,
+		environment: environment,
+		endpoints:   make(map[int]SinkEndpoint),
 	}
 }
 
 func (ds *OutputDataSink) GetDataConnector() *config.DataConnectorConfig {
-	return ds.dataConnector
+	return ds.environment.GetAppConfig().GetDataConnectorById(ds.id)
 }
 
 func (ds *OutputDataSink) GetName() string {
-	return ds.dataConnector.Name
+	return ds.GetDataConnector().Name
 }
 
 func (ds *OutputDataSink) GetId() int {
-	return ds.dataConnector.Id
+	return ds.id
 }
 
 func (ds *OutputDataSink) GetEnvironment() ServiceExecutionEnvironment {
@@ -81,7 +81,7 @@ func (ds *OutputDataSink) AddEndpoint(endpoint SinkEndpoint) {
 }
 
 type DataSinkEndpoint struct {
-	config            *config.EndpointConfig
+	id                int
 	environment       ServiceExecutionEnvironment
 	dataSink          DataSink
 	endpointConsumers []OutputEndpointConsumer
@@ -90,22 +90,22 @@ type DataSinkEndpoint struct {
 func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
 	return &DataSinkEndpoint{
 		dataSink:          dataSink,
-		config:            config,
+		id:                config.Id,
 		environment:       environment,
 		endpointConsumers: make([]OutputEndpointConsumer, 0),
 	}
 }
 
 func (ep *DataSinkEndpoint) GetConfig() *config.EndpointConfig {
-	return ep.config
+	return ep.environment.GetAppConfig().GetEndpointConfigById(ep.id)
 }
 
 func (ep *DataSinkEndpoint) GetName() string {
-	return ep.config.Name
+	return ep.GetConfig().Name
 }
 
 func (ep *DataSinkEndpoint) GetId() int {
-	return ep.config.Id
+	return ep.GetConfig().Id
 }
 
 func (ep *DataSinkEndpoint) GetEnvironment() ServiceExecutionEnvironment {

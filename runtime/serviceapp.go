@@ -29,14 +29,18 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var englishUpperCaser = cases.Upper(language.English)
 
 type ServiceApp struct {
-	config            *config.ServiceAppConfig
-	serviceConfig     *config.ServiceConfig
+	id            int
+	config        atomic.Value
+	serviceConfig atomic.Value
+	//config            *config.ServiceAppConfig
+	//serviceConfig     *config.ServiceConfig
 	environment       ServiceExecutionEnvironment
 	streams           map[int]Stream
 	dataSources       map[int]DataSource
@@ -54,22 +58,32 @@ type ServiceApp struct {
 	loader            ServiceLoader
 }
 
+func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
+	return app.config.Load().(*config.ServiceAppConfig)
+}
+
 func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
 	return app
 }
 
-func (app *ServiceApp) reloadConfig(config config.Config) {
-	app.config = config.GetServiceConfig()
-	app.config.InitRuntimeConfig()
-	app.environment.SetConfig(config)
+func (app *ServiceApp) reloadConfig(cfg config.Config) {
+	appConfig := cfg.GetAppConfig()
+	appConfig.InitRuntimeConfig()
+	app.config.Store(appConfig)
+	app.serviceConfig.Store(appConfig.GetServiceConfigById(app.id))
+	app.environment.SetConfig(cfg)
 }
 
-func (app *ServiceApp) GetConfig() *config.ServiceAppConfig {
-	return app.config
+func (app *ServiceApp) GetAppConfig() *config.ServiceAppConfig {
+	return app.getConfig()
+}
+
+func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
+	return app.serviceConfig.Load().(*config.ServiceConfig)
 }
 
 func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
-	return app.serviceConfig
+	return app.getServiceConfig()
 }
 
 func (app *ServiceApp) ReloadConfig(config config.Config) {
@@ -100,14 +114,18 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 }
 
 func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) {
-	app.config = cfg.GetServiceConfig()
-	app.config.InitRuntimeConfig()
-	app.serviceConfig = cfg.GetServiceConfig().GetServiceConfigByName(name)
-	if app.serviceConfig == nil {
+	appConfig := cfg.GetAppConfig()
+	appConfig.InitRuntimeConfig()
+	app.config.Store(appConfig)
+	serviceConfig := appConfig.GetServiceConfigByName(name)
+	if serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)
+		return
 	}
+	app.serviceConfig.Store(serviceConfig)
+	app.id = serviceConfig.Id
 	app.loader = loader
-	app.metrics = telemetry.CreateMetrics(app.serviceConfig.MetricsEngine, app.serviceConfig.Environment)
+	app.metrics = telemetry.CreateMetrics(serviceConfig.MetricsEngine, serviceConfig.Environment)
 	app.environment = env
 	app.streams = make(map[int]Stream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
@@ -121,20 +139,20 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 	app.httpServer = http.Server{
 		Handler: app.mux,
-		Addr:    fmt.Sprintf("%s:%d", app.serviceConfig.MonitoringHost, app.serviceConfig.MonitoringPort),
+		Addr:    fmt.Sprintf("%s:%d", serviceConfig.MonitoringHost, serviceConfig.MonitoringPort),
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	if app.serviceConfig.MetricsEngine == api.Prometeus {
+	if serviceConfig.MetricsEngine == api.Prometeus {
 		app.mux.Handle("/metrics", promhttp.Handler())
 	}
-	for idx := range app.config.Links {
-		link := &app.config.Links[idx]
-		streamFrom := app.config.GetStreamConfigById(link.From)
-		streamTo := app.config.GetStreamConfigById(link.To)
-		if streamFrom.IdService == app.serviceConfig.Id || streamTo.IdService == app.serviceConfig.Id {
+	for idx := range appConfig.Links {
+		link := &appConfig.Links[idx]
+		streamFrom := appConfig.GetStreamConfigById(link.From)
+		streamTo := appConfig.GetStreamConfigById(link.To)
+		if streamFrom.IdService == serviceConfig.Id || streamTo.IdService == serviceConfig.Id {
 			var callSemantics api.CallSemantics
-			if streamFrom.IdService == app.serviceConfig.Id {
+			if streamFrom.IdService == serviceConfig.Id {
 				callSemantics = link.CallSemantics
 			} else {
 				if link.IncomeCallSemantics == nil {
@@ -149,7 +167,7 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 			}
 			if callSemantics != api.FunctionCall {
 				var poolName string
-				if streamFrom.IdService == app.serviceConfig.Id {
+				if streamFrom.IdService == serviceConfig.Id {
 					if link.PoolName == nil {
 						log.Fatalf("pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
 					}
@@ -166,7 +184,7 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 					}
 					poolName = *link.IncomePoolName
 				}
-				poolConfig := app.config.GetPoolByName(poolName)
+				poolConfig := appConfig.GetPoolByName(poolName)
 				if poolConfig == nil {
 					log.Fatalf("task pool '%s' not found for link{from=%d, to=%d}", poolName, link.From, link.To)
 				}
@@ -228,14 +246,16 @@ const (
 )
 
 func (app *ServiceApp) makeNode(stream Stream) *Node {
+	appConfig := app.getConfig()
 	cfg := stream.GetConfig()
-	background := app.serviceConfig.Color
-	serviceName := app.serviceConfig.Name
-	if cfg.IdService != app.serviceConfig.Id {
-		for i := range app.config.Services {
-			if app.config.Services[i].Id == cfg.IdService {
-				serviceName = app.config.Services[i].Name
-				background = app.config.Services[i].Color
+	serviceConfig := app.getServiceConfig()
+	background := serviceConfig.Color
+	serviceName := serviceConfig.Name
+	if cfg.IdService != serviceConfig.Id {
+		for i := range appConfig.Services {
+			if appConfig.Services[i].Id == cfg.IdService {
+				serviceName = appConfig.Services[i].Name
+				background = appConfig.Services[i].Color
 				break
 			}
 		}
@@ -362,6 +382,8 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error
 }
 
 func (app *ServiceApp) Start(ctx context.Context) error {
+	serviceConfig := app.getServiceConfig()
+
 	addr := app.httpServer.Addr
 	if addr == "" {
 		addr = ":http"
@@ -371,7 +393,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		return err
 	}
 	go func() {
-		log.Infof("Monitoring for service '%s' listening at %v", app.serviceConfig.Name, app.httpServer.Addr)
+		log.Infof("Monitoring for service '%s' listening at %v", serviceConfig.Name, app.httpServer.Addr)
 
 		err := app.httpServer.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -411,6 +433,8 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
+	serviceConfig := app.getServiceConfig()
+
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -460,7 +484,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-app.httpServerDone:
 		case <-ctx.Done():
-			log.Warnf("Monitoring server stop timeout for service '%s'. %s", app.serviceConfig.Name, ctx.Err().Error())
+			log.Warnf("Monitoring server stop timeout for service '%s'. %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}()
 
@@ -476,7 +500,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
+		log.Warnf("ServiceApp '%s' stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -499,15 +523,17 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			log.Warnf("ServiceApp '%s' stop timeout: %s", app.serviceConfig.Name, ctx.Err().Error())
+			log.Warnf("ServiceApp '%s' stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
 }
 
 func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
-	link := app.config.GetLink(from, to)
+	appConfig := app.getConfig()
+	serviceConfig := app.getServiceConfig()
+	link := appConfig.GetLink(from, to)
 	if link == nil || link.Timeout == nil {
-		return time.Duration(app.serviceConfig.DefaultGrpcTimeout) * time.Millisecond
+		return time.Duration(serviceConfig.DefaultGrpcTimeout) * time.Millisecond
 	}
 	return time.Duration(*link.Timeout) * time.Millisecond
 }

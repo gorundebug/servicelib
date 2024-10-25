@@ -79,10 +79,10 @@ type DelayPoolImpl struct {
 	head                    *DelayTask
 	tail                    *DelayTask
 	count                   int
-	config                  config.ServiceEnvironmentConfig
+	config                  config.ServiceEnvironment
 }
 
-func makeDelayPool(cfg config.ServiceEnvironmentConfig, m metrics.Metrics) DelayPool {
+func makeDelayPool(cfg config.ServiceEnvironment, m metrics.Metrics) DelayPool {
 	pool := &DelayPoolImpl{
 		executorsCount: cfg.GetServiceConfig().DelayExecutors,
 		pq:             &DelayTaskPriorityQueue{},

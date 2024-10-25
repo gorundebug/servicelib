@@ -17,7 +17,7 @@ type InputStream[T any] struct {
 
 func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *InputStream[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -27,7 +27,7 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 		ConsumedStream: ConsumedStream[T]{
 			StreamBase: StreamBase[T]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: MakeSerde[T](runtime),
 		},
@@ -37,7 +37,7 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 }
 
 func (s *InputStream[T]) GetEndpointId() int {
-	return *s.config.IdEndpoint
+	return *s.GetConfig().IdEndpoint
 }
 
 func (s *InputStream[T]) Consume(value T) {

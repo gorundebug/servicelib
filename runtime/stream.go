@@ -16,7 +16,7 @@ import (
 
 type StreamBase[T any] struct {
 	environment ServiceExecutionEnvironment
-	config      *config.StreamConfig
+	id          int
 }
 
 func (s *StreamBase[T]) GetTypeName() string {
@@ -25,15 +25,15 @@ func (s *StreamBase[T]) GetTypeName() string {
 }
 
 func (s *StreamBase[T]) GetName() string {
-	return s.config.Name
+	return s.GetConfig().Name
 }
 
 func (s *StreamBase[T]) GetId() int {
-	return s.config.Id
+	return s.id
 }
 
 func (s *StreamBase[T]) GetConfig() *config.StreamConfig {
-	return s.config
+	return s.environment.GetAppConfig().GetStreamConfigById(s.id)
 }
 
 func (s *StreamBase[T]) GetEnvironment() ServiceExecutionEnvironment {
@@ -64,7 +64,7 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 
 func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
-		log.Fatalf("consumer already assigned to the stream %d", s.StreamBase.config.Id)
+		log.Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
 	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.environment, s)

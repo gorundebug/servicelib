@@ -124,7 +124,7 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := env.GetConfig().GetDataConnectorById(id)
+	cfg := env.GetAppConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
 	if cfg.Host == nil || cfg.Port == nil {
 		log.Fatalf("no host or port specified for data connector with id %d", id)
@@ -144,7 +144,7 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 }
 
 func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.GetConfig().GetEndpointConfigById(id)
+	cfg := env.GetAppConfig().GetEndpointConfigById(id)
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {

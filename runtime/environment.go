@@ -19,7 +19,7 @@ import (
 )
 
 type ServiceExecutionEnvironment interface {
-	config.ServiceEnvironmentConfig
+	config.ServiceEnvironment
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	StreamsInit(ctx context.Context)
 	SetConfig(config config.Config)

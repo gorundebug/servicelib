@@ -113,7 +113,7 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -123,7 +123,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 		ConsumedStream: ConsumedStream[T]{
 			StreamBase: StreamBase[T]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: stream.GetSerde(),
 		},
@@ -137,7 +137,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 
 func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *InputSplitStream[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -148,7 +148,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 			ConsumedStream: ConsumedStream[T]{
 				StreamBase: StreamBase[T]{
 					environment: env,
-					config:      streamConfig,
+					id:          streamConfig.Id,
 				},
 				serde: MakeSerde[T](runtime),
 			},
@@ -161,7 +161,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 
 func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[datastruct.KeyValue[K, V]] {
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -173,7 +173,7 @@ func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecuti
 			ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
 				StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
 					environment: env,
-					config:      streamConfig,
+					id:          streamConfig.Id,
 				},
 				serde: serdeKV,
 			},

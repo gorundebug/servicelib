@@ -175,6 +175,5 @@ func TestNetHTTPEndpointConsumer(t *testing.T) {
 	case <-timeoutCtx.Done():
 		t.Errorf("TestNetHTTPEndpointConsumer timeout: %s", timeoutCtx.Err())
 	}
-	time.Sleep(1000 * time.Second)
 	service.StopService(mainCtx)
 }

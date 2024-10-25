@@ -38,11 +38,11 @@ type PriorityTaskPoolImpl struct {
 	wg               sync.WaitGroup
 	done             bool
 	cond             *sync.Cond
-	config           config.ServiceEnvironmentConfig
+	config           config.ServiceEnvironment
 }
 
-func makePriorityTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) PriorityTaskPool {
-	poolConfig := cfg.GetConfig().GetPoolByName(name)
+func makePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) PriorityTaskPool {
+	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("priority task pool '%s' does not exist.", name)
 		return nil

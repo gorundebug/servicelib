@@ -39,7 +39,7 @@ type MapStream[T, R any] struct {
 func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T, R]) *MapStream[T, R] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -49,7 +49,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 		ConsumedStream: ConsumedStream[R]{
 			StreamBase: StreamBase[R]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: MakeSerde[R](runtime),
 		},

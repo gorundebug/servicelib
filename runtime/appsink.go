@@ -22,7 +22,7 @@ type AppSinkStream[T any] struct {
 func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer ConsumerFunc[T]) *AppSinkStream[T] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -31,7 +31,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 	appSink := &AppSinkStream[T]{
 		StreamBase: StreamBase[T]{
 			environment: env,
-			config:      streamConfig,
+			id:          streamConfig.Id,
 		},
 		consumer: consumer,
 		serde:    stream.GetSerde(),

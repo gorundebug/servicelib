@@ -39,29 +39,29 @@ type InputEndpointConsumer interface {
 }
 
 type InputDataSource struct {
-	dataConnector *config.DataConnectorConfig
-	environment   ServiceExecutionEnvironment
-	endpoints     map[int]InputEndpoint
+	id          int
+	environment ServiceExecutionEnvironment
+	endpoints   map[int]InputEndpoint
 }
 
 func MakeInputDataSource(dataConnector *config.DataConnectorConfig, environment ServiceExecutionEnvironment) *InputDataSource {
 	return &InputDataSource{
-		dataConnector: dataConnector,
-		environment:   environment,
-		endpoints:     make(map[int]InputEndpoint),
+		id:          dataConnector.Id,
+		environment: environment,
+		endpoints:   make(map[int]InputEndpoint),
 	}
 }
 
 func (ds *InputDataSource) GetDataConnector() *config.DataConnectorConfig {
-	return ds.dataConnector
+	return ds.environment.GetAppConfig().GetDataConnectorById(ds.id)
 }
 
 func (ds *InputDataSource) GetName() string {
-	return ds.dataConnector.Name
+	return ds.GetDataConnector().Name
 }
 
 func (ds *InputDataSource) GetId() int {
-	return ds.dataConnector.Id
+	return ds.id
 }
 
 func (ds *InputDataSource) GetEnvironment() ServiceExecutionEnvironment {
@@ -81,7 +81,7 @@ func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 }
 
 type DataSourceEndpoint struct {
-	config            *config.EndpointConfig
+	id                int
 	environment       ServiceExecutionEnvironment
 	dataSource        DataSource
 	endpointConsumers []InputEndpointConsumer
@@ -90,22 +90,22 @@ type DataSourceEndpoint struct {
 func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSourceEndpoint {
 	return &DataSourceEndpoint{
 		dataSource:        dataSource,
-		config:            config,
+		id:                config.Id,
 		environment:       environment,
 		endpointConsumers: make([]InputEndpointConsumer, 0),
 	}
 }
 
 func (ep *DataSourceEndpoint) GetConfig() *config.EndpointConfig {
-	return ep.config
+	return ep.environment.GetAppConfig().GetEndpointConfigById(ep.id)
 }
 
 func (ep *DataSourceEndpoint) GetName() string {
-	return ep.config.Name
+	return ep.GetConfig().Name
 }
 
 func (ep *DataSourceEndpoint) GetId() int {
-	return ep.config.Id
+	return ep.GetConfig().Id
 }
 
 func (ep *DataSourceEndpoint) GetEnvironment() ServiceExecutionEnvironment {
