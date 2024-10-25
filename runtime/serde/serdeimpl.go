@@ -1310,8 +1310,6 @@ func (s *mapSerde) DeserializeObj(data []byte) (interface{}, error) {
 
 type MapSerde[T any] struct {
 	mapSerde
-	keySerde   Serializer
-	valueSerde Serializer
 }
 
 func (s *MapSerde[T]) Serialize(value T, b []byte) ([]byte, error) {

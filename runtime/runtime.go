@@ -109,12 +109,7 @@ func getConfigData(cfg map[string]any) io.Reader {
 	return bytes.NewReader(output)
 }
 
-func getConfigMap(configFile string, configValuesFile string) (map[string]any, error) {
-	configData, err := os.ReadFile(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %s", err)
-	}
-
+func getConfigMap(configData []byte, configValuesFile string) (map[string]any, error) {
 	valuesData, err := os.ReadFile(configValuesFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading values file: %s", err)
@@ -173,33 +168,32 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 	viper.SetConfigType("yaml")
 	viper.AutomaticEnv()
 
-	l.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("failed to create watcher: %s", err)
-	}
-
 	configFile := filepath.Clean(configFileName)
-	configDir, _ := filepath.Split(configFile)
-	realConfigFile, _ := filepath.EvalSymlinks(configFileName)
 
 	valuesFile := filepath.Clean(valuesFileName)
 	valuesDir, _ := filepath.Split(valuesFile)
 	realValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
 
+	configData, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("error reading config file: %s", err)
+	}
+
+	l.watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %s", err)
+	}
+
 	configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
 
 	err = func() error {
-		if err := l.watcher.Add(configDir); err != nil {
-			return fmt.Errorf("watcher error: %s", err)
+		if err := l.watcher.Add(valuesDir); err != nil {
+			return fmt.Errorf("watcher add error: %s", err)
 		}
-		if valuesDir != configDir {
-			if err := l.watcher.Add(valuesDir); err != nil {
-				return fmt.Errorf("watcher add error: %s", err)
-			}
-		}
-		cfgMap, err := getConfigMap(configFileName, valuesFileName)
+
+		cfgMap, err := getConfigMap(configData, valuesFile)
 		if err != nil {
-			return fmt.Errorf("load config map error: %s", err)
+			return fmt.Errorf("get config map error: %s", err)
 		}
 
 		err = viper.ReadConfig(getConfigData(cfgMap))
@@ -235,19 +229,16 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 				if !ok {
 					return
 				}
-				currentConfigFile, _ := filepath.EvalSymlinks(configFileName)
 				currentValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
 				// we only care about the config file with the following cases:
 				// 1 - if the config file was modified or created
 				// 2 - if the real path to the config file changed (eg: k8s ConfigMap replacement)
-				if ((filepath.Clean(event.Name) == configFile || filepath.Clean(event.Name) == valuesFile) &&
+				if (filepath.Clean(event.Name) == valuesFile &&
 					(event.Has(fsnotify.Write) || event.Has(fsnotify.Create))) ||
-					(currentConfigFile != "" && currentConfigFile != realConfigFile) ||
 					(currentValuesFile != "" && currentValuesFile != realValuesFile) {
-					realConfigFile = currentConfigFile
 					realValuesFile = currentValuesFile
 
-					if cfgMap, err := getConfigMap(realConfigFile, realValuesFile); err != nil {
+					if cfgMap, err := getConfigMap(configData, realValuesFile); err != nil {
 						log.Errorf("Reload config map error: %s", err)
 					} else {
 						if err := viper.MergeConfigMap(cfgMap); err != nil {
@@ -262,7 +253,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 						}
 					}
 				} else if event.Has(fsnotify.Remove) &&
-					(filepath.Clean(event.Name) == configFile || filepath.Clean(event.Name) == valuesFile) {
+					filepath.Clean(event.Name) == valuesFile {
 					return
 				}
 
@@ -370,7 +361,7 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 			ser, err = makeTypedMapSerde[T](runtime)
 		}
 	}
-	if ser == nil {
+	if ser == nil || err != nil {
 		ser = serde.MakeStubSerde[T]()
 	}
 	serT, ok := ser.(serde.Serde[T])
@@ -414,7 +405,7 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 			ser, err = makeTypedMapSerde[V](runtime)
 		}
 	}
-	if ser == nil {
+	if ser == nil || err != nil {
 		ser = serde.MakeStubSerde[V]()
 	}
 	serdeV, ok := ser.(serde.Serde[V])
