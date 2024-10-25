@@ -59,6 +59,7 @@ func mockService(environment string) *MockService {
 			},
 		},
 	}
+	cfg.InitRuntimeConfig()
 	service := MockService{}
 	service.serviceInit("MockService", &service, &MockServiceLoader{}, &cfg)
 	return &service
