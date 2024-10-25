@@ -222,7 +222,6 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 		if err := l.watcher.Close(); err != nil {
 			log.Errorf("watcher close error: %s", err)
 		}
-
 		return err
 	}
 
