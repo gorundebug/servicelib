@@ -10,6 +10,7 @@ package runtime
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
@@ -26,6 +27,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -38,9 +40,13 @@ type ConsumeStatistics interface {
 	LinkId() config.LinkId
 }
 
+type ServiceLoader interface {
+	Stop()
+}
+
 type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
-	serviceInit(name string, env ServiceExecutionEnvironment, config config.Config)
+	serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, config config.Config)
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
 	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
@@ -51,18 +57,18 @@ type ServiceExecutionRuntime interface {
 	getPriorityTaskPool(name string) pool.PriorityTaskPool
 }
 
-func getPath(argPath *string) string {
+func getPath(argPath string) (string, error) {
 	var filePath string
-	if !filepath.IsAbs(*argPath) {
+	if !filepath.IsAbs(argPath) {
 		dir, err := os.Getwd()
 		if err != nil {
-			log.Fatalf("path error: %s", err.Error())
+			return "", fmt.Errorf("path error: %s", err.Error())
 		}
-		filePath = filepath.Join(dir, *argPath)
+		filePath = filepath.Join(dir, argPath)
 	} else {
-		filePath = *argPath
+		filePath = argPath
 	}
-	return filePath
+	return filePath, nil
 }
 
 func replacePlaceholders(config interface{}, values map[string]interface{}) interface{} {
@@ -95,32 +101,7 @@ func replacePlaceholders(config interface{}, values map[string]interface{}) inte
 	}
 }
 
-func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader {
-	configFile := getPath(configPathArg)
-	configValuesFile := getPath(configValuesPathArg)
-
-	configData, err := os.ReadFile(configFile)
-	if err != nil {
-		log.Fatalf("Error reading config file: %s", err)
-	}
-
-	valuesData, err := os.ReadFile(configValuesFile)
-	if err != nil {
-		log.Fatalf("Error reading values file: %s", err)
-	}
-
-	var cfg map[string]interface{}
-	var values map[string]interface{}
-
-	if err := yaml.Unmarshal(configData, &cfg); err != nil {
-		log.Fatalf("Error unmarshalling config YAML: %s", err)
-	}
-	if err := yaml.Unmarshal(valuesData, &values); err != nil {
-		log.Fatalf("Error unmarshalling values YAML: %s", err)
-	}
-
-	replacePlaceholders(cfg, values)
-
+func getConfigData(cfg map[string]any) io.Reader {
 	output, err := yaml.Marshal(cfg)
 	if err != nil {
 		log.Fatalf("Error marshaling config to YAML: %s", err)
@@ -128,38 +109,181 @@ func getConfigData(configPathArg *string, configValuesPathArg *string) io.Reader
 	return bytes.NewReader(output)
 }
 
-func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string, configSettings *config.ConfigSettings) Environment {
-	configValuesPathArg := flag.String("values", "./values.yaml", "service config values path")
+func getConfigMap(configFile string, configValuesFile string) (map[string]any, error) {
+	configData, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading config file: %s", err)
+	}
+
+	valuesData, err := os.ReadFile(configValuesFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading values file: %s", err)
+	}
+
+	var cfg map[string]any
+	var values map[string]any
+
+	if err := yaml.Unmarshal(configData, &cfg); err != nil {
+		return nil, fmt.Errorf("error unmarshalling config YAML: %s", err)
+	}
+	if err := yaml.Unmarshal(valuesData, &values); err != nil {
+		return nil, fmt.Errorf("error unmarshalling values YAML: %s", err)
+	}
+
+	replacePlaceholders(cfg, values)
+	return cfg, nil
+}
+
+type serviceLoader[Environment ServiceExecutionEnvironment, Cfg config.Config] struct {
+	watcher *fsnotify.Watcher
+	wg      sync.WaitGroup
+}
+
+func (l *serviceLoader[Environment, Cfg]) Stop() {
+	if err := l.watcher.Close(); err != nil {
+		log.Warnf("watcher close error: %s", err)
+	}
+}
+
+func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string, configSettings *config.ConfigSettings) error {
+	valuesPathArg := flag.String("values", "./values.yaml", "service config values path")
 	configPathArg := flag.String("config", "./config.yaml", "service config path")
 	flag.Parse()
+
+	configFileName, err := getPath(*configPathArg)
+	if err != nil {
+		return fmt.Errorf("get config file path error: %s", err)
+	}
+
+	_, err = os.Stat(configFileName)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("config file '%s' does not exist", configFileName)
+	}
+
+	valuesFileName, err := getPath(*valuesPathArg)
+	if err != nil {
+		return fmt.Errorf("get config values file path error: %s", err)
+	}
+
+	_, err = os.Stat(valuesFileName)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("config values file '%s' does not exist", valuesFileName)
+	}
 
 	viper.SetConfigType("yaml")
 	viper.AutomaticEnv()
 
-	if err := viper.ReadConfig(getConfigData(configPathArg, configValuesPathArg)); err != nil {
-		log.Fatalf("fatal error config file: %s\n", err)
+	l.watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create watcher: %s", err)
 	}
+
+	configFile := filepath.Clean(configFileName)
+	configDir, _ := filepath.Split(configFile)
+	realConfigFile, _ := filepath.EvalSymlinks(configFileName)
+
+	valuesFile := filepath.Clean(valuesFileName)
+	valuesDir, _ := filepath.Split(valuesFile)
+	realValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
 
 	configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
-	cfg := reflect.New(configType).Interface().(Cfg)
 
-	if err := viper.Unmarshal(cfg); err != nil {
-		log.Fatalf("fatal error config file: %s", err)
+	err = func() error {
+		if err := l.watcher.Add(configDir); err != nil {
+			return fmt.Errorf("watcher error: %s", err)
+		}
+		if valuesDir != configDir {
+			if err := l.watcher.Add(valuesDir); err != nil {
+				return fmt.Errorf("watcher add error: %s", err)
+			}
+		}
+		cfgMap, err := getConfigMap(configFileName, valuesFileName)
+		if err != nil {
+			return fmt.Errorf("load config map error: %s", err)
+		}
+
+		err = viper.ReadConfig(getConfigData(cfgMap))
+		if err != nil {
+			return fmt.Errorf("viper read config error: %s\n", err)
+		}
+
+		cfg := reflect.New(configType).Interface().(Cfg)
+
+		if err := viper.Unmarshal(cfg); err != nil {
+			log.Fatalf("fatal error config file: %s", err)
+		}
+
+		service.GetRuntime().serviceInit(name, service, l, cfg)
+
+		return nil
+	}()
+
+	if err != nil {
+		if err := l.watcher.Close(); err != nil {
+			log.Errorf("watcher close error: %s", err)
+		}
 	}
+
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+
+		for {
+			select {
+			case event, ok := <-l.watcher.Events:
+				if !ok {
+					return
+				}
+				currentConfigFile, _ := filepath.EvalSymlinks(configFileName)
+				currentValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
+				// we only care about the config file with the following cases:
+				// 1 - if the config file was modified or created
+				// 2 - if the real path to the config file changed (eg: k8s ConfigMap replacement)
+				if ((filepath.Clean(event.Name) == configFile || filepath.Clean(event.Name) == valuesFile) &&
+					(event.Has(fsnotify.Write) || event.Has(fsnotify.Create))) ||
+					(currentConfigFile != "" && currentConfigFile != realConfigFile) ||
+					(currentValuesFile != "" && currentValuesFile != realValuesFile) {
+					realConfigFile = currentConfigFile
+					realValuesFile = currentValuesFile
+
+					if cfgMap, err := getConfigMap(realConfigFile, realValuesFile); err != nil {
+						log.Errorln(err)
+					} else {
+						if err := viper.MergeConfigMap(cfgMap); err != nil {
+							log.Errorf("Viper merge config error: %s", err)
+						} else {
+							cfg := reflect.New(configType).Interface().(Cfg)
+							if err := viper.Unmarshal(cfg); err != nil {
+								log.Errorf("Viper unmarshal config error: %s", err)
+							} else {
+								service.GetRuntime().reloadConfig(cfg)
+							}
+						}
+					}
+				} else if event.Has(fsnotify.Remove) &&
+					(filepath.Clean(event.Name) == configFile || filepath.Clean(event.Name) == valuesFile) {
+					return
+				}
+
+			case err, ok := <-l.watcher.Errors:
+				if ok {
+					log.Errorf("watcher error: %s", err)
+				}
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string, configSettings *config.ConfigSettings) Environment {
 	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
 	service := reflect.New(serviceType).Interface().(Environment)
 
-	viper.OnConfigChange(func(e fsnotify.Event) {
-		configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
-		cfg := reflect.New(configType).Interface().(Cfg)
-		if err := viper.Unmarshal(cfg); err != nil {
-			log.Println("error config update:\n", err)
-		} else {
-			service.GetRuntime().reloadConfig(cfg)
-		}
-	})
-	viper.WatchConfig()
-	service.GetRuntime().serviceInit(name, service, cfg)
+	loader := &serviceLoader[Environment, Cfg]{}
+	if err := loader.init(service, name, configSettings); err != nil {
+		log.Fatalf("make server error: %s", err)
+	}
 	return service
 }
 
@@ -245,7 +369,7 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 			ser, err = makeTypedMapSerde[T](runtime)
 		}
 	}
-	if err != nil {
+	if ser == nil {
 		ser = serde.MakeStubSerde[T]()
 	}
 	serT, ok := ser.(serde.Serde[T])
@@ -289,7 +413,7 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 			ser, err = makeTypedMapSerde[V](runtime)
 		}
 	}
-	if err != nil {
+	if ser == nil {
 		ser = serde.MakeStubSerde[V]()
 	}
 	serdeV, ok := ser.(serde.Serde[V])
