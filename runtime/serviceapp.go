@@ -65,7 +65,6 @@ func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
 
 func (app *ServiceApp) reloadConfig(cfg config.Config) {
 	appConfig := cfg.GetAppConfig()
-	appConfig.InitRuntimeConfig()
 	app.config.Store(appConfig)
 	app.environment.SetConfig(cfg)
 }
@@ -111,7 +110,6 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 
 func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) {
 	appConfig := cfg.GetAppConfig()
-	appConfig.InitRuntimeConfig()
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
 		log.Fatalf("Cannot find service config for %s", name)

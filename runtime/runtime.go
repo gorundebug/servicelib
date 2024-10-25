@@ -207,6 +207,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 			return fmt.Errorf("unmarshal config error: %s", err)
 		}
 
+		cfg.GetAppConfig().InitRuntimeConfig()
 		service.GetRuntime().serviceInit(name, service, l, cfg)
 
 		return nil
@@ -248,6 +249,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 							if err := viper.Unmarshal(cfg); err != nil {
 								log.Errorf("Viper unmarshal config error: %s", err)
 							} else {
+								cfg.GetAppConfig().InitRuntimeConfig()
 								service.GetRuntime().reloadConfig(cfg)
 							}
 						}
