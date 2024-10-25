@@ -123,10 +123,10 @@ func getConfigMap(configFile string, configValuesFile string) (map[string]any, e
 	var cfg map[string]any
 	var values map[string]any
 
-	if err := yaml.Unmarshal(configData, &cfg); err != nil {
+	if err = yaml.Unmarshal(configData, &cfg); err != nil {
 		return nil, fmt.Errorf("error unmarshalling config YAML: %s", err)
 	}
-	if err := yaml.Unmarshal(valuesData, &values); err != nil {
+	if err = yaml.Unmarshal(valuesData, &values); err != nil {
 		return nil, fmt.Errorf("error unmarshalling values YAML: %s", err)
 	}
 
