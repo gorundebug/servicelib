@@ -65,7 +65,7 @@ type MockServiceConfig struct {
 
 type MockService struct {
 	runtime.ServiceApp
-	serviceConfig          *MockServiceConfig
+	serviceConfig          *MockServiceConfig //nolint:unused
 	done                   chan struct{}
 	appSink                runtime.TypedStreamConsumer[*RequestData]
 	inputRequest           runtime.TypedInputStream[*RequestData]

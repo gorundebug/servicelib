@@ -361,7 +361,7 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 			ser, err = makeTypedMapSerde[T](runtime)
 		}
 	}
-	if ser == nil {
+	if ser == nil || err != nil {
 		ser = serde.MakeStubSerde[T]()
 	}
 	serT, ok := ser.(serde.Serde[T])
@@ -405,7 +405,7 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 			ser, err = makeTypedMapSerde[V](runtime)
 		}
 	}
-	if ser == nil {
+	if ser == nil || err != nil {
 		ser = serde.MakeStubSerde[V]()
 	}
 	serdeV, ok := ser.(serde.Serde[V])

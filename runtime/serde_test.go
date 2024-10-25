@@ -24,7 +24,7 @@ type MockServiceConfig struct {
 
 type MockService struct {
 	ServiceApp
-	serviceConfig *MockServiceConfig
+	serviceConfig *MockServiceConfig //nolint:unused
 }
 
 type MockServiceLoader struct {

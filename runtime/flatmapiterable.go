@@ -16,7 +16,7 @@ import (
 type FlatMapIterableStream[T, R any] struct {
 	ConsumedStream[R]
 	serdeIn serde.StreamSerde[T]
-	source  TypedStream[T]
+	source  TypedStream[T] //nolint:unused
 }
 
 func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
