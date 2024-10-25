@@ -38,7 +38,7 @@ type DelayStream[T any] struct {
 func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[T]) *DelayStream[T] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -48,7 +48,7 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 		ConsumedStream: ConsumedStream[T]{
 			StreamBase: StreamBase[T]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: stream.GetSerde(),
 		},

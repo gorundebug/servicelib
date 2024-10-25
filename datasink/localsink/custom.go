@@ -114,7 +114,7 @@ func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) 
 	if dataSink != nil {
 		return dataSink
 	}
-	cfg := execRuntime.GetConfig().GetDataConnectorById(id)
+	cfg := execRuntime.GetAppConfig().GetDataConnectorById(id)
 	customDataSink := &CustomDataSink{
 		OutputDataSink: runtime.MakeOutputDataSink(cfg, execRuntime),
 	}
@@ -124,7 +124,7 @@ func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) 
 }
 
 func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.SinkEndpoint {
-	cfg := env.GetConfig().GetEndpointConfigById(id)
+	cfg := env.GetAppConfig().GetEndpointConfigById(id)
 	dataSink := getCustomDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {

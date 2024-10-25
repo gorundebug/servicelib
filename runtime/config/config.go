@@ -11,13 +11,13 @@ import (
 	"github.com/gorundebug/servicelib/api"
 )
 
-type ServiceEnvironmentConfig interface {
-	GetConfig() *ServiceAppConfig
+type ServiceEnvironment interface {
+	GetAppConfig() *ServiceAppConfig
 	GetServiceConfig() *ServiceConfig
 }
 
 type Config interface {
-	GetServiceConfig() *ServiceAppConfig
+	GetAppConfig() *ServiceAppConfig
 }
 
 // ConfigSettings /*
@@ -190,11 +190,7 @@ func (cfg *ServiceAppConfig) InitRuntimeConfig() {
 	}
 }
 
-func (cfg *ServiceAppConfig) GetServiceConfig() *ServiceAppConfig {
-	return cfg
-}
-
-func (cfg *ServiceAppConfig) GetConfig() Config {
+func (cfg *ServiceAppConfig) GetAppConfig() *ServiceAppConfig {
 	return cfg
 }
 

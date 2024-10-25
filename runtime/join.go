@@ -145,7 +145,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -167,7 +167,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		ConsumedStream: ConsumedStream[R]{
 			StreamBase: StreamBase[R]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: MakeSerde[R](runtime),
 		},

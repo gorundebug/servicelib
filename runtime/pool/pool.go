@@ -18,14 +18,14 @@ type Pool interface {
 	Stop(ctx context.Context)
 }
 
-func MakeDelayTaskPool(cfg config.ServiceEnvironmentConfig, m metrics.Metrics) DelayPool {
+func MakeDelayTaskPool(cfg config.ServiceEnvironment, m metrics.Metrics) DelayPool {
 	return makeDelayPool(cfg, m)
 }
 
-func MakePriorityTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) PriorityTaskPool {
+func MakePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) PriorityTaskPool {
 	return makePriorityTaskPool(cfg, name, m)
 }
 
-func MakeTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) TaskPool {
+func MakeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) TaskPool {
 	return makeTaskPool(cfg, name, m)
 }

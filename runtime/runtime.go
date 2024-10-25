@@ -435,7 +435,7 @@ func IsKeyValueType[T any]() bool {
 
 func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) Caller[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	serviceConfig := env.GetServiceConfig()
 	consumer := source.GetConsumer()
 	link := cfg.GetLink(source.GetId(), consumer.GetId())

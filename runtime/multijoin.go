@@ -119,7 +119,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 
 	env := leftStream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -141,7 +141,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		ConsumedStream: ConsumedStream[R]{
 			StreamBase: StreamBase[R]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: MakeSerde[R](runtime),
 		},

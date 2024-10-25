@@ -138,7 +138,7 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := env.GetConfig().GetDataConnectorById(id)
+	cfg := env.GetAppConfig().GetDataConnectorById(id)
 	customDataSource := &CustomDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
 	}
@@ -148,7 +148,7 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 }
 
 func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.GetConfig().GetEndpointConfigById(id)
+	cfg := env.GetAppConfig().GetEndpointConfigById(id)
 	dataSource := getCustomDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {

@@ -40,7 +40,7 @@ type KeyByStream[T any, K comparable, V any] struct {
 func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream[T], f KeyByFunction[T, K, V]) *KeyByStream[T, K, V] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetConfig()
+	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
 		log.Fatalf("Config for the stream with name=%s does not exists", name)
@@ -50,7 +50,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 		ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
 			StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
 				environment: env,
-				config:      streamConfig,
+				id:          streamConfig.Id,
 			},
 			serde: MakeKeyValueSerde[K, V](runtime),
 		},

@@ -39,11 +39,11 @@ type TaskPoolImpl struct {
 	done             bool
 	cond             *sync.Cond
 	count            int
-	config           config.ServiceEnvironmentConfig
+	config           config.ServiceEnvironment
 }
 
-func makeTaskPool(cfg config.ServiceEnvironmentConfig, name string, m metrics.Metrics) TaskPool {
-	poolConfig := cfg.GetConfig().GetPoolByName(name)
+func makeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) TaskPool {
+	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("task pool '%s' does not exist.", name)
 		return nil
