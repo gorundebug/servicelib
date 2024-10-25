@@ -210,7 +210,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 		cfg := reflect.New(configType).Interface().(Cfg)
 
 		if err := viper.Unmarshal(cfg); err != nil {
-			log.Fatalf("fatal error config file: %s", err)
+			return fmt.Errorf("unmarshal config error: %s", err)
 		}
 
 		service.GetRuntime().serviceInit(name, service, l, cfg)
@@ -222,6 +222,8 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 		if err := l.watcher.Close(); err != nil {
 			log.Errorf("watcher close error: %s", err)
 		}
+
+		return err
 	}
 
 	l.wg.Add(1)
@@ -247,7 +249,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 					realValuesFile = currentValuesFile
 
 					if cfgMap, err := getConfigMap(realConfigFile, realValuesFile); err != nil {
-						log.Errorln(err)
+						log.Errorf("Reload config map error: %s", err)
 					} else {
 						if err := viper.MergeConfigMap(cfgMap); err != nil {
 							log.Errorf("Viper merge config error: %s", err)
