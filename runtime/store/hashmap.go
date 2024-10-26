@@ -9,7 +9,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 	"sync"
 	"time"
@@ -25,29 +24,30 @@ type Item struct {
 type HashMapJoinStorage[K comparable] struct {
 	storage1   map[K]*Item
 	storage2   map[K]*Item
-	ttl        time.Duration
 	rotateLock sync.RWMutex
 	lock       sync.RWMutex
 	timer      *time.Timer
-	renewTTL   bool
-	metrics    metrics.Metrics
+	config     JoinStorageConfig
 	gaugeCount metrics.Gauge
 }
 
-func MakeHashMapJoinStorage[K comparable](m metrics.Metrics, ttl time.Duration, renewTTL bool, streamName string) JoinStorage[K] {
+func MakeHashMapJoinStorage[K comparable](cfg JoinStorageConfig) JoinStorage[K] {
 	joinStorage := &HashMapJoinStorage[K]{
 		storage1: make(map[K]*Item),
-		ttl:      ttl,
-		renewTTL: renewTTL,
-		metrics:  m,
+		config:   cfg,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
-			Name: fmt.Sprintf("hashmap_join_storage_count{stream=\"%s\"}", streamName),
+			Name: "hashmap_join_storage_count",
 			Help: "Elements count stored in a join storage",
+			ConstLabels: metrics.Labels{
+				"service": cfg.GetServiceName(),
+				"name":    cfg.GetName(),
+			},
 		},
 	}
-	joinStorage.gaugeCount = m.Gauge(gaugeOpts)
+	joinStorage.gaugeCount = cfg.GetMetrics().Gauge(gaugeOpts)
+	ttl := cfg.GetTTL()
 	if ttl > 0 {
 		joinStorage.storage2 = make(map[K]*Item)
 		joinStorage.timer = time.AfterFunc(ttl, joinStorage.rotate)
@@ -62,11 +62,13 @@ func (s *HashMapJoinStorage[K]) rotate() {
 	s.gaugeCount.Sub(float64(len(s.storage2)))
 	s.storage2 = s.storage1
 	s.storage1 = newStorage
-	s.timer.Reset(s.ttl)
+	s.timer.Reset(s.config.GetTTL())
 }
 
 func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f JoinValueFunc) {
-	if s.ttl > 0 {
+	ttl := s.config.GetTTL()
+	renewTTL := s.config.GetRenewTTL()
+	if ttl > 0 {
 		s.rotateLock.RLock()
 		defer s.rotateLock.RUnlock()
 	}
@@ -80,7 +82,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 				if item != nil && time.Now().Before(item.deadline) {
 					return item, s.storage1
 				}
-				if item == nil && s.ttl > 0 {
+				if item == nil && ttl > 0 {
 					item = s.storage2[key]
 					if item != nil && time.Now().Before(item.deadline) {
 						return item, s.storage2
@@ -102,8 +104,8 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 			if item != nil && time.Now().Before(item.deadline) {
 				return item, s.storage1
 			}
-			if s.ttl > 0 {
-				newItem.deadline = time.Now().Add(s.ttl)
+			if ttl > 0 {
+				newItem.deadline = time.Now().Add(ttl)
 			}
 			s.storage1[key] = newItem
 			if item == nil {
@@ -126,13 +128,13 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 					defer s.lock.Unlock()
 					delete(storage, key)
 					s.gaugeCount.Dec()
-				} else if s.renewTTL { //Depend on logic: should we extend deadline after change or not
+				} else if renewTTL { //Depend on logic: should we extend deadline after change or not
 					s.lock.Lock()
 					defer s.lock.Unlock()
 					if &storage != &s.storage1 {
 						delete(storage, key)
 					}
-					item.deadline = time.Now().Add(s.ttl)
+					item.deadline = time.Now().Add(ttl)
 					s.storage1[key] = item
 				}
 				return true

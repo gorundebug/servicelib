@@ -13,6 +13,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
+	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -139,6 +140,34 @@ func (s *JoinStream[K, T1, T2, R]) Out(value R) {
 	}
 }
 
+func (s *JoinStream[K, T1, T2, R]) GetJoinStorageType() api.JoinStorageType {
+	return *s.GetConfig().JoinStorage
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetTTL() time.Duration {
+	ttl := time.Duration(0)
+	if s.GetConfig().Ttl != nil {
+		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
+	}
+	return ttl
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetRenewTTL() bool {
+	renewTTL := false
+	if s.GetConfig().RenewTTL != nil {
+		renewTTL = *s.GetConfig().RenewTTL
+	}
+	return renewTTL
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetServiceName() string {
+	return s.environment.GetServiceConfig().Name
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetMetrics() metrics.Metrics {
+	return s.environment.GetMetrics()
+}
+
 func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream[datastruct.KeyValue[K, T1]],
 	streamRight TypedStream[datastruct.KeyValue[K, T2]],
 	f JoinFunction[K, T1, T2, R]) *JoinStream[K, T1, T2, R] {
@@ -155,14 +184,6 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		log.Fatalf("Join storage type is undefined for the stream '%s", name)
 		return nil
 	}
-	ttl := time.Duration(0)
-	if streamConfig.Ttl != nil {
-		ttl = time.Duration(*streamConfig.Ttl) * time.Millisecond
-	}
-	renewTTL := false
-	if streamConfig.RenewTTL != nil {
-		renewTTL = *streamConfig.RenewTTL
-	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: ConsumedStream[R]{
 			StreamBase: StreamBase[R]{
@@ -174,11 +195,11 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		f: JoinFunctionContext[K, T1, T2, R]{
 			f: f,
 		},
-		serdeIn:     stream.GetSerde(),
-		source:      stream,
-		joinStorage: store.MakeJoinStorage[K](env.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
-		joinType:    *streamConfig.JoinType,
+		serdeIn:  stream.GetSerde(),
+		source:   stream,
+		joinType: *streamConfig.JoinType,
 	}
+	joinStream.joinStorage = store.MakeJoinStorage[K](joinStream)
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)

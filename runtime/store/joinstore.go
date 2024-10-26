@@ -21,12 +21,21 @@ type JoinStorage[K comparable] interface {
 	JoinValue(key K, index int, value interface{}, f JoinValueFunc)
 }
 
-func MakeJoinStorage[K comparable](m metrics.Metrics, storageType api.JoinStorageType, ttl time.Duration, renewTTL bool, streamName string) JoinStorage[K] {
-	switch storageType {
+type JoinStorageConfig interface {
+	GetJoinStorageType() api.JoinStorageType
+	GetTTL() time.Duration
+	GetRenewTTL() bool
+	GetName() string
+	GetServiceName() string
+	GetMetrics() metrics.Metrics
+}
+
+func MakeJoinStorage[K comparable](cfg JoinStorageConfig) JoinStorage[K] {
+	switch cfg.GetJoinStorageType() {
 	case api.HashMap:
-		return MakeHashMapJoinStorage[K](m, ttl, renewTTL, streamName)
+		return MakeHashMapJoinStorage[K](cfg)
 	default:
-		log.Fatalf("Join storage type %d is not supported", storageType)
+		log.Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
 		return nil
 	}
 }

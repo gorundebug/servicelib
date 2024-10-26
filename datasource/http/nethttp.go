@@ -236,7 +236,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) 
 
 func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != ep.method {
-		errText := fmt.Sprintf("Invalid request method %q for endpoint '%s' with path '%s'",
+		errText := fmt.Sprintf("Invalid request method %q for endpoint %q with path %q",
 			r.Method, ep.GetName(),
 			*ep.GetConfig().Path)
 		http.Error(w, errText,
