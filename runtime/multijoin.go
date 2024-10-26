@@ -8,10 +8,12 @@
 package runtime
 
 import (
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
+	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -129,14 +131,6 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		log.Fatalf("Join storage type is undefined for the stream '%s", name)
 		return nil
 	}
-	ttl := time.Duration(0)
-	if streamConfig.Ttl != nil {
-		ttl = time.Duration(*streamConfig.Ttl) * time.Millisecond
-	}
-	renewTTL := false
-	if streamConfig.RenewTTL != nil {
-		renewTTL = *streamConfig.RenewTTL
-	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: ConsumedStream[R]{
 			StreamBase: StreamBase[R]{
@@ -150,8 +144,8 @@ func MakeMultiJoinStream[K comparable, T, R any](
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
-		joinStorage: store.MakeJoinStorage[K](env.GetMetrics(), *streamConfig.JoinStorage, ttl, renewTTL, streamConfig.Name),
 	}
+	multiJoinStream.joinStorage = store.MakeJoinStorage[K](multiJoinStream)
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
@@ -181,4 +175,32 @@ func (s *MultiJoinStream[K, T, R]) Out(value R) {
 	if s.caller != nil {
 		s.caller.Consume(value)
 	}
+}
+
+func (s *MultiJoinStream[K, T, R]) GetJoinStorageType() api.JoinStorageType {
+	return *s.GetConfig().JoinStorage
+}
+
+func (s *MultiJoinStream[K, T, R]) GetTTL() time.Duration {
+	ttl := time.Duration(0)
+	if s.GetConfig().Ttl != nil {
+		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
+	}
+	return ttl
+}
+
+func (s *MultiJoinStream[K, T, R]) GetRenewTTL() bool {
+	renewTTL := false
+	if s.GetConfig().RenewTTL != nil {
+		renewTTL = *s.GetConfig().RenewTTL
+	}
+	return renewTTL
+}
+
+func (s *MultiJoinStream[K, T, R]) GetServiceName() string {
+	return s.environment.GetServiceConfig().Name
+}
+
+func (s *MultiJoinStream[K, T, R]) GetMetrics() metrics.Metrics {
+	return s.environment.GetMetrics()
 }
