@@ -38,7 +38,6 @@ var englishUpperCaser = cases.Upper(language.English)
 type ServiceApp struct {
 	id                int
 	config            atomic.Pointer[config.ServiceAppConfig]
-	serviceConfig     atomic.Pointer[config.ServiceConfig]
 	environment       ServiceExecutionEnvironment
 	streams           map[int]Stream
 	dataSources       map[int]DataSource
@@ -66,9 +65,7 @@ func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
 
 func (app *ServiceApp) reloadConfig(cfg config.Config) {
 	appConfig := cfg.GetAppConfig()
-	appConfig.InitRuntimeConfig()
 	app.config.Store(appConfig)
-	app.serviceConfig.Store(appConfig.GetServiceConfigById(app.id))
 	app.environment.SetConfig(cfg)
 }
 
@@ -77,7 +74,7 @@ func (app *ServiceApp) GetAppConfig() *config.ServiceAppConfig {
 }
 
 func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
-	return app.serviceConfig.Load()
+	return app.getConfig().GetServiceConfigById(app.id)
 }
 
 func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
@@ -111,16 +108,13 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) {
+func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) error {
 	appConfig := cfg.GetAppConfig()
-	appConfig.InitRuntimeConfig()
-	app.config.Store(appConfig)
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
-		log.Fatalf("Cannot find service config for %s", name)
-		return
+		return fmt.Errorf("cannot find service config for %s", name)
 	}
-	app.serviceConfig.Store(serviceConfig)
+	app.config.Store(appConfig)
 	app.id = serviceConfig.Id
 	app.loader = loader
 	app.metrics = telemetry.CreateMetrics(serviceConfig.MetricsEngine, serviceConfig.Environment)
@@ -154,37 +148,37 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 				callSemantics = link.CallSemantics
 			} else {
 				if link.IncomeCallSemantics == nil {
-					log.Fatalf("income call semantics does not defined for link{from=%d, to=%d}", link.From, link.To)
+					return fmt.Errorf("income call semantics does not defined for link{from=%d, to=%d}", link.From, link.To)
 				}
 				callSemantics = *link.IncomeCallSemantics
 			}
 			if callSemantics != api.FunctionCall &&
 				callSemantics != api.PriorityTaskPool &&
 				callSemantics != api.TaskPool {
-				log.Fatalf("invalid call semantics %d defined for link{from=%d, to=%d}", callSemantics, link.From, link.To)
+				return fmt.Errorf("invalid call semantics %d defined for link{from=%d, to=%d}", callSemantics, link.From, link.To)
 			}
 			if callSemantics != api.FunctionCall {
 				var poolName string
 				if streamFrom.IdService == serviceConfig.Id {
 					if link.PoolName == nil {
-						log.Fatalf("pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
+						return fmt.Errorf("pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
 					}
 					if callSemantics == api.PriorityTaskPool && link.Priority == nil {
-						log.Fatalf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
+						return fmt.Errorf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
 					}
 					poolName = *link.PoolName
 				} else {
 					if link.IncomePoolName == nil {
-						log.Fatalf("income pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
+						return fmt.Errorf("income pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
 					}
 					if callSemantics == api.PriorityTaskPool && link.IncomePriority == nil {
-						log.Fatalf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
+						return fmt.Errorf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
 					}
 					poolName = *link.IncomePoolName
 				}
 				poolConfig := appConfig.GetPoolByName(poolName)
 				if poolConfig == nil {
-					log.Fatalf("task pool '%s' not found for link{from=%d, to=%d}", poolName, link.From, link.To)
+					return fmt.Errorf("task pool %q not found for link{from=%d, to=%d}", poolName, link.From, link.To)
 				}
 				if callSemantics == api.TaskPool {
 					if _, ok := app.taskPools[poolName]; !ok {
@@ -195,12 +189,14 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(app, poolName, app.metrics)
 					}
 				} else {
-					log.Fatalf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)
+					return fmt.Errorf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)
 				}
 			}
 		}
 	}
 	env.SetConfig(cfg)
+
+	return nil
 }
 
 //go:embed status.html
@@ -391,7 +387,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		return err
 	}
 	go func() {
-		log.Infof("Monitoring for service '%s' listening at %v", serviceConfig.Name, app.httpServer.Addr)
+		log.Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
 
 		err := app.httpServer.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -482,7 +478,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-app.httpServerDone:
 		case <-ctx.Done():
-			log.Warnf("Monitoring server stop timeout for service '%s'. %s", serviceConfig.Name, ctx.Err().Error())
+			log.Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}()
 
@@ -498,7 +494,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		log.Warnf("ServiceApp '%s' stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+		log.Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -521,7 +517,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			log.Warnf("ServiceApp '%s' stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+			log.Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
 }

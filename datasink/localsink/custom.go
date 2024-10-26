@@ -68,7 +68,7 @@ func (ds *CustomDataSink) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		log.Warnf("Stop custom datasink '%s' after timeout.", ds.GetName())
+		log.Warnf("Stop custom datasink %q after timeout.", ds.GetName())
 	}
 }
 

@@ -129,7 +129,7 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		log.Warnf("Stop custom datasource '%s' after timeout.", ds.GetName())
+		log.Warnf("Stop custom datasource %q after timeout.", ds.GetName())
 	}
 }
 

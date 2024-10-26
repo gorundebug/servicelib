@@ -46,7 +46,7 @@ type ServiceLoader interface {
 
 type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
-	serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, config config.Config)
+	serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, config config.Config) error
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
 	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
@@ -152,7 +152,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 
 	_, err = os.Stat(configFileName)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("config file '%s' does not exist", configFileName)
+		return fmt.Errorf("config file %q does not exist", configFileName)
 	}
 
 	valuesFileName, err := getPath(*valuesPathArg)
@@ -162,7 +162,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 
 	_, err = os.Stat(valuesFileName)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("config values file '%s' does not exist", valuesFileName)
+		return fmt.Errorf("config values file %q does not exist", valuesFileName)
 	}
 
 	viper.SetConfigType("yaml")
@@ -207,9 +207,8 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 			return fmt.Errorf("unmarshal config error: %s", err)
 		}
 
-		service.GetRuntime().serviceInit(name, service, l, cfg)
-
-		return nil
+		cfg.GetAppConfig().InitRuntimeConfig()
+		return service.GetRuntime().serviceInit(name, service, l, cfg)
 	}()
 
 	if err != nil {
@@ -248,6 +247,7 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 							if err := viper.Unmarshal(cfg); err != nil {
 								log.Errorf("Viper unmarshal config error: %s", err)
 							} else {
+								cfg.GetAppConfig().InitRuntimeConfig()
 								service.GetRuntime().reloadConfig(cfg)
 							}
 						}
@@ -274,7 +274,7 @@ func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](nam
 
 	loader := &serviceLoader[Environment, Cfg]{}
 	if err := loader.init(service, name, configSettings); err != nil {
-		log.Fatalf("make server error: %s", err)
+		log.Fatalf("make service %q error: %s", name, err)
 	}
 	return service
 }

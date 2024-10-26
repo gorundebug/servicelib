@@ -1123,12 +1123,12 @@ func (s *StubSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
 
 func (s *StubSerde[T]) Serialize(T, []byte) ([]byte, error) {
 
-	log.Fatalf("serde for type '%s' is not implemented", GetSerdeTypeName[T]())
+	log.Fatalf("serde for type %q is not implemented", GetSerdeTypeName[T]())
 	return []byte{}, nil
 }
 
 func (s *StubSerde[T]) Deserialize([]byte) (T, error) {
-	log.Fatalf("serde for type '%s' is not implemented", GetSerdeTypeName[T]())
+	log.Fatalf("serde for type %q is not implemented", GetSerdeTypeName[T]())
 	var t T
 	return t, nil
 }

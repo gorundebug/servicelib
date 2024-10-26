@@ -198,7 +198,7 @@ func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
 	select {
 	case <-ds.done:
 	case <-ctx.Done():
-		log.Warnf("Stop HTTP server for data source '%s' after timeout. %s", ds.GetName(), ctx.Err().Error())
+		log.Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
 	}
 }
 
@@ -236,7 +236,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) 
 
 func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != ep.method {
-		errText := fmt.Sprintf("Invalid request method '%s' for endpoint '%s' with path '%s'",
+		errText := fmt.Sprintf("Invalid request method %q for endpoint '%s' with path '%s'",
 			r.Method, ep.GetName(),
 			*ep.GetConfig().Path)
 		http.Error(w, errText,
@@ -282,12 +282,12 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 		query := requestData.GetQuery()
 		data := query.Get(*ec.param)
 		if data == "" {
-			return fmt.Errorf("missing '%s' parameter", *ec.param)
+			return fmt.Errorf("missing %q parameter", *ec.param)
 		}
 		var err error
 		t, err = ec.DeserializeJson(data)
 		if err != nil {
-			return fmt.Errorf("error deserializing '%s' parameter: %s", *ec.param, err.Error())
+			return fmt.Errorf("error deserializing %q parameter: %s", *ec.param, err.Error())
 		}
 	}
 	ec.Consume(t)
@@ -355,7 +355,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		netHTTPEndpointConsumer = endpointConsumer
 
 	default:
-		log.Fatalf("Unknown endpoint format '%s' for endpoint '%s'.",
+		log.Fatalf("Unknown endpoint format %q for endpoint %q.",
 			*endpoint.GetConfig().Format, endpoint.GetName())
 	}
 
