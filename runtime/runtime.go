@@ -55,6 +55,7 @@ type ServiceExecutionRuntime interface {
 	registerStorage(storage store.Storage)
 	getTaskPool(name string) pool.TaskPool
 	getPriorityTaskPool(name string) pool.PriorityTaskPool
+	getLog() *log.Logger
 }
 
 func getPath(argPath string) (string, error) {
@@ -101,12 +102,12 @@ func replacePlaceholders(config interface{}, values map[string]interface{}) inte
 	}
 }
 
-func getConfigData(cfg map[string]any) io.Reader {
+func getConfigData(cfg map[string]any) (io.Reader, error) {
 	output, err := yaml.Marshal(cfg)
 	if err != nil {
-		log.Fatalf("Error marshaling config to YAML: %s", err)
+		return nil, fmt.Errorf("error marshaling config to YAML: %s", err)
 	}
-	return bytes.NewReader(output)
+	return bytes.NewReader(output), nil
 }
 
 func getConfigMap(configData []byte, configValuesFile string) (map[string]any, error) {
@@ -196,7 +197,12 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 			return fmt.Errorf("get config map error: %s", err)
 		}
 
-		err = viper.ReadConfig(getConfigData(cfgMap))
+		reader, err := getConfigData(cfgMap)
+		if err != nil {
+			return fmt.Errorf("get config data error: %s", err)
+		}
+
+		err = viper.ReadConfig(reader)
 		if err != nil {
 			return fmt.Errorf("viper read config error: %s\n", err)
 		}
@@ -314,7 +320,11 @@ func makeTypedArraySerde[T any](runtime ServiceExecutionRuntime) (serde.Serializ
 	if err != nil {
 		return nil, err
 	}
-	return serde.MakeTypedArraySerde[T](serElm), nil
+	arrSer, err := serde.MakeTypedArraySerde[T](serElm)
+	if err != nil {
+		runtime.getLog().Fatalln(err)
+	}
+	return arrSer, err
 }
 
 func makeTypedMapSerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer, error) {
@@ -610,7 +620,7 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 
 func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
-		log.Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
+		consumer.GetEnvironment().GetLog().Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
 	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.environment, s)

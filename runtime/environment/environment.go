@@ -10,10 +10,12 @@ package environment
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	log "github.com/sirupsen/logrus"
 )
 
 type ServiceEnvironment interface {
 	GetAppConfig() *config.ServiceAppConfig
 	GetServiceConfig() *config.ServiceConfig
 	GetMetrics() metrics.Metrics
+	GetLog() *log.Logger
 }

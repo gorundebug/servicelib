@@ -53,6 +53,7 @@ type ServiceApp struct {
 	taskPools         map[string]pool.TaskPool
 	priorityTaskPools map[string]pool.PriorityTaskPool
 	loader            ServiceLoader
+	log               *log.Logger
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
@@ -108,9 +109,18 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
+func (app *ServiceApp) GetLog() *log.Logger {
+	return app.getLog()
+}
+
+func (app *ServiceApp) getLog() *log.Logger {
+	return app.log
+}
+
 func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) error {
 	appConfig := cfg.GetAppConfig()
 	serviceConfig := appConfig.GetServiceConfigByName(name)
+	app.log = log.StandardLogger()
 	if serviceConfig == nil {
 		return fmt.Errorf("cannot find service config for %s", name)
 	}
