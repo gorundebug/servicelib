@@ -9,8 +9,8 @@ package pool
 
 import (
 	"context"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"runtime"
 	"sync"
@@ -39,11 +39,11 @@ type TaskPoolImpl struct {
 	done             bool
 	cond             *sync.Cond
 	count            int
-	config           config.ServiceEnvironment
+	environment      environment.ServiceEnvironment
 }
 
-func makeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) TaskPool {
-	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
+func makeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
+	poolConfig := env.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("task pool %q does not exist.", name)
 		return nil
@@ -52,8 +52,7 @@ func makeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics)
 	pool := &TaskPoolImpl{
 		name:           name,
 		executorsCount: poolConfig.ExecutorsCount,
-		metrics:        m,
-		config:         cfg,
+		environment:    env,
 	}
 	if pool.executorsCount == 0 {
 		pool.executorsCount = runtime.NumCPU()
@@ -63,11 +62,12 @@ func makeTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics)
 			Name: "task_pool_queue_length",
 			Help: "Task pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": cfg.GetServiceConfig().Name,
+				"service": env.GetServiceConfig().Name,
 				"name":    name,
 			},
 		},
 	}
+	m := env.GetMetrics()
 	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool

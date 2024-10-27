@@ -9,7 +9,7 @@ package store
 
 import (
 	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -26,14 +26,12 @@ type JoinStorageConfig interface {
 	GetTTL() time.Duration
 	GetRenewTTL() bool
 	GetName() string
-	GetServiceName() string
-	GetMetrics() metrics.Metrics
 }
 
-func MakeJoinStorage[K comparable](cfg JoinStorageConfig) JoinStorage[K] {
+func MakeJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinStorageConfig) JoinStorage[K] {
 	switch cfg.GetJoinStorageType() {
 	case api.HashMap:
-		return MakeHashMapJoinStorage[K](cfg)
+		return MakeHashMapJoinStorage[K](env, cfg)
 	default:
 		log.Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
 		return nil

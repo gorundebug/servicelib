@@ -10,8 +10,8 @@ package pool
 import (
 	"container/heap"
 	"context"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"runtime"
 	"sync"
@@ -73,21 +73,19 @@ type DelayPoolImpl struct {
 	tasksLock               sync.Mutex
 	done                    bool
 	stop                    bool
-	metrics                 metrics.Metrics
 	gaugeWaitQueueLength    metrics.Gauge
 	gaugeExecuteQueueLength metrics.Gauge
 	head                    *DelayTask
 	tail                    *DelayTask
 	count                   int
-	config                  config.ServiceEnvironment
+	environment             environment.ServiceEnvironment
 }
 
-func makeDelayPool(cfg config.ServiceEnvironment, m metrics.Metrics) DelayPool {
+func makeDelayPool(env environment.ServiceEnvironment) DelayPool {
 	pool := &DelayPoolImpl{
-		executorsCount: cfg.GetServiceConfig().DelayExecutors,
+		executorsCount: env.GetServiceConfig().DelayExecutors,
 		pq:             &DelayTaskPriorityQueue{},
-		metrics:        m,
-		config:         cfg,
+		environment:    env,
 	}
 	if pool.executorsCount == 0 {
 		pool.executorsCount = runtime.NumCPU()
@@ -97,17 +95,18 @@ func makeDelayPool(cfg config.ServiceEnvironment, m metrics.Metrics) DelayPool {
 			Name: "delay_pool_wait_queue_length",
 			Help: "Delay pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": cfg.GetServiceConfig().Name,
+				"service": env.GetServiceConfig().Name,
 			},
 		},
 	}
+	m := env.GetMetrics()
 	pool.gaugeWaitQueueLength = m.Gauge(gaugeOpts)
 	gaugeOpts = metrics.GaugeOpts{
 		Opts: metrics.Opts{
 			Name: "delay_pool_execute_queue_length",
 			Help: "Delay pool execute queue length",
 			ConstLabels: metrics.Labels{
-				"service": cfg.GetServiceConfig().Name,
+				"service": env.GetServiceConfig().Name,
 			},
 		},
 	}
