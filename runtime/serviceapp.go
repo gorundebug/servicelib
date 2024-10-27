@@ -126,7 +126,7 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.delayPool = pool.MakeDelayTaskPool(app, app.metrics)
+	app.delayPool = pool.MakeDelayTaskPool(app)
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 	app.httpServer = http.Server{
@@ -182,11 +182,11 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 				}
 				if callSemantics == api.TaskPool {
 					if _, ok := app.taskPools[poolName]; !ok {
-						app.taskPools[poolName] = pool.MakeTaskPool(app, poolName, app.metrics)
+						app.taskPools[poolName] = pool.MakeTaskPool(app, poolName)
 					}
 				} else if callSemantics == api.PriorityTaskPool {
 					if _, ok := app.priorityTaskPools[poolName]; !ok {
-						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(app, poolName, app.metrics)
+						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(app, poolName)
 					}
 				} else {
 					return fmt.Errorf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)

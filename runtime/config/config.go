@@ -11,11 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/api"
 )
 
-type ServiceEnvironment interface {
-	GetAppConfig() *ServiceAppConfig
-	GetServiceConfig() *ServiceConfig
-}
-
 type Config interface {
 	GetAppConfig() *ServiceAppConfig
 }

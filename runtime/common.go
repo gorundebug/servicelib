@@ -11,15 +11,15 @@ import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
 	"io"
 	"reflect"
 	"time"
 )
 
 type ServiceExecutionEnvironment interface {
-	config.ServiceEnvironment
+	environment.ServiceEnvironment
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	StreamsInit(ctx context.Context)
 	SetConfig(config config.Config)
@@ -32,7 +32,6 @@ type ServiceExecutionEnvironment interface {
 	GetConsumeTimeout(from int, to int) time.Duration
 	GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader
 	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
-	GetMetrics() metrics.Metrics
 	Delay(duration time.Duration, f func())
 	GetRuntime() ServiceExecutionRuntime
 }

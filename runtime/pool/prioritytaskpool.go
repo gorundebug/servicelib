@@ -10,7 +10,7 @@ package pool
 import (
 	"container/heap"
 	"context"
-	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"runtime"
@@ -33,16 +33,15 @@ type PriorityTaskPoolImpl struct {
 	name             string
 	executorsCount   int
 	pq               *TaskPriorityQueue
-	metrics          metrics.Metrics
 	gaugeQueueLength metrics.Gauge
 	wg               sync.WaitGroup
 	done             bool
 	cond             *sync.Cond
-	config           config.ServiceEnvironment
+	environment      environment.ServiceEnvironment
 }
 
-func makePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.Metrics) PriorityTaskPool {
-	poolConfig := cfg.GetAppConfig().GetPoolByName(name)
+func makePriorityTaskPool(env environment.ServiceEnvironment, name string) PriorityTaskPool {
+	poolConfig := env.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
 		log.Fatalf("priority task pool %q does not exist.", name)
 		return nil
@@ -51,8 +50,7 @@ func makePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.
 		name:           name,
 		executorsCount: poolConfig.ExecutorsCount,
 		pq:             &TaskPriorityQueue{},
-		metrics:        m,
-		config:         cfg,
+		environment:    env,
 	}
 	if pool.executorsCount == 0 {
 		pool.executorsCount = runtime.NumCPU()
@@ -62,11 +60,12 @@ func makePriorityTaskPool(cfg config.ServiceEnvironment, name string, m metrics.
 			Name: "priority_task_pool_queue_length",
 			Help: "Priority task pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": cfg.GetServiceConfig().Name,
+				"service": env.GetServiceConfig().Name,
 				"name":    name,
 			},
 		},
 	}
+	m := env.GetMetrics()
 	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool
