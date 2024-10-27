@@ -9,7 +9,7 @@ package prometeus
 
 import (
 	"fmt"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )

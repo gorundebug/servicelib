@@ -9,8 +9,8 @@ package telemetry
 
 import (
 	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
-	"github.com/gorundebug/servicelib/telemetry/prometeus"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/telemetry/prometeus"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -13,7 +13,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -160,14 +159,6 @@ func (s *JoinStream[K, T1, T2, R]) GetRenewTTL() bool {
 	return renewTTL
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetServiceName() string {
-	return s.environment.GetServiceConfig().Name
-}
-
-func (s *JoinStream[K, T1, T2, R]) GetMetrics() metrics.Metrics {
-	return s.environment.GetMetrics()
-}
-
 func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream[datastruct.KeyValue[K, T1]],
 	streamRight TypedStream[datastruct.KeyValue[K, T2]],
 	f JoinFunction[K, T1, T2, R]) *JoinStream[K, T1, T2, R] {
@@ -199,7 +190,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}
-	joinStream.joinStorage = store.MakeJoinStorage[K](joinStream)
+	joinStream.joinStorage = store.MakeJoinStorage[K](env, joinStream)
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)

@@ -9,7 +9,7 @@ package environment
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 )
 
 type ServiceEnvironment interface {

@@ -9,7 +9,8 @@ package store
 
 import (
 	"context"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 	"sync"
 	"time"
 )
@@ -22,31 +23,33 @@ type Item struct {
 }
 
 type HashMapJoinStorage[K comparable] struct {
-	storage1   map[K]*Item
-	storage2   map[K]*Item
-	rotateLock sync.RWMutex
-	lock       sync.RWMutex
-	timer      *time.Timer
-	config     JoinStorageConfig
-	gaugeCount metrics.Gauge
+	storage1    map[K]*Item
+	storage2    map[K]*Item
+	rotateLock  sync.RWMutex
+	lock        sync.RWMutex
+	timer       *time.Timer
+	config      JoinStorageConfig
+	gaugeCount  metrics.Gauge
+	environment environment.ServiceEnvironment
 }
 
-func MakeHashMapJoinStorage[K comparable](cfg JoinStorageConfig) JoinStorage[K] {
+func MakeHashMapJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinStorageConfig) JoinStorage[K] {
 	joinStorage := &HashMapJoinStorage[K]{
-		storage1: make(map[K]*Item),
-		config:   cfg,
+		storage1:    make(map[K]*Item),
+		environment: env,
+		config:      cfg,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
 			Name: "hashmap_join_storage_count",
 			Help: "Elements count stored in a join storage",
 			ConstLabels: metrics.Labels{
-				"service": cfg.GetServiceName(),
+				"service": env.GetServiceConfig().Name,
 				"name":    cfg.GetName(),
 			},
 		},
 	}
-	joinStorage.gaugeCount = cfg.GetMetrics().Gauge(gaugeOpts)
+	joinStorage.gaugeCount = env.GetMetrics().Gauge(gaugeOpts)
 	ttl := cfg.GetTTL()
 	if ttl > 0 {
 		joinStorage.storage2 = make(map[K]*Item)

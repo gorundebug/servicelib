@@ -11,7 +11,7 @@ import (
 	"container/heap"
 	"context"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
 	log "github.com/sirupsen/logrus"
 	"runtime"
 	"sync"
