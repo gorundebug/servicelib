@@ -43,6 +43,7 @@ func (s *MockService) StreamsInit(ctx context.Context) {
 func (s *MockService) SetConfig(config config.Config) {}
 
 func mockService(environment string) *MockService {
+
 	cfg := MockServiceConfig{
 		ServiceAppConfig: config.ServiceAppConfig{
 			Services: []config.ServiceConfig{
@@ -61,11 +62,13 @@ func mockService(environment string) *MockService {
 	}
 	cfg.InitRuntimeConfig()
 	service := MockService{}
-	if err := service.serviceInit("MockService", &service, &MockServiceLoader{}, &cfg); err != nil {
+	if err := service.serviceInit("MockService", &service, nil, &MockServiceLoader{}, &cfg); err != nil {
 		panic(err)
 	}
 	return &service
 }
+
+var testMockService = mockService("TestEnvironment")
 
 func TestIsKeyValueType(t *testing.T) {
 	assert.Equal(t, true, IsKeyValueType[datastruct.KeyValue[int, int]]())
@@ -73,7 +76,7 @@ func TestIsKeyValueType(t *testing.T) {
 }
 
 func TestArraySerde(t *testing.T) {
-	arraySer := MakeSerde[[]int](mockService("TestArraySerde"))
+	arraySer := MakeSerde[[]int](testMockService)
 	arr := []int{1, 2, 3}
 	data, err := arraySer.Serialize(arr)
 	assert.Equal(t, err, nil, err)
@@ -83,7 +86,7 @@ func TestArraySerde(t *testing.T) {
 }
 
 func TestArrayArraySerde(t *testing.T) {
-	arraySer := MakeSerde[[][]int32](mockService("TestArrayArraySerde"))
+	arraySer := MakeSerde[[][]int32](testMockService)
 	arr := [][]int32{{1, 2, 3}, {1, 2, 3}}
 	data, err := arraySer.Serialize(arr)
 	assert.Equal(t, err, nil, err)
@@ -94,7 +97,7 @@ func TestArrayArraySerde(t *testing.T) {
 
 func TestIntPtrSerde(t *testing.T) {
 	t.Skip()
-	mapSer := MakeSerde[*int](mockService("TestMapSerde"))
+	mapSer := MakeSerde[*int](testMockService)
 	v := 1
 	data, err := mapSer.Serialize(&v)
 	assert.Equal(t, err, nil, err)
@@ -104,7 +107,7 @@ func TestIntPtrSerde(t *testing.T) {
 }
 
 func TestMapSerde(t *testing.T) {
-	mapSer := MakeSerde[map[int]int](mockService("TestMapSerde"))
+	mapSer := MakeSerde[map[int]int](testMockService)
 	dict := map[int]int{1: 1, 2: 2, 3: 3}
 	data, err := mapSer.Serialize(dict)
 	assert.Equal(t, err, nil, err)
@@ -114,7 +117,7 @@ func TestMapSerde(t *testing.T) {
 }
 
 func TestMapMapSerde(t *testing.T) {
-	mapSer := MakeSerde[map[int]map[int]int](mockService("TestMapMapSerde"))
+	mapSer := MakeSerde[map[int]map[int]int](testMockService)
 	dict := map[int]map[int]int{1: {1: 1, 2: 2}, 2: {3: 3, 4: 4}}
 	data, err := mapSer.Serialize(dict)
 	assert.Equal(t, err, nil, err)

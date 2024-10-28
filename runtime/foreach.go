@@ -7,10 +7,6 @@
 
 package runtime
 
-import (
-	log "github.com/sirupsen/logrus"
-)
-
 type ForEachFunction[T any] interface {
 	ForEach(Stream, T)
 }
@@ -39,7 +35,7 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	forEachStream := &ForEachStream[T]{

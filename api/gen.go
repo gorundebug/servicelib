@@ -86,6 +86,11 @@ const (
 	Right JoinType = 3
 )
 
+// Defines values for LogsEngine.
+const (
+	Logrus LogsEngine = 1
+)
+
 // Defines values for MetricsEngine.
 const (
 	Prometeus MetricsEngine = 1
@@ -194,6 +199,9 @@ type Link struct {
 	To                           int                    `json:"to"`
 }
 
+// LogsEngine defines model for LogsEngine.
+type LogsEngine int
+
 // MetricsEngine defines model for MetricsEngine.
 type MetricsEngine int
 
@@ -223,6 +231,7 @@ type Service struct {
 	GrpcHost             string              `json:"grpcHost"`
 	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`
+	LogEngine            *LogsEngine         `json:"logEngine,omitempty"`
 	MetricsEngine        MetricsEngine       `json:"metricsEngine"`
 	MonitoringHost       string              `json:"monitoringHost"`
 	MonitoringPort       int                 `json:"monitoringPort"`
@@ -330,7 +339,7 @@ type UnescapedCookieParamError struct {
 }
 
 func (e *UnescapedCookieParamError) Error() string {
-	return fmt.Sprintf("error unescaping cookie parameter %q", e.ParamName)
+	return fmt.Sprintf("error unescaping cookie parameter '%s'", e.ParamName)
 }
 
 func (e *UnescapedCookieParamError) Unwrap() error {

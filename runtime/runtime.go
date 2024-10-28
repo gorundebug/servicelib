@@ -15,10 +15,11 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 	"io"
@@ -46,7 +47,10 @@ type ServiceLoader interface {
 
 type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
-	serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, config config.Config) error
+	serviceInit(name string, env ServiceExecutionEnvironment,
+		dep environment.ServiceDependency,
+		loader ServiceLoader,
+		config config.Config) error
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
 	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
@@ -55,7 +59,7 @@ type ServiceExecutionRuntime interface {
 	registerStorage(storage store.Storage)
 	getTaskPool(name string) pool.TaskPool
 	getPriorityTaskPool(name string) pool.PriorityTaskPool
-	getLog() *log.Logger
+	getLog() log.Logger
 }
 
 func getPath(argPath string) (string, error) {
@@ -133,15 +137,22 @@ func getConfigMap(configData []byte, configValuesFile string) (map[string]any, e
 type serviceLoader[Environment ServiceExecutionEnvironment, Cfg config.Config] struct {
 	watcher *fsnotify.Watcher
 	wg      sync.WaitGroup
+	service Environment
 }
 
 func (l *serviceLoader[Environment, Cfg]) Stop() {
 	if err := l.watcher.Close(); err != nil {
-		log.Warnf("watcher close error: %s", err)
+		l.service.GetLog().Warnf("watcher close error: %s", err)
 	}
 }
 
-func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string, configSettings *config.ConfigSettings) error {
+func (l *serviceLoader[Environment, Cfg]) init(name string,
+	dep environment.ServiceDependency,
+	configSettings *config.ConfigSettings) error {
+
+	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
+	l.service = reflect.New(serviceType).Interface().(Environment)
+
 	valuesPathArg := flag.String("values", "./values.yaml", "service config values path")
 	configPathArg := flag.String("config", "./config.yaml", "service config path")
 	flag.Parse()
@@ -214,13 +225,11 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 		}
 
 		cfg.GetAppConfig().InitRuntimeConfig()
-		return service.GetRuntime().serviceInit(name, service, l, cfg)
+		return l.service.GetRuntime().serviceInit(name, l.service, dep, l, cfg)
 	}()
 
 	if err != nil {
-		if err := l.watcher.Close(); err != nil {
-			log.Errorf("watcher close error: %s", err)
-		}
+		_ = l.watcher.Close()
 		return err
 	}
 
@@ -244,17 +253,17 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 					realValuesFile = currentValuesFile
 
 					if cfgMap, err := getConfigMap(configData, realValuesFile); err != nil {
-						log.Errorf("Reload config map error: %s", err)
+						l.service.GetLog().Errorf("Reload config map error: %s", err)
 					} else {
 						if err := viper.MergeConfigMap(cfgMap); err != nil {
-							log.Errorf("Viper merge config error: %s", err)
+							l.service.GetLog().Errorf("Viper merge config error: %s", err)
 						} else {
 							cfg := reflect.New(configType).Interface().(Cfg)
 							if err := viper.Unmarshal(cfg); err != nil {
-								log.Errorf("Viper unmarshal config error: %s", err)
+								l.service.GetLog().Errorf("Viper unmarshal config error: %s", err)
 							} else {
 								cfg.GetAppConfig().InitRuntimeConfig()
-								service.GetRuntime().reloadConfig(cfg)
+								l.service.GetRuntime().reloadConfig(cfg)
 							}
 						}
 					}
@@ -265,24 +274,24 @@ func (l *serviceLoader[Environment, Cfg]) init(service Environment, name string,
 
 			case err, ok := <-l.watcher.Errors:
 				if ok {
-					log.Errorf("watcher error: %s", err)
+					l.service.GetLog().Errorf("watcher error: %s", err)
 				}
 				return
 			}
 		}
 	}()
+
 	return nil
 }
 
-func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string, configSettings *config.ConfigSettings) Environment {
-	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
-	service := reflect.New(serviceType).Interface().(Environment)
-
+func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string,
+	dep environment.ServiceDependency,
+	configSettings *config.ConfigSettings) Environment {
 	loader := &serviceLoader[Environment, Cfg]{}
-	if err := loader.init(service, name, configSettings); err != nil {
-		log.Fatalf("make service %q error: %s", name, err)
+	if err := loader.init(name, dep, configSettings); err != nil {
+		panic(fmt.Sprintf("make service %q error: %s", name, err))
 	}
-	return service
+	return loader.service
 }
 
 func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.Serializer, error) {
@@ -341,7 +350,11 @@ func makeTypedMapSerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer
 	if err != nil {
 		return nil, err
 	}
-	return serde.MakeTypedMapSerde[T](keyArraySerde, valueArraySerde), nil
+	mapSer, err := serde.MakeTypedMapSerde[T](keyArraySerde, valueArraySerde)
+	if err != nil {
+		runtime.getLog().Fatalln(err)
+	}
+	return mapSer, nil
 }
 
 func registerSerde[T any](runtime ServiceExecutionRuntime, ser serde.StreamSerde[T]) {
@@ -376,7 +389,7 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	}
 	serT, ok := ser.(serde.Serde[T])
 	if !ok {
-		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 	streamSer := serde.MakeStreamSerde(serT)
 	registerSerde[T](runtime, streamSer)
@@ -404,7 +417,7 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	}
 	serdeK, ok := ser.(serde.Serde[K])
 	if !ok {
-		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 
 	tp = serde.GetSerdeType[V]()
@@ -420,7 +433,7 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	}
 	serdeV, ok := ser.(serde.Serde[V])
 	if !ok {
-		log.Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
 	}
 	streamSer := serde.MakeStreamKeyValueSerde[K, V](serdeK, serdeV)
 	registerSerde[datastruct.KeyValue[K, V]](runtime, streamSer)
@@ -441,7 +454,7 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 	consumer := source.GetConsumer()
 	link := cfg.GetLink(source.GetId(), consumer.GetId())
 	if link == nil {
-		log.Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
+		env.GetLog().Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
 		return nil
 	}
 	streamFrom := cfg.GetStreamConfigById(link.From)
@@ -506,7 +519,7 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		streamCaller = c
 
 	default:
-		log.Fatalf("undefined callSemantics [%d] ", callSemantics)
+		env.GetLog().Fatalf("undefined callSemantics [%d] ", callSemantics)
 	}
 
 	runtime.registerConsumeStatistics(consumeStat)

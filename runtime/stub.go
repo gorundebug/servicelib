@@ -10,7 +10,6 @@ package runtime
 import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	log "github.com/sirupsen/logrus"
 )
 
 type InStubStream[T any] struct {
@@ -22,12 +21,12 @@ func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InSt
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	ser := MakeSerde[T](runtime)
 	if ser.ValueSerializer().IsStub() {
-		log.Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 	inStubStream := &InStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
@@ -58,15 +57,15 @@ func MakeInStubKVStream[K comparable, V any](name string, env ServiceExecutionEn
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	serdeKV := MakeKeyValueSerde[K, V](runtime)
 	if serdeKV.KeySerializer().IsStub() {
-		log.Fatalf("Serializer for the key type '%q in the stream %q can't be a stub serializer", serde.GetSerdeType[K]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the key type '%q in the stream %q can't be a stub serializer", serde.GetSerdeType[K]().Name(), name)
 	}
 	if serdeKV.ValueSerializer().IsStub() {
-		log.Fatalf("Serializer for the value type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[V]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the value type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[V]().Name(), name)
 	}
 
 	inStubStream := &InStubKVStream[datastruct.KeyValue[K, V]]{
@@ -92,7 +91,7 @@ func (s *InStubKVStream[T]) Consume(value T) {
 func (s *InStubStream[T]) ConsumeBinary(data []byte) {
 	t, err := s.serde.Deserialize(data)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -101,7 +100,7 @@ func (s *InStubStream[T]) ConsumeBinary(data []byte) {
 func (s *InStubKVStream[T]) ConsumeBinary(key []byte, value []byte) {
 	t, err := s.serdeKV.DeserializeKeyValue(key, value)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -116,7 +115,7 @@ type OutStubStream[T any] struct {
 func (s *OutStubStream[T]) Consume(value T) {
 	err := s.consumer(value)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	}
 }
 
@@ -129,11 +128,11 @@ type OutStubBinaryStream[T any] struct {
 func (s *OutStubBinaryStream[T]) Consume(value T) {
 	data, err := s.serde.Serialize(value)
 	if err != nil {
-		log.Fatalln(err)
+		s.environment.GetLog().Fatalln(err)
 	}
 	err = s.consumer(data)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	}
 }
 
@@ -147,15 +146,15 @@ type OutStubBinaryKVStream[T any] struct {
 func (s *OutStubBinaryKVStream[T]) Consume(value T) {
 	key, err := s.serdeKV.SerializeKey(value)
 	if err != nil {
-		log.Fatalln(err)
+		s.environment.GetLog().Fatalln(err)
 	}
 	val, err := s.serdeKV.SerializeValue(value)
 	if err != nil {
-		log.Fatalln(err)
+		s.environment.GetLog().Fatalln(err)
 	}
 	err = s.consumer(key, val)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	}
 }
 
@@ -165,7 +164,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 
@@ -193,13 +192,13 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 
 	ser := MakeSerde[T](runtime)
 	if ser.ValueSerializer().IsStub() {
-		log.Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 
 	outStubBinaryStream := &OutStubBinaryStream[T]{
@@ -224,15 +223,15 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%q does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%q does not exists", name)
 		return nil
 	}
 	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
 	if serdeKV.KeySerializer().IsStub() {
-		log.Fatalf("Serializer for the key type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the key type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 	if serdeKV.ValueSerializer().IsStub() {
-		log.Fatalf("Serializer for the value type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
+		env.GetLog().Fatalf("Serializer for the value type %q in the stream %q can't be a stub serializer", serde.GetSerdeType[T]().Name(), name)
 	}
 	outStubBinaryKVStream := &OutStubBinaryKVStream[T]{
 		ConsumedStream: ConsumedStream[T]{

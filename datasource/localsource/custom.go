@@ -10,7 +10,6 @@ package localsource
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -88,7 +87,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	go func() {
 		defer dataSource.WaitGroup().Done()
 		if err := ep.dataProducer.Start(ctx, ep); err != nil {
-			log.Fatalln(err)
+			dataSource.GetEnvironment().GetLog().Fatalln(err)
 		}
 	}()
 	return nil
@@ -129,7 +128,7 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		log.Warnf("Stop custom datasource %q after timeout.", ds.GetName())
+		ds.GetEnvironment().GetLog().Warnf("Stop custom datasource %q after timeout.", ds.GetName())
 	}
 }
 

@@ -157,7 +157,7 @@ func TestNetHTTPEndpointConsumer(t *testing.T) {
 	defer cancel()
 
 	configSettings := config.ConfigSettings{}
-	service := runtime.MakeService[*MockService, *MockServiceConfig]("IncomeService", &configSettings)
+	service := runtime.MakeService[*MockService, *MockServiceConfig]("IncomeService", nil, &configSettings)
 	if err := service.StartService(mainCtx); err != nil {
 		assert.Equal(t, nil, err)
 		return

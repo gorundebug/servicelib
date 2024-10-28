@@ -13,7 +13,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -123,11 +122,11 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	if streamConfig.JoinStorage == nil {
-		log.Fatalf("Join storage type is undefined for the stream '%s", name)
+		env.GetLog().Fatalf("Join storage type is undefined for the stream '%s", name)
 		return nil
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{

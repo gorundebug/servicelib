@@ -9,7 +9,6 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/serde"
-	log "github.com/sirupsen/logrus"
 )
 
 type MapFunction[T, R any] interface {
@@ -42,7 +41,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	mapStream := &MapStream[T, R]{

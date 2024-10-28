@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/schema"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/http"
@@ -127,7 +126,7 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 	cfg := env.GetAppConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
 	if cfg.Host == nil || cfg.Port == nil {
-		log.Fatalf("no host or port specified for data connector with id %d", id)
+		env.GetLog().Fatalf("no host or port specified for data connector with id %d", id)
 	}
 	netHTTPDataSource := &NetHTTPDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
@@ -151,14 +150,14 @@ func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironmen
 		return endpoint
 	}
 	if cfg.Method == nil {
-		log.Fatalf("no method specified for http endpoint with id %d", id)
+		env.GetLog().Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {
-		log.Fatalf("no path specified for http endpoint with id %d", id)
+		env.GetLog().Fatalf("no path specified for http endpoint with id %d", id)
 	}
 	dataSource.(NetHTTPInputDataSource).AddHandler(*cfg.Path, http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
 	var inputEndpoint runtime.InputEndpoint = netHTTPEndpoint
@@ -178,7 +177,7 @@ func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
 	go func() {
 		err := ds.server.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalln(err)
+			ds.GetEnvironment().GetLog().Fatalln(err)
 		}
 		ds.done <- struct{}{}
 	}()
@@ -192,13 +191,13 @@ func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
 func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
-			log.Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
+			ds.GetEnvironment().GetLog().Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
 		}
 	}()
 	select {
 	case <-ds.done:
 	case <-ctx.Done():
-		log.Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
+		ds.GetEnvironment().GetLog().Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
 	}
 }
 
@@ -241,7 +240,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			*ep.GetConfig().Path)
 		http.Error(w, errText,
 			http.StatusBadRequest)
-		log.Warnln(errText)
+		ep.GetEnvironment().GetLog().Warnln(errText)
 	} else {
 		endpointConsumers := ep.GetEndpointConsumers()
 		requestData := netHTTPEndpointRequestData{
@@ -252,7 +251,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, endpointConsumer := range endpointConsumers {
 			if err := endpointConsumer.(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				log.Warnln(err)
+				ep.GetEnvironment().GetLog().Warnln(err)
 				return
 			}
 		}
@@ -269,7 +268,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 			t, err = func(reader io.ReadCloser) (T, error) {
 				defer func() {
 					if err := reader.Close(); err != nil {
-						log.Warnln(err)
+						ec.Endpoint().GetEnvironment().GetLog().Warnln(err)
 					}
 				}()
 				return ec.DeserializeJsonBody(reader)
@@ -327,7 +326,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 	var consumer runtime.Consumer[T]
 	var netHTTPEndpointConsumer NetHTTPEndpointConsumer
 	if endpoint.GetConfig().Format == nil {
-		log.Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
+		env.GetLog().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
 	}
 	switch *endpoint.GetConfig().Format {
 	case "json":
@@ -355,7 +354,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		netHTTPEndpointConsumer = endpointConsumer
 
 	default:
-		log.Fatalf("Unknown endpoint format %q for endpoint %q.",
+		env.GetLog().Fatalf("Unknown endpoint format %q for endpoint %q.",
 			*endpoint.GetConfig().Format, endpoint.GetName())
 	}
 

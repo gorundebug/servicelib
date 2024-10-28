@@ -9,9 +9,13 @@ package prometeus
 
 import (
 	"fmt"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
+	"sync"
 )
 
 type Metrics struct {
@@ -152,4 +156,30 @@ type HistogramVec struct {
 
 func (p *HistogramVec) WithLabelValues(lvs ...string) metrics.Histogram {
 	return p.histogramVec.WithLabelValues(lvs...)
+}
+
+var metricsEngine *MetricsEngine
+var once sync.Once
+
+type MetricsEngine struct {
+	environment environment.ServiceEnvironment
+	metrics     Metrics
+}
+
+func (m *MetricsEngine) Metrics() metrics.Metrics {
+	return m.metrics
+}
+
+func (m *MetricsEngine) MetricsHandler() http.Handler {
+	return promhttp.Handler()
+}
+
+func CreateMetricsEngine(env environment.ServiceEnvironment) metrics.MetricsEngine {
+	once.Do(func() {
+		metricsEngine = &MetricsEngine{
+			environment: env,
+			metrics:     Metrics{Namespace: env.GetServiceConfig().Name},
+		}
+	})
+	return metricsEngine
 }

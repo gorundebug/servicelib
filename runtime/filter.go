@@ -7,10 +7,6 @@
 
 package runtime
 
-import (
-	log "github.com/sirupsen/logrus"
-)
-
 type FilterFunction[T any] interface {
 	Filter(Stream, T) bool
 }
@@ -40,7 +36,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	filterStream := &FilterStream[T]{

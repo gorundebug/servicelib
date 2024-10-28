@@ -9,7 +9,6 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/serde"
-	log "github.com/sirupsen/logrus"
 )
 
 type AppSinkStream[T any] struct {
@@ -25,7 +24,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	appSink := &AppSinkStream[T]{
