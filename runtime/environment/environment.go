@@ -9,11 +9,18 @@ package environment
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
+
+type ServiceDependency interface {
+	GetMetricsEngine() metrics.MetricsEngine
+	GetLogsEngine() log.LogsEngine
+}
 
 type ServiceEnvironment interface {
 	GetAppConfig() *config.ServiceAppConfig
 	GetServiceConfig() *config.ServiceConfig
 	GetMetrics() metrics.Metrics
+	GetLog() log.Logger
 }

@@ -10,7 +10,7 @@ package store
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"sync"
 	"time"
 )

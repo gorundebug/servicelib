@@ -10,7 +10,6 @@ package localsink
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime"
-	log "github.com/sirupsen/logrus"
 	"sync"
 )
 
@@ -68,7 +67,7 @@ func (ds *CustomDataSink) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		log.Warnf("Stop custom datasink %q after timeout.", ds.GetName())
+		ds.GetEnvironment().GetLog().Warnf("Stop custom datasink %q after timeout.", ds.GetName())
 	}
 }
 

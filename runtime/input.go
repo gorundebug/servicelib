@@ -7,10 +7,6 @@
 
 package runtime
 
-import (
-	log "github.com/sirupsen/logrus"
-)
-
 type InputStream[T any] struct {
 	ConsumedStream[T]
 }
@@ -20,7 +16,7 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	inputStream := &InputStream[T]{

@@ -8,8 +8,8 @@
 package serde
 
 import (
+	"fmt"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
-	log "github.com/sirupsen/logrus"
 	"reflect"
 )
 
@@ -44,13 +44,13 @@ type StreamKeyValueSerde[T any] interface {
 	DeserializeKeyValue([]byte, []byte) (T, error)
 }
 
-func MakeTypedArraySerde[T any](valueSerde Serializer) *ArraySerde[T] {
+func MakeTypedArraySerde[T any](valueSerde Serializer) (*ArraySerde[T], error) {
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Array && v.Kind() != reflect.Slice {
-		log.Fatalf("expected array or slice, got %d", v.Kind())
+		return nil, fmt.Errorf("expected array or slice, got %d", v.Kind())
 	}
-	return &ArraySerde[T]{arraySerde: arraySerde{valueSerde: valueSerde, arrayType: GetSerdeType[T]()}}
+	return &ArraySerde[T]{arraySerde: arraySerde{valueSerde: valueSerde, arrayType: GetSerdeType[T]()}}, nil
 }
 
 func MakeStreamSerde[T any](serde Serde[T]) StreamSerde[T] {
@@ -106,11 +106,11 @@ func MakeArraySerde(arrayType reflect.Type, valueSerde Serializer) Serializer {
 	}
 }
 
-func MakeTypedMapSerde[T any](keyArraySerde Serializer, valueArraySerde Serializer) Serde[T] {
+func MakeTypedMapSerde[T any](keyArraySerde Serializer, valueArraySerde Serializer) (Serde[T], error) {
 	var t T
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Map {
-		log.Fatalf("expected map, got %d", v.Kind())
+		return nil, fmt.Errorf("expected map, got %d", v.Kind())
 	}
 	return &MapSerde[T]{
 		mapSerde: mapSerde{
@@ -118,7 +118,7 @@ func MakeTypedMapSerde[T any](keyArraySerde Serializer, valueArraySerde Serializ
 			valueArraySerde: valueArraySerde,
 			mapType:         GetSerdeType[T](),
 		},
-	}
+	}, nil
 }
 
 func MakeMapSerde(mapType reflect.Type,

@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
-	log "github.com/sirupsen/logrus"
 	"math"
 	"math/bits"
 	"reflect"
@@ -1122,15 +1121,12 @@ func (s *StubSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
 }
 
 func (s *StubSerde[T]) Serialize(T, []byte) ([]byte, error) {
-
-	log.Fatalf("serde for type %q is not implemented", GetSerdeTypeName[T]())
-	return []byte{}, nil
+	return nil, fmt.Errorf("serde for type %q is not implemented", GetSerdeTypeName[T]())
 }
 
 func (s *StubSerde[T]) Deserialize([]byte) (T, error) {
-	log.Fatalf("serde for type %q is not implemented", GetSerdeTypeName[T]())
 	var t T
-	return t, nil
+	return t, fmt.Errorf("serde for type %q is not implemented", GetSerdeTypeName[T]())
 }
 
 type arraySerde struct {

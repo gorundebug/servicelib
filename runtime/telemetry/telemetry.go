@@ -8,17 +8,17 @@
 package telemetry
 
 import (
+	"fmt"
 	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/telemetry/prometeus"
-	log "github.com/sirupsen/logrus"
 )
 
-func CreateMetrics(metricsEngine api.MetricsEngine, namespace string) metrics.Metrics {
+func CreateMetricsEngine(metricsEngine api.MetricsEngine, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
 	switch metricsEngine {
 	case api.Prometeus:
-		return &prometeus.Metrics{Namespace: namespace}
+		return prometeus.CreateMetricsEngine(env), nil
 	}
-	log.Fatalf("Unsupported metrics engine: %d", metricsEngine)
-	return nil
+	return nil, fmt.Errorf("unsupported metrics engine: %d", metricsEngine)
 }

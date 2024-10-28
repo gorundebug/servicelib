@@ -11,7 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	log "github.com/sirupsen/logrus"
 	"strconv"
 )
 
@@ -95,7 +94,7 @@ type InputKVSplitStream[T any] struct {
 func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 	t, err := s.serde.Deserialize(data)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -104,7 +103,7 @@ func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 	t, err := s.serdeKV.DeserializeKeyValue(key, value)
 	if err != nil {
-		log.Errorln(err)
+		s.environment.GetLog().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -116,7 +115,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	splitStream := &SplitStream[T]{
@@ -140,7 +139,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	inputSplitStream := &InputSplitStream[T]{
@@ -164,7 +163,7 @@ func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecuti
 	cfg := env.GetAppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		log.Fatalf("Config for the stream with name=%s does not exists", name)
+		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	serdeKV := MakeKeyValueSerde[K, V](runtime)

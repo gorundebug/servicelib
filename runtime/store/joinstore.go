@@ -10,7 +10,6 @@ package store
 import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -33,7 +32,7 @@ func MakeJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinS
 	case api.HashMap:
 		return MakeHashMapJoinStorage[K](env, cfg)
 	default:
-		log.Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
+		env.GetLog().Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
 		return nil
 	}
 }

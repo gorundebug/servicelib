@@ -11,8 +11,7 @@ import (
 	"container/heap"
 	"context"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
-	log "github.com/sirupsen/logrus"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"runtime"
 	"sync"
 )
@@ -43,7 +42,7 @@ type PriorityTaskPoolImpl struct {
 func makePriorityTaskPool(env environment.ServiceEnvironment, name string) PriorityTaskPool {
 	poolConfig := env.GetAppConfig().GetPoolByName(name)
 	if poolConfig == nil {
-		log.Fatalf("priority task pool %q does not exist.", name)
+		env.GetLog().Fatalf("priority task pool %q does not exist.", name)
 		return nil
 	}
 	pool := &PriorityTaskPoolImpl{
@@ -157,7 +156,7 @@ func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 			p.lock.Lock()
 			tasksCount := p.pq.Len()
 			p.lock.Unlock()
-			log.Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+			p.environment.GetLog().Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()

@@ -163,6 +163,8 @@ components:
           minimum: 0
         metricsEngine:
           $ref: '#/components/schemas/MetricsEngine'
+        logEngine:
+          $ref: '#/components/schemas/LogsEngine'
         environment:
           type: string
         delayExecutors:
@@ -252,6 +254,12 @@ components:
       enum: [ 1 ]
       x-enum-varnames:
         - Prometeus
+
+    LogsEngine:
+      type: integer
+      enum: [ 1 ]
+      x-enum-varnames:
+        - Logrus
 
     Pool:
       type: object

@@ -15,13 +15,14 @@ import (
 	"fmt"
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/logging"
 	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"github.com/gorundebug/servicelib/runtime/telemetry"
-	"github.com/gorundebug/servicelib/runtime/telemetry/metrics"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"net"
@@ -47,12 +48,15 @@ type ServiceApp struct {
 	mux               *http.ServeMux
 	httpServerDone    chan struct{}
 	metrics           metrics.Metrics
+	metricsEngine     metrics.MetricsEngine
 	consumeStatistics map[config.LinkId]ConsumeStatistics
 	storages          []store.Storage
 	delayPool         pool.DelayPool
 	taskPools         map[string]pool.TaskPool
 	priorityTaskPools map[string]pool.PriorityTaskPool
 	loader            ServiceLoader
+	logsEngine        log.LogsEngine
+	log               log.Logger
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
@@ -108,7 +112,20 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment, loader ServiceLoader, cfg config.Config) error {
+func (app *ServiceApp) GetLog() log.Logger {
+	return app.getLog()
+}
+
+func (app *ServiceApp) getLog() log.Logger {
+	return app.log
+}
+
+func (app *ServiceApp) serviceInit(name string,
+	env ServiceExecutionEnvironment,
+	dep environment.ServiceDependency,
+	loader ServiceLoader,
+	cfg config.Config) error {
+	var err error
 	appConfig := cfg.GetAppConfig()
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
@@ -117,27 +134,54 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 	app.config.Store(appConfig)
 	app.id = serviceConfig.Id
 	app.loader = loader
-	app.metrics = telemetry.CreateMetrics(serviceConfig.MetricsEngine, serviceConfig.Environment)
 	app.environment = env
+
+	if dep != nil {
+		app.logsEngine = dep.GetLogsEngine()
+		app.metricsEngine = dep.GetMetricsEngine()
+	}
+
+	if app.logsEngine == nil {
+		logsEngineType := api.Logrus
+		if serviceConfig.LogEngine != nil {
+			logsEngineType = *serviceConfig.LogEngine
+		}
+		app.logsEngine, err = logging.CreateLogsEngine(logsEngineType, env)
+		if err != nil {
+			return err
+		}
+	}
+	app.log = app.logsEngine.DefaultLogger(nil)
+
+	if app.metricsEngine == nil {
+		app.metricsEngine, err = telemetry.CreateMetricsEngine(serviceConfig.MetricsEngine, env)
+		if err != nil {
+			return err
+		}
+	}
+	app.metrics = app.metricsEngine.Metrics()
+
 	app.streams = make(map[int]Stream)
 	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
+	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
+
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
-	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
-	app.mux = http.NewServeMux()
-	app.httpServerDone = make(chan struct{})
-	app.delayPool = pool.MakeDelayTaskPool(app)
+
+	app.delayPool = pool.MakeDelayTaskPool(env)
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
+
+	app.mux = http.NewServeMux()
+	app.httpServerDone = make(chan struct{})
 	app.httpServer = http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", serviceConfig.MonitoringHost, serviceConfig.MonitoringPort),
 	}
 	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
 	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	if serviceConfig.MetricsEngine == api.Prometeus {
-		app.mux.Handle("/metrics", promhttp.Handler())
-	}
+	app.mux.Handle("/metrics", app.metricsEngine.MetricsHandler())
+
 	for idx := range appConfig.Links {
 		link := &appConfig.Links[idx]
 		streamFrom := appConfig.GetStreamConfigById(link.From)
@@ -182,11 +226,11 @@ func (app *ServiceApp) serviceInit(name string, env ServiceExecutionEnvironment,
 				}
 				if callSemantics == api.TaskPool {
 					if _, ok := app.taskPools[poolName]; !ok {
-						app.taskPools[poolName] = pool.MakeTaskPool(app, poolName)
+						app.taskPools[poolName] = pool.MakeTaskPool(env, poolName)
 					}
 				} else if callSemantics == api.PriorityTaskPool {
 					if _, ok := app.priorityTaskPools[poolName]; !ok {
-						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(app, poolName)
+						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(env, poolName)
 					}
 				} else {
 					return fmt.Errorf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)
@@ -206,7 +250,7 @@ func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(statusHtml); err != nil {
-		log.Warnf("statusHandler write error: %s", err.Error())
+		app.GetLog().Warnf("statusHandler write error: %s", err.Error())
 	}
 }
 
@@ -331,7 +375,7 @@ func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(jsonData); err != nil {
-		log.Warnf("dataHandler write error: %s", err.Error())
+		app.GetLog().Warnf("dataHandler write error: %s", err.Error())
 	}
 }
 
@@ -387,27 +431,27 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		return err
 	}
 	go func() {
-		log.Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+		app.GetLog().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
 
 		err := app.httpServer.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalln(err)
+			app.GetLog().Fatalln(err)
 		}
 		app.httpServerDone <- struct{}{}
 	}()
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
-			log.Fatalln(err)
+			app.GetLog().Fatalln(err)
 		}
 	}
 	for _, v := range app.dataSinks {
 		if err := v.Start(ctx); err != nil {
-			log.Fatalln(err)
+			app.GetLog().Fatalln(err)
 		}
 	}
 	for _, v := range app.storages {
 		if err := v.Start(ctx); err != nil {
-			log.Fatalln(err)
+			app.GetLog().Fatalln(err)
 		}
 	}
 	if err := app.delayPool.Start(ctx); err != nil {
@@ -472,13 +516,13 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		defer wg.Done()
 		go func() {
 			if err := app.httpServer.Shutdown(ctx); err != nil {
-				log.Warnf("server shutdown: %s", err.Error())
+				app.GetLog().Warnf("server shutdown: %s", err.Error())
 			}
 		}()
 		select {
 		case <-app.httpServerDone:
 		case <-ctx.Done():
-			log.Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
+			app.GetLog().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}()
 
@@ -494,7 +538,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		log.Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+		app.GetLog().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -517,7 +561,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			log.Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+			app.GetLog().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
 }

@@ -7,7 +7,15 @@
 
 package metrics
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
+
+type MetricsEngine interface {
+	Metrics() Metrics
+	MetricsHandler() http.Handler
+}
 
 type Counter interface {
 	Inc()
