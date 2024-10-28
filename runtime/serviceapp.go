@@ -44,7 +44,7 @@ type ServiceApp struct {
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
-	httpServer        http.Server
+	httpServer        *http.Server
 	mux               *http.ServeMux
 	httpServerDone    chan struct{}
 	metrics           metrics.Metrics
@@ -174,7 +174,7 @@ func (app *ServiceApp) serviceInit(name string,
 
 	app.mux = http.NewServeMux()
 	app.httpServerDone = make(chan struct{})
-	app.httpServer = http.Server{
+	app.httpServer = &http.Server{
 		Handler: app.mux,
 		Addr:    fmt.Sprintf("%s:%d", serviceConfig.MonitoringHost, serviceConfig.MonitoringPort),
 	}

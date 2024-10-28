@@ -286,12 +286,13 @@ func (l *serviceLoader[Environment, Cfg]) init(name string,
 
 func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string,
 	dep environment.ServiceDependency,
-	configSettings *config.ConfigSettings) Environment {
+	configSettings *config.ConfigSettings) (Environment, error) {
 	loader := &serviceLoader[Environment, Cfg]{}
 	if err := loader.init(name, dep, configSettings); err != nil {
-		panic(fmt.Sprintf("make service %q error: %s", name, err))
+		var env Environment
+		return env, fmt.Errorf("make service %q error: %s", name, err)
 	}
-	return loader.service
+	return loader.service, nil
 }
 
 func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.Serializer, error) {
