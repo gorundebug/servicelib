@@ -62,7 +62,6 @@ func (pq *DelayTaskPriorityQueue) Pop() interface{} {
 }
 
 type DelayPoolImpl struct {
-	executorsCount          int
 	pq                      *DelayTaskPriorityQueue
 	wg                      sync.WaitGroup
 	timer                   *time.Timer
@@ -82,12 +81,8 @@ type DelayPoolImpl struct {
 
 func makeDelayPool(env environment.ServiceEnvironment) DelayPool {
 	pool := &DelayPoolImpl{
-		executorsCount: env.GetServiceConfig().DelayExecutors,
-		pq:             &DelayTaskPriorityQueue{},
-		environment:    env,
-	}
-	if pool.executorsCount == 0 {
-		pool.executorsCount = runtime.NumCPU()
+		pq:          &DelayTaskPriorityQueue{},
+		environment: env,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
@@ -162,7 +157,11 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 }
 
 func (p *DelayPoolImpl) Start(ctx context.Context) error {
-	for i := 0; i < p.executorsCount; i++ {
+	executorsCount := p.environment.GetServiceConfig().DelayExecutors
+	if executorsCount == 0 {
+		executorsCount = runtime.NumCPU()
+	}
+	for i := 0; i < executorsCount; i++ {
 		p.wg.Add(1)
 		go func() {
 			defer p.wg.Done()

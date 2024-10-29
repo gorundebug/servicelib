@@ -30,7 +30,6 @@ type PriorityTaskPool interface {
 type PriorityTaskPoolImpl struct {
 	lock             sync.Mutex
 	name             string
-	executorsCount   int
 	pq               *TaskPriorityQueue
 	gaugeQueueLength metrics.Gauge
 	wg               sync.WaitGroup
@@ -46,13 +45,9 @@ func makePriorityTaskPool(env environment.ServiceEnvironment, name string) Prior
 		return nil
 	}
 	pool := &PriorityTaskPoolImpl{
-		name:           name,
-		executorsCount: poolConfig.ExecutorsCount,
-		pq:             &TaskPriorityQueue{},
-		environment:    env,
-	}
-	if pool.executorsCount == 0 {
-		pool.executorsCount = runtime.NumCPU()
+		name:        name,
+		pq:          &TaskPriorityQueue{},
+		environment: env,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
@@ -116,7 +111,12 @@ func (p *PriorityTaskPoolImpl) AddTask(priority int, fn func()) *PriorityTask {
 }
 
 func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
-	for i := 0; i < p.executorsCount; i++ {
+	poolConfig := p.environment.GetAppConfig().GetPoolByName(p.name)
+	executorsCount := poolConfig.ExecutorsCount
+	if executorsCount == 0 {
+		executorsCount = runtime.NumCPU()
+	}
+	for i := 0; i < executorsCount; i++ {
 		p.wg.Add(1)
 		go func() {
 			defer p.wg.Done()
