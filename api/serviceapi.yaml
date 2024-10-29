@@ -179,7 +179,6 @@ components:
         - grpcPort
         - defaultGrpcTimeout
         - shutdownTimeout
-        - metricsEngine
         - delayExecutors
         - environment
         - color

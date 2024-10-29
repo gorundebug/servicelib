@@ -14,16 +14,16 @@ import (
 	"github.com/gorundebug/servicelib/runtime/telemetry/prometheus"
 )
 
-type MetricsEngine int
+type MetricsEngineType int
 
 const (
-	Prometheus MetricsEngine = 1
+	Prometheus MetricsEngineType = 1
 )
 
-func CreateMetricsEngine(metricsEngine MetricsEngine, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
-	switch metricsEngine {
+func CreateMetricsEngine(metricsEngineType MetricsEngineType, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+	switch metricsEngineType {
 	case Prometheus:
 		return prometheus.CreateMetricsEngine(env), nil
 	}
-	return nil, fmt.Errorf("unsupported metrics engine: %d", metricsEngine)
+	return nil, fmt.Errorf("unsupported metrics engine type: %d", metricsEngineType)
 }

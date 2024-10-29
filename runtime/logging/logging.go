@@ -14,16 +14,16 @@ import (
 	"github.com/gorundebug/servicelib/runtime/logging/logrus"
 )
 
-type LogsEngine int
+type LogsEngineType int
 
 const (
-	Logrus LogsEngine = 1
+	Logrus LogsEngineType = 1
 )
 
-func CreateLogsEngine(logsEngine LogsEngine, env environment.ServiceEnvironment) (log.LogsEngine, error) {
-	switch logsEngine {
+func CreateLogsEngine(logsEngineType LogsEngineType, env environment.ServiceEnvironment) (log.LogsEngine, error) {
+	switch logsEngineType {
 	case Logrus:
 		return logrus.CreateLogsEngine(env), nil
 	}
-	return nil, fmt.Errorf("unsupported logs engine: %d", logsEngine)
+	return nil, fmt.Errorf("unsupported logs engine: %d", logsEngineType)
 }

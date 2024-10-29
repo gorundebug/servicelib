@@ -37,10 +37,10 @@ type ParallelsStream[T, R any] struct {
 func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f ParallelsFunction[T, R]) *ParallelsStream[T, R] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 

@@ -178,7 +178,7 @@ func CreateMetricsEngine(env environment.ServiceEnvironment) metrics.MetricsEngi
 	once.Do(func() {
 		metricsEngine = &MetricsEngine{
 			environment: env,
-			metrics:     Metrics{Namespace: env.GetServiceConfig().Name},
+			metrics:     Metrics{Namespace: env.ServiceConfig().Name},
 		}
 	})
 	return metricsEngine

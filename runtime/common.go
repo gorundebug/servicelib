@@ -34,6 +34,7 @@ type ServiceExecutionEnvironment interface {
 	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
 	Delay(duration time.Duration, f func())
 	GetRuntime() ServiceExecutionRuntime
+	Release()
 }
 
 type DelayFunc[T any] func(T) error

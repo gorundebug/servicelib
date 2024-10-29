@@ -13,10 +13,10 @@ type InputStream[T any] struct {
 
 func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *InputStream[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	inputStream := &InputStream[T]{

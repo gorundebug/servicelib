@@ -123,10 +123,10 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := env.GetAppConfig().GetDataConnectorById(id)
+	cfg := env.AppConfig().GetDataConnectorById(id)
 	mux := http.NewServeMux()
 	if cfg.Host == nil || cfg.Port == nil {
-		env.GetLog().Fatalf("no host or port specified for data connector with id %d", id)
+		env.Log().Fatalf("no host or port specified for data connector with id %d", id)
 	}
 	netHTTPDataSource := &NetHTTPDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
@@ -143,21 +143,21 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 }
 
 func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.GetAppConfig().GetEndpointConfigById(id)
+	cfg := env.AppConfig().GetEndpointConfigById(id)
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
 	}
 	if cfg.Method == nil {
-		env.GetLog().Fatalf("no method specified for http endpoint with id %d", id)
+		env.Log().Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
 		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {
-		env.GetLog().Fatalf("no path specified for http endpoint with id %d", id)
+		env.Log().Fatalf("no path specified for http endpoint with id %d", id)
 	}
 	dataSource.(NetHTTPInputDataSource).AddHandler(*cfg.Path, http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
 	var inputEndpoint runtime.InputEndpoint = netHTTPEndpoint
@@ -177,7 +177,7 @@ func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
 	go func() {
 		err := ds.server.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
-			ds.GetEnvironment().GetLog().Fatalln(err)
+			ds.GetEnvironment().Log().Fatalln(err)
 		}
 		ds.done <- struct{}{}
 	}()
@@ -191,13 +191,13 @@ func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
 func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
-			ds.GetEnvironment().GetLog().Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
+			ds.GetEnvironment().Log().Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
 		}
 	}()
 	select {
 	case <-ds.done:
 	case <-ctx.Done():
-		ds.GetEnvironment().GetLog().Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
+		ds.GetEnvironment().Log().Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
 	}
 }
 
@@ -240,7 +240,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			*ep.GetConfig().Path)
 		http.Error(w, errText,
 			http.StatusBadRequest)
-		ep.GetEnvironment().GetLog().Warnln(errText)
+		ep.GetEnvironment().Log().Warnln(errText)
 	} else {
 		endpointConsumers := ep.GetEndpointConsumers()
 		requestData := netHTTPEndpointRequestData{
@@ -251,7 +251,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, endpointConsumer := range endpointConsumers {
 			if err := endpointConsumer.(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				ep.GetEnvironment().GetLog().Warnln(err)
+				ep.GetEnvironment().Log().Warnln(err)
 				return
 			}
 		}
@@ -268,7 +268,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 			t, err = func(reader io.ReadCloser) (T, error) {
 				defer func() {
 					if err := reader.Close(); err != nil {
-						ec.Endpoint().GetEnvironment().GetLog().Warnln(err)
+						ec.Endpoint().GetEnvironment().Log().Warnln(err)
 					}
 				}()
 				return ec.DeserializeJsonBody(reader)
@@ -326,7 +326,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 	var consumer runtime.Consumer[T]
 	var netHTTPEndpointConsumer NetHTTPEndpointConsumer
 	if endpoint.GetConfig().Format == nil {
-		env.GetLog().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
+		env.Log().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
 	}
 	switch *endpoint.GetConfig().Format {
 	case "json":
@@ -354,7 +354,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		netHTTPEndpointConsumer = endpointConsumer
 
 	default:
-		env.GetLog().Fatalf("Unknown endpoint format %q for endpoint %q.",
+		env.Log().Fatalf("Unknown endpoint format %q for endpoint %q.",
 			*endpoint.GetConfig().Format, endpoint.GetName())
 	}
 

@@ -40,9 +40,9 @@ type TaskPoolImpl struct {
 }
 
 func makeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
-	poolConfig := env.GetAppConfig().GetPoolByName(name)
+	poolConfig := env.AppConfig().GetPoolByName(name)
 	if poolConfig == nil {
-		env.GetLog().Fatalf("task pool %q does not exist.", name)
+		env.Log().Fatalf("task pool %q does not exist.", name)
 		return nil
 	}
 
@@ -55,12 +55,12 @@ func makeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
 			Name: "task_pool_queue_length",
 			Help: "Task pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": env.GetServiceConfig().Name,
+				"service": env.ServiceConfig().Name,
 				"name":    name,
 			},
 		},
 	}
-	m := env.GetMetrics()
+	m := env.Metrics()
 	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool
@@ -84,7 +84,7 @@ func (p *TaskPoolImpl) AddTask(fn func()) *Task {
 }
 
 func (p *TaskPoolImpl) Start(ctx context.Context) error {
-	poolConfig := p.environment.GetAppConfig().GetPoolByName(p.name)
+	poolConfig := p.environment.AppConfig().GetPoolByName(p.name)
 	executorsCount := poolConfig.ExecutorsCount
 	if executorsCount == 0 {
 		executorsCount = runtime.NumCPU()
@@ -137,7 +137,7 @@ func (p *TaskPoolImpl) Stop(ctx context.Context) {
 			p.lock.Lock()
 			tasksCount := p.count
 			p.lock.Unlock()
-			p.environment.GetLog().Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+			p.environment.Log().Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()

@@ -53,7 +53,7 @@ func MakeOutputDataSink(dataConnector *config.DataConnectorConfig, environment S
 }
 
 func (ds *OutputDataSink) GetDataConnector() *config.DataConnectorConfig {
-	return ds.environment.GetAppConfig().GetDataConnectorById(ds.id)
+	return ds.environment.AppConfig().GetDataConnectorById(ds.id)
 }
 
 func (ds *OutputDataSink) GetName() string {
@@ -97,7 +97,7 @@ func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, envi
 }
 
 func (ep *DataSinkEndpoint) GetConfig() *config.EndpointConfig {
-	return ep.environment.GetAppConfig().GetEndpointConfigById(ep.id)
+	return ep.environment.AppConfig().GetEndpointConfigById(ep.id)
 }
 
 func (ep *DataSinkEndpoint) GetName() string {

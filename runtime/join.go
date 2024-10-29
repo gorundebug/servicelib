@@ -164,14 +164,14 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	if streamConfig.JoinStorage == nil {
-		env.GetLog().Fatalf("Join storage type is undefined for the stream '%s", name)
+		env.Log().Fatalf("Join storage type is undefined for the stream '%s", name)
 		return nil
 	}
 	joinStream := &JoinStream[K, T1, T2, R]{

@@ -53,7 +53,7 @@ func MakeInputDataSource(dataConnector *config.DataConnectorConfig, environment 
 }
 
 func (ds *InputDataSource) GetDataConnector() *config.DataConnectorConfig {
-	return ds.environment.GetAppConfig().GetDataConnectorById(ds.id)
+	return ds.environment.AppConfig().GetDataConnectorById(ds.id)
 }
 
 func (ds *InputDataSource) GetName() string {
@@ -97,7 +97,7 @@ func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig
 }
 
 func (ep *DataSourceEndpoint) GetConfig() *config.EndpointConfig {
-	return ep.environment.GetAppConfig().GetEndpointConfigById(ep.id)
+	return ep.environment.AppConfig().GetEndpointConfigById(ep.id)
 }
 
 func (ep *DataSourceEndpoint) GetName() string {
