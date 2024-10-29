@@ -14,8 +14,8 @@ import (
 )
 
 type ServiceDependency interface {
-	GetMetricsEngine() metrics.MetricsEngine
-	GetLogsEngine() log.LogsEngine
+	GetMetricsEngine(env ServiceEnvironment) metrics.MetricsEngine
+	GetLogsEngine(env ServiceEnvironment) log.LogsEngine
 }
 
 type ServiceEnvironment interface {

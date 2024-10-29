@@ -161,10 +161,8 @@ components:
         shutdownTimeout:
           type: integer
           minimum: 0
-        metricsEngine:
-          $ref: '#/components/schemas/MetricsEngine'
-        logEngine:
-          $ref: '#/components/schemas/LogsEngine'
+        logLevel:
+          $ref: '#/components/schemas/LogLevel'
         environment:
           type: string
         delayExecutors:
@@ -249,17 +247,9 @@ components:
         - Kafka
         - Custom
 
-    MetricsEngine:
-      type: integer
-      enum: [ 1 ]
-      x-enum-varnames:
-        - Prometeus
-
-    LogsEngine:
-      type: integer
-      enum: [ 1 ]
-      x-enum-varnames:
-        - Logrus
+    LogLevel:
+      type: string
+      enum: [ 'CRITICAL', 'FATAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
 
     Pool:
       type: object

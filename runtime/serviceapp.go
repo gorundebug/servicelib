@@ -125,28 +125,28 @@ func (app *ServiceApp) serviceInit(name string,
 	dep environment.ServiceDependency,
 	loader ServiceLoader,
 	cfg config.Config) error {
+
 	var err error
+
+	app.loader = loader
+	app.environment = env
+
 	appConfig := cfg.GetAppConfig()
+	app.config.Store(appConfig)
+
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
 		return fmt.Errorf("cannot find service config for %s", name)
 	}
-	app.config.Store(appConfig)
 	app.id = serviceConfig.Id
-	app.loader = loader
-	app.environment = env
 
 	if dep != nil {
-		app.logsEngine = dep.GetLogsEngine()
-		app.metricsEngine = dep.GetMetricsEngine()
+		app.logsEngine = dep.GetLogsEngine(env)
+		app.metricsEngine = dep.GetMetricsEngine(env)
 	}
 
 	if app.logsEngine == nil {
-		logsEngineType := api.Logrus
-		if serviceConfig.LogEngine != nil {
-			logsEngineType = *serviceConfig.LogEngine
-		}
-		app.logsEngine, err = logging.CreateLogsEngine(logsEngineType, env)
+		app.logsEngine, err = logging.CreateLogsEngine(logging.Logrus, env)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (app *ServiceApp) serviceInit(name string,
 	app.log = app.logsEngine.DefaultLogger(nil)
 
 	if app.metricsEngine == nil {
-		app.metricsEngine, err = telemetry.CreateMetricsEngine(serviceConfig.MetricsEngine, env)
+		app.metricsEngine, err = telemetry.CreateMetricsEngine(telemetry.Prometheus, env)
 		if err != nil {
 			return err
 		}
