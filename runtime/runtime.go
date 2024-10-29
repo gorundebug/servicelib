@@ -142,7 +142,7 @@ type serviceLoader[Environment ServiceExecutionEnvironment, Cfg config.Config] s
 
 func (l *serviceLoader[Environment, Cfg]) Stop() {
 	if err := l.watcher.Close(); err != nil {
-		l.service.GetLog().Warnf("watcher close error: %s", err)
+		l.service.Log().Warnf("watcher close error: %s", err)
 	}
 }
 
@@ -224,7 +224,7 @@ func (l *serviceLoader[Environment, Cfg]) init(name string,
 			return fmt.Errorf("unmarshal config error: %s", err)
 		}
 
-		cfg.GetAppConfig().InitRuntimeConfig()
+		cfg.AppConfig().InitRuntimeConfig()
 		return l.service.GetRuntime().serviceInit(name, l.service, dep, l, cfg)
 	}()
 
@@ -253,16 +253,16 @@ func (l *serviceLoader[Environment, Cfg]) init(name string,
 					realValuesFile = currentValuesFile
 
 					if cfgMap, err := getConfigMap(configData, realValuesFile); err != nil {
-						l.service.GetLog().Errorf("Reload config map error: %s", err)
+						l.service.Log().Errorf("Reload config map error: %s", err)
 					} else {
 						if err := viper.MergeConfigMap(cfgMap); err != nil {
-							l.service.GetLog().Errorf("Viper merge config error: %s", err)
+							l.service.Log().Errorf("Viper merge config error: %s", err)
 						} else {
 							cfg := reflect.New(configType).Interface().(Cfg)
 							if err := viper.Unmarshal(cfg); err != nil {
-								l.service.GetLog().Errorf("Viper unmarshal config error: %s", err)
+								l.service.Log().Errorf("Viper unmarshal config error: %s", err)
 							} else {
-								cfg.GetAppConfig().InitRuntimeConfig()
+								cfg.AppConfig().InitRuntimeConfig()
 								l.service.GetRuntime().reloadConfig(cfg)
 							}
 						}
@@ -274,7 +274,7 @@ func (l *serviceLoader[Environment, Cfg]) init(name string,
 
 			case err, ok := <-l.watcher.Errors:
 				if ok {
-					l.service.GetLog().Errorf("watcher error: %s", err)
+					l.service.Log().Errorf("watcher error: %s", err)
 				}
 				return
 			}
@@ -450,12 +450,12 @@ func IsKeyValueType[T any]() bool {
 
 func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) Caller[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
-	serviceConfig := env.GetServiceConfig()
+	cfg := env.AppConfig()
+	serviceConfig := env.ServiceConfig()
 	consumer := source.GetConsumer()
 	link := cfg.GetLink(source.GetId(), consumer.GetId())
 	if link == nil {
-		env.GetLog().Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
+		env.Log().Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
 		return nil
 	}
 	streamFrom := cfg.GetStreamConfigById(link.From)
@@ -520,7 +520,7 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		streamCaller = c
 
 	default:
-		env.GetLog().Fatalf("undefined callSemantics [%d] ", callSemantics)
+		env.Log().Fatalf("undefined callSemantics [%d] ", callSemantics)
 	}
 
 	runtime.registerConsumeStatistics(consumeStat)
@@ -603,7 +603,7 @@ func (s *StreamBase[T]) GetId() int {
 }
 
 func (s *StreamBase[T]) GetConfig() *config.StreamConfig {
-	return s.environment.GetAppConfig().GetStreamConfigById(s.id)
+	return s.environment.AppConfig().GetStreamConfigById(s.id)
 }
 
 func (s *StreamBase[T]) GetEnvironment() ServiceExecutionEnvironment {
@@ -634,7 +634,7 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 
 func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
-		consumer.GetEnvironment().GetLog().Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
+		consumer.GetEnvironment().Log().Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
 	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.environment, s)

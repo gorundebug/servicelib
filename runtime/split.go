@@ -94,7 +94,7 @@ type InputKVSplitStream[T any] struct {
 func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 	t, err := s.serde.Deserialize(data)
 	if err != nil {
-		s.environment.GetLog().Errorln(err)
+		s.environment.Log().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -103,7 +103,7 @@ func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 	t, err := s.serdeKV.DeserializeKeyValue(key, value)
 	if err != nil {
-		s.environment.GetLog().Errorln(err)
+		s.environment.Log().Errorln(err)
 	} else {
 		s.caller.Consume(t)
 	}
@@ -112,10 +112,10 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	splitStream := &SplitStream[T]{
@@ -136,10 +136,10 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 
 func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *InputSplitStream[T] {
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	inputSplitStream := &InputSplitStream[T]{
@@ -160,10 +160,10 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 
 func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[datastruct.KeyValue[K, V]] {
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	serdeKV := MakeKeyValueSerde[K, V](runtime)

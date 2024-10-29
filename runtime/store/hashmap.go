@@ -44,12 +44,12 @@ func MakeHashMapJoinStorage[K comparable](env environment.ServiceEnvironment, cf
 			Name: "hashmap_join_storage_count",
 			Help: "Elements count stored in a join storage",
 			ConstLabels: metrics.Labels{
-				"service": env.GetServiceConfig().Name,
+				"service": env.ServiceConfig().Name,
 				"name":    cfg.GetName(),
 			},
 		},
 	}
-	joinStorage.gaugeCount = env.GetMetrics().Gauge(gaugeOpts)
+	joinStorage.gaugeCount = env.Metrics().Gauge(gaugeOpts)
 	ttl := cfg.GetTTL()
 	if ttl > 0 {
 		joinStorage.storage2 = make(map[K]*Item)

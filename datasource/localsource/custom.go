@@ -87,7 +87,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	go func() {
 		defer dataSource.WaitGroup().Done()
 		if err := ep.dataProducer.Start(ctx, ep); err != nil {
-			dataSource.GetEnvironment().GetLog().Fatalln(err)
+			dataSource.GetEnvironment().Log().Fatalln(err)
 		}
 	}()
 	return nil
@@ -128,7 +128,7 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().GetLog().Warnf("Stop custom datasource %q after timeout.", ds.GetName())
+		ds.GetEnvironment().Log().Warnf("Stop custom datasource %q after timeout.", ds.GetName())
 	}
 }
 
@@ -137,7 +137,7 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 	if dataSource != nil {
 		return dataSource
 	}
-	cfg := env.GetAppConfig().GetDataConnectorById(id)
+	cfg := env.AppConfig().GetDataConnectorById(id)
 	customDataSource := &CustomDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
 	}
@@ -147,7 +147,7 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 }
 
 func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.GetAppConfig().GetEndpointConfigById(id)
+	cfg := env.AppConfig().GetEndpointConfigById(id)
 	dataSource := getCustomDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {

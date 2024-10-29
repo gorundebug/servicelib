@@ -86,14 +86,14 @@ const (
 	Right JoinType = 3
 )
 
-// Defines values for LogsEngine.
+// Defines values for LogLevel.
 const (
-	Logrus LogsEngine = 1
-)
-
-// Defines values for MetricsEngine.
-const (
-	Prometeus MetricsEngine = 1
+	CRITICAL LogLevel = "CRITICAL"
+	DEBUG    LogLevel = "DEBUG"
+	ERROR    LogLevel = "ERROR"
+	FATAL    LogLevel = "FATAL"
+	INFO     LogLevel = "INFO"
+	WARNING  LogLevel = "WARNING"
 )
 
 // Defines values for ProgrammingLanguage.
@@ -199,11 +199,8 @@ type Link struct {
 	To                           int                    `json:"to"`
 }
 
-// LogsEngine defines model for LogsEngine.
-type LogsEngine int
-
-// MetricsEngine defines model for MetricsEngine.
-type MetricsEngine int
+// LogLevel defines model for LogLevel.
+type LogLevel string
 
 // Pool defines model for Pool.
 type Pool struct {
@@ -231,8 +228,7 @@ type Service struct {
 	GrpcHost             string              `json:"grpcHost"`
 	GrpcPort             int                 `json:"grpcPort"`
 	Id                   int                 `json:"id"`
-	LogEngine            *LogsEngine         `json:"logEngine,omitempty"`
-	MetricsEngine        MetricsEngine       `json:"metricsEngine"`
+	LogLevel             *LogLevel           `json:"logLevel,omitempty"`
 	MonitoringHost       string              `json:"monitoringHost"`
 	MonitoringPort       int                 `json:"monitoringPort"`
 	Name                 string              `json:"name"`

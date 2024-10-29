@@ -30,7 +30,6 @@ type PriorityTaskPool interface {
 type PriorityTaskPoolImpl struct {
 	lock             sync.Mutex
 	name             string
-	executorsCount   int
 	pq               *TaskPriorityQueue
 	gaugeQueueLength metrics.Gauge
 	wg               sync.WaitGroup
@@ -40,31 +39,27 @@ type PriorityTaskPoolImpl struct {
 }
 
 func makePriorityTaskPool(env environment.ServiceEnvironment, name string) PriorityTaskPool {
-	poolConfig := env.GetAppConfig().GetPoolByName(name)
+	poolConfig := env.AppConfig().GetPoolByName(name)
 	if poolConfig == nil {
-		env.GetLog().Fatalf("priority task pool %q does not exist.", name)
+		env.Log().Fatalf("priority task pool %q does not exist.", name)
 		return nil
 	}
 	pool := &PriorityTaskPoolImpl{
-		name:           name,
-		executorsCount: poolConfig.ExecutorsCount,
-		pq:             &TaskPriorityQueue{},
-		environment:    env,
-	}
-	if pool.executorsCount == 0 {
-		pool.executorsCount = runtime.NumCPU()
+		name:        name,
+		pq:          &TaskPriorityQueue{},
+		environment: env,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
 			Name: "priority_task_pool_queue_length",
 			Help: "Priority task pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": env.GetServiceConfig().Name,
+				"service": env.ServiceConfig().Name,
 				"name":    name,
 			},
 		},
 	}
-	m := env.GetMetrics()
+	m := env.Metrics()
 	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool
@@ -116,7 +111,12 @@ func (p *PriorityTaskPoolImpl) AddTask(priority int, fn func()) *PriorityTask {
 }
 
 func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
-	for i := 0; i < p.executorsCount; i++ {
+	poolConfig := p.environment.AppConfig().GetPoolByName(p.name)
+	executorsCount := poolConfig.ExecutorsCount
+	if executorsCount == 0 {
+		executorsCount = runtime.NumCPU()
+	}
+	for i := 0; i < executorsCount; i++ {
 		p.wg.Add(1)
 		go func() {
 			defer p.wg.Done()
@@ -156,7 +156,7 @@ func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 			p.lock.Lock()
 			tasksCount := p.pq.Len()
 			p.lock.Unlock()
-			p.environment.GetLog().Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+			p.environment.Log().Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()

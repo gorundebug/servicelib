@@ -66,10 +66,10 @@ func (s *MergeLink[T]) GetTypeName() string {
 func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
 	env := streams[0].GetEnvironment()
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	var ser serde.StreamSerde[T]

@@ -68,12 +68,12 @@ func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
 }
 
 func (app *ServiceApp) reloadConfig(cfg config.Config) {
-	appConfig := cfg.GetAppConfig()
+	appConfig := cfg.AppConfig()
 	app.config.Store(appConfig)
 	app.environment.SetConfig(cfg)
 }
 
-func (app *ServiceApp) GetAppConfig() *config.ServiceAppConfig {
+func (app *ServiceApp) AppConfig() *config.ServiceAppConfig {
 	return app.getConfig()
 }
 
@@ -81,14 +81,14 @@ func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
 	return app.getConfig().GetServiceConfigById(app.id)
 }
 
-func (app *ServiceApp) GetServiceConfig() *config.ServiceConfig {
+func (app *ServiceApp) ServiceConfig() *config.ServiceConfig {
 	return app.getServiceConfig()
 }
 
 func (app *ServiceApp) ReloadConfig(config config.Config) {
 }
 
-func (app *ServiceApp) GetMetrics() metrics.Metrics {
+func (app *ServiceApp) Metrics() metrics.Metrics {
 	return app.metrics
 }
 
@@ -112,7 +112,7 @@ func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
 	app.consumeStatistics[statistics.LinkId()] = statistics
 }
 
-func (app *ServiceApp) GetLog() log.Logger {
+func (app *ServiceApp) Log() log.Logger {
 	return app.getLog()
 }
 
@@ -125,28 +125,28 @@ func (app *ServiceApp) serviceInit(name string,
 	dep environment.ServiceDependency,
 	loader ServiceLoader,
 	cfg config.Config) error {
+
 	var err error
-	appConfig := cfg.GetAppConfig()
+
+	app.loader = loader
+	app.environment = env
+
+	appConfig := cfg.AppConfig()
+	app.config.Store(appConfig)
+
 	serviceConfig := appConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
 		return fmt.Errorf("cannot find service config for %s", name)
 	}
-	app.config.Store(appConfig)
 	app.id = serviceConfig.Id
-	app.loader = loader
-	app.environment = env
 
 	if dep != nil {
-		app.logsEngine = dep.GetLogsEngine()
-		app.metricsEngine = dep.GetMetricsEngine()
+		app.logsEngine = dep.LogsEngine(env)
+		app.metricsEngine = dep.MetricsEngine(env)
 	}
 
 	if app.logsEngine == nil {
-		logsEngineType := api.Logrus
-		if serviceConfig.LogEngine != nil {
-			logsEngineType = *serviceConfig.LogEngine
-		}
-		app.logsEngine, err = logging.CreateLogsEngine(logsEngineType, env)
+		app.logsEngine, err = logging.CreateLogsEngine(logging.Logrus, env)
 		if err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (app *ServiceApp) serviceInit(name string,
 	app.log = app.logsEngine.DefaultLogger(nil)
 
 	if app.metricsEngine == nil {
-		app.metricsEngine, err = telemetry.CreateMetricsEngine(serviceConfig.MetricsEngine, env)
+		app.metricsEngine, err = telemetry.CreateMetricsEngine(telemetry.Prometheus, env)
 		if err != nil {
 			return err
 		}
@@ -250,7 +250,7 @@ func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(statusHtml); err != nil {
-		app.GetLog().Warnf("statusHandler write error: %s", err.Error())
+		app.Log().Warnf("statusHandler write error: %s", err.Error())
 	}
 }
 
@@ -375,7 +375,7 @@ func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(jsonData); err != nil {
-		app.GetLog().Warnf("dataHandler write error: %s", err.Error())
+		app.Log().Warnf("dataHandler write error: %s", err.Error())
 	}
 }
 
@@ -431,27 +431,27 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		return err
 	}
 	go func() {
-		app.GetLog().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+		app.Log().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
 
 		err := app.httpServer.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
-			app.GetLog().Fatalln(err)
+			app.Log().Fatalln(err)
 		}
 		app.httpServerDone <- struct{}{}
 	}()
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
-			app.GetLog().Fatalln(err)
+			app.Log().Fatalln(err)
 		}
 	}
 	for _, v := range app.dataSinks {
 		if err := v.Start(ctx); err != nil {
-			app.GetLog().Fatalln(err)
+			app.Log().Fatalln(err)
 		}
 	}
 	for _, v := range app.storages {
 		if err := v.Start(ctx); err != nil {
-			app.GetLog().Fatalln(err)
+			app.Log().Fatalln(err)
 		}
 	}
 	if err := app.delayPool.Start(ctx); err != nil {
@@ -468,6 +468,9 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (app *ServiceApp) Release() {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
@@ -516,13 +519,13 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		defer wg.Done()
 		go func() {
 			if err := app.httpServer.Shutdown(ctx); err != nil {
-				app.GetLog().Warnf("server shutdown: %s", err.Error())
+				app.Log().Warnf("server shutdown: %s", err.Error())
 			}
 		}()
 		select {
 		case <-app.httpServerDone:
 		case <-ctx.Done():
-			app.GetLog().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
+			app.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}()
 
@@ -538,7 +541,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		app.GetLog().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+		app.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -561,7 +564,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			app.GetLog().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+			app.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
 }

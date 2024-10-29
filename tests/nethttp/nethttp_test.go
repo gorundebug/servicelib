@@ -106,7 +106,7 @@ func (s *MockService) StartService(ctx context.Context) error {
 }
 
 func (s *MockService) StopService(ctx context.Context) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.GetServiceConfig().ShutdownTimeout)*time.Millisecond)
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.ServiceConfig().ShutdownTimeout)*time.Millisecond)
 	defer cancel()
 	wg := sync.WaitGroup{}
 	done := make(chan struct{})

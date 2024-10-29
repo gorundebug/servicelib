@@ -62,7 +62,6 @@ func (pq *DelayTaskPriorityQueue) Pop() interface{} {
 }
 
 type DelayPoolImpl struct {
-	executorsCount          int
 	pq                      *DelayTaskPriorityQueue
 	wg                      sync.WaitGroup
 	timer                   *time.Timer
@@ -82,30 +81,26 @@ type DelayPoolImpl struct {
 
 func makeDelayPool(env environment.ServiceEnvironment) DelayPool {
 	pool := &DelayPoolImpl{
-		executorsCount: env.GetServiceConfig().DelayExecutors,
-		pq:             &DelayTaskPriorityQueue{},
-		environment:    env,
-	}
-	if pool.executorsCount == 0 {
-		pool.executorsCount = runtime.NumCPU()
+		pq:          &DelayTaskPriorityQueue{},
+		environment: env,
 	}
 	gaugeOpts := metrics.GaugeOpts{
 		Opts: metrics.Opts{
 			Name: "delay_pool_wait_queue_length",
 			Help: "Delay pool wait queue length",
 			ConstLabels: metrics.Labels{
-				"service": env.GetServiceConfig().Name,
+				"service": env.ServiceConfig().Name,
 			},
 		},
 	}
-	m := env.GetMetrics()
+	m := env.Metrics()
 	pool.gaugeWaitQueueLength = m.Gauge(gaugeOpts)
 	gaugeOpts = metrics.GaugeOpts{
 		Opts: metrics.Opts{
 			Name: "delay_pool_execute_queue_length",
 			Help: "Delay pool execute queue length",
 			ConstLabels: metrics.Labels{
-				"service": env.GetServiceConfig().Name,
+				"service": env.ServiceConfig().Name,
 			},
 		},
 	}
@@ -162,7 +157,11 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 }
 
 func (p *DelayPoolImpl) Start(ctx context.Context) error {
-	for i := 0; i < p.executorsCount; i++ {
+	executorsCount := p.environment.ServiceConfig().DelayExecutors
+	if executorsCount == 0 {
+		executorsCount = runtime.NumCPU()
+	}
+	for i := 0; i < executorsCount; i++ {
 		p.wg.Add(1)
 		go func() {
 			defer p.wg.Done()
@@ -203,7 +202,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			case <-p.stopCh:
 			case <-ctx.Done():
 				p.lock.Lock()
-				p.environment.GetLog().Warnf("delay task pool stopped by timeout and was not empty (waiting tasks count=%d), %s",
+				p.environment.Log().Warnf("delay task pool stopped by timeout and was not empty (waiting tasks count=%d), %s",
 					p.pq.Len(), ctx.Err())
 				p.lock.Unlock()
 			}
@@ -229,7 +228,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			p.tasksLock.Lock()
 			tasksCount := p.count
 			p.tasksLock.Unlock()
-			p.environment.GetLog().Warnf("delay task pool stopped by timeout: %s (executing tasks count=%d)", ctx.Err(), tasksCount)
+			p.environment.Log().Warnf("delay task pool stopped by timeout: %s (executing tasks count=%d)", ctx.Err(), tasksCount)
 		}
 	} else {
 		p.lock.Unlock()

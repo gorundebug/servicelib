@@ -67,7 +67,7 @@ func (ds *CustomDataSink) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().GetLog().Warnf("Stop custom datasink %q after timeout.", ds.GetName())
+		ds.GetEnvironment().Log().Warnf("Stop custom datasink %q after timeout.", ds.GetName())
 	}
 }
 
@@ -113,7 +113,7 @@ func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) 
 	if dataSink != nil {
 		return dataSink
 	}
-	cfg := execRuntime.GetAppConfig().GetDataConnectorById(id)
+	cfg := execRuntime.AppConfig().GetDataConnectorById(id)
 	customDataSink := &CustomDataSink{
 		OutputDataSink: runtime.MakeOutputDataSink(cfg, execRuntime),
 	}
@@ -123,7 +123,7 @@ func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) 
 }
 
 func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.SinkEndpoint {
-	cfg := env.GetAppConfig().GetEndpointConfigById(id)
+	cfg := env.AppConfig().GetEndpointConfigById(id)
 	dataSink := getCustomDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {

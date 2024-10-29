@@ -12,7 +12,7 @@ import (
 )
 
 type Config interface {
-	GetAppConfig() *ServiceAppConfig
+	AppConfig() *ServiceAppConfig
 }
 
 // ConfigSettings /*
@@ -185,7 +185,7 @@ func (cfg *ServiceAppConfig) InitRuntimeConfig() {
 	}
 }
 
-func (cfg *ServiceAppConfig) GetAppConfig() *ServiceAppConfig {
+func (cfg *ServiceAppConfig) AppConfig() *ServiceAppConfig {
 	return cfg
 }
 

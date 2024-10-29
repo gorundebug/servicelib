@@ -32,7 +32,7 @@ func MakeJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinS
 	case api.HashMap:
 		return MakeHashMapJoinStorage[K](env, cfg)
 	default:
-		env.GetLog().Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
+		env.Log().Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
 		return nil
 	}
 }

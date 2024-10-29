@@ -23,21 +23,21 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 	tpT := reflect.TypeOf((*T)(nil)).Elem()
 	tpR := reflect.TypeOf((*R)(nil)).Elem()
 	if tpT.Kind() != reflect.Array && tpT.Kind() != reflect.Slice && tpT.Kind() != reflect.String {
-		env.GetLog().Fatalf("Type %s is not an array or slice", tpR.Name())
+		env.Log().Fatalf("Type %s is not an array or slice", tpR.Name())
 	}
 	if tpT.Kind() != reflect.String {
 		tpE := tpT.Elem()
 		if tpE != tpR {
-			env.GetLog().Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
+			env.Log().Fatalf("Element type %s does not equals to type %s", tpE.Name(), tpR.Name())
 		}
 	} else if tpR.Kind() != reflect.Int32 && tpR.Kind() != reflect.Uint8 {
-		env.GetLog().Fatalf("Element type %s is not rune or byte", tpR.Name())
+		env.Log().Fatalf("Element type %s is not rune or byte", tpR.Name())
 	}
 	runtime := env.GetRuntime()
-	cfg := env.GetAppConfig()
+	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
 	if streamConfig == nil {
-		env.GetLog().Fatalf("Config for the stream with name=%s does not exists", name)
+		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{

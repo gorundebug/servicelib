@@ -14,13 +14,13 @@ import (
 )
 
 type ServiceDependency interface {
-	GetMetricsEngine() metrics.MetricsEngine
-	GetLogsEngine() log.LogsEngine
+	MetricsEngine(env ServiceEnvironment) metrics.MetricsEngine
+	LogsEngine(env ServiceEnvironment) log.LogsEngine
 }
 
 type ServiceEnvironment interface {
-	GetAppConfig() *config.ServiceAppConfig
-	GetServiceConfig() *config.ServiceConfig
-	GetMetrics() metrics.Metrics
-	GetLog() log.Logger
+	AppConfig() *config.ServiceAppConfig
+	ServiceConfig() *config.ServiceConfig
+	Metrics() metrics.Metrics
+	Log() log.Logger
 }
