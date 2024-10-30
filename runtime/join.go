@@ -176,7 +176,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

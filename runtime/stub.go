@@ -30,7 +30,7 @@ func MakeInStubStream[T any](name string, env ServiceExecutionEnvironment) *InSt
 	}
 	inStubStream := &InStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -70,7 +70,7 @@ func MakeInStubKVStream[K comparable, V any](name string, env ServiceExecutionEn
 
 	inStubStream := &InStubKVStream[datastruct.KeyValue[K, V]]{
 		ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
-			StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
+			ServiceStream: ServiceStream[datastruct.KeyValue[K, V]]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -172,7 +172,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T], consumer Consu
 
 	outStubStream := &OutStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -203,7 +203,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T], consumer
 
 	outStubBinaryStream := &OutStubBinaryStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -235,7 +235,7 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T], consum
 	}
 	outStubBinaryKVStream := &OutStubBinaryKVStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

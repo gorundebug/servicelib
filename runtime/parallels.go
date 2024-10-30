@@ -46,7 +46,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 
 	parallelsStream := &ParallelsStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

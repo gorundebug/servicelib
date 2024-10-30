@@ -46,7 +46,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 	}
 	mapStream := &MapStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

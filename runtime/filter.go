@@ -41,7 +41,7 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 	}
 	filterStream := &FilterStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

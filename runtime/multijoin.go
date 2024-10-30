@@ -131,7 +131,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

@@ -21,7 +21,7 @@ func MakeInputStream[T any](name string, env ServiceExecutionEnvironment) *Input
 	}
 	inputStream := &InputStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

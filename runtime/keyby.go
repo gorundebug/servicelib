@@ -47,7 +47,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 	}
 	keyByStream := &KeyByStream[T, K, V]{
 		ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
-			StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
+			ServiceStream: ServiceStream[datastruct.KeyValue[K, V]]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

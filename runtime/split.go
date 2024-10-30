@@ -120,7 +120,7 @@ func MakeSplitStream[T any](name string, stream TypedStream[T]) *SplitStream[T] 
 	}
 	splitStream := &SplitStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -145,7 +145,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 	inputSplitStream := &InputSplitStream[T]{
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: ConsumedStream[T]{
-				StreamBase: StreamBase[T]{
+				ServiceStream: ServiceStream[T]{
 					environment: env,
 					id:          streamConfig.Id,
 				},
@@ -170,7 +170,7 @@ func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecuti
 	inputKVSplitStream := &InputKVSplitStream[datastruct.KeyValue[K, V]]{
 		SplitStream: &SplitStream[datastruct.KeyValue[K, V]]{
 			ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
-				StreamBase: StreamBase[datastruct.KeyValue[K, V]]{
+				ServiceStream: ServiceStream[datastruct.KeyValue[K, V]]{
 					environment: env,
 					id:          streamConfig.Id,
 				},
