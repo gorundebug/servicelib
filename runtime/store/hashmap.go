@@ -120,7 +120,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(key K, index int, value interface{}, f
 		if func() bool {
 			item.lock.Lock()
 			defer item.lock.Unlock()
-			if !item.processed {
+			if !item.processed && item.deadline.Before(time.Now()) {
 				if len(item.values) <= index {
 					item.values = append(item.values, make([][]interface{}, index-len(item.values)+1)...)
 				}
