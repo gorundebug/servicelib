@@ -138,10 +138,6 @@ func (s *JoinStream[K, T1, T2, R]) Out(value R) {
 	}
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetJoinStorageType() api.JoinStorageType {
-	return *s.GetConfig().JoinStorage
-}
-
 func (s *JoinStream[K, T1, T2, R]) GetTTL() time.Duration {
 	ttl := time.Duration(0)
 	if s.GetConfig().Ttl != nil {
@@ -189,7 +185,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}
-	joinStream.joinStorage = store.MakeJoinStorage[K](env, joinStream)
+	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, joinStream)
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)

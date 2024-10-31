@@ -21,18 +21,17 @@ type JoinStorage[K comparable] interface {
 }
 
 type JoinStorageConfig interface {
-	GetJoinStorageType() api.JoinStorageType
 	GetTTL() time.Duration
 	GetRenewTTL() bool
 	GetName() string
 }
 
-func MakeJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinStorageConfig) JoinStorage[K] {
-	switch cfg.GetJoinStorageType() {
+func MakeJoinStorage[K comparable](storageType api.JoinStorageType, env environment.ServiceEnvironment, cfg JoinStorageConfig) JoinStorage[K] {
+	switch storageType {
 	case api.HashMap:
 		return MakeHashMapJoinStorage[K](env, cfg)
 	default:
-		env.Log().Fatalf("Join storage type %d is not supported", cfg.GetJoinStorageType())
+		env.Log().Fatalf("Join storage type %d is not supported", storageType)
 		return nil
 	}
 }
