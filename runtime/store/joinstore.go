@@ -26,7 +26,9 @@ type JoinStorageConfig interface {
 	GetName() string
 }
 
-func MakeJoinStorage[K comparable](storageType api.JoinStorageType, env environment.ServiceEnvironment, cfg JoinStorageConfig) JoinStorage[K] {
+func MakeJoinStorage[K comparable](storageType api.JoinStorageType,
+	env environment.ServiceEnvironment,
+	cfg JoinStorageConfig) JoinStorage[K] {
 	switch storageType {
 	case api.HashMap:
 		return MakeHashMapJoinStorage[K](env, cfg)
