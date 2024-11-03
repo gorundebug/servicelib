@@ -42,7 +42,7 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

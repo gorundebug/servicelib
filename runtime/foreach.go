@@ -40,7 +40,7 @@ func MakeForEachStream[T any](name string, stream TypedStream[T], f ForEachFunct
 	}
 	forEachStream := &ForEachStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

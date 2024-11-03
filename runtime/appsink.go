@@ -12,7 +12,7 @@ import (
 )
 
 type AppSinkStream[T any] struct {
-	StreamBase[T]
+	ServiceStream[T]
 	consumer ConsumerFunc[T]
 	serde    serde.StreamSerde[T]
 	source   TypedStream[T]
@@ -28,7 +28,7 @@ func MakeAppSinkStream[T any](name string, stream TypedStream[T], consumer Consu
 		return nil
 	}
 	appSink := &AppSinkStream[T]{
-		StreamBase: StreamBase[T]{
+		ServiceStream: ServiceStream[T]{
 			environment: env,
 			id:          streamConfig.Id,
 		},

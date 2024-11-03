@@ -8,7 +8,6 @@
 package runtime
 
 import (
-	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
@@ -131,7 +130,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	}
 	multiJoinStream := &MultiJoinStream[K, T, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -143,7 +142,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 			f: f,
 		},
 	}
-	multiJoinStream.joinStorage = store.MakeJoinStorage[K](env, multiJoinStream)
+	multiJoinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, multiJoinStream)
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
@@ -173,10 +172,6 @@ func (s *MultiJoinStream[K, T, R]) Out(value R) {
 	if s.caller != nil {
 		s.caller.Consume(value)
 	}
-}
-
-func (s *MultiJoinStream[K, T, R]) GetJoinStorageType() api.JoinStorageType {
-	return *s.GetConfig().JoinStorage
 }
 
 func (s *MultiJoinStream[K, T, R]) GetTTL() time.Duration {

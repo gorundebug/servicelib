@@ -78,7 +78,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	}
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

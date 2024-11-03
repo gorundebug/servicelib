@@ -45,7 +45,7 @@ func MakeDelayStream[T any](name string, stream TypedStream[T], f DelayFunction[
 	}
 	delayStream := &DelayStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},

@@ -584,38 +584,38 @@ func (c *priorityTaskPoolCaller[T]) Consume(value T) {
 	})
 }
 
-type StreamBase[T any] struct {
+type ServiceStream[T any] struct {
 	environment ServiceExecutionEnvironment
 	id          int
 }
 
-func (s *StreamBase[T]) GetTypeName() string {
+func (s *ServiceStream[T]) GetTypeName() string {
 	var t T
 	return reflect.TypeOf(t).String()
 }
 
-func (s *StreamBase[T]) GetName() string {
+func (s *ServiceStream[T]) GetName() string {
 	return s.GetConfig().Name
 }
 
-func (s *StreamBase[T]) GetId() int {
+func (s *ServiceStream[T]) GetId() int {
 	return s.id
 }
 
-func (s *StreamBase[T]) GetConfig() *config.StreamConfig {
+func (s *ServiceStream[T]) GetConfig() *config.StreamConfig {
 	return s.environment.AppConfig().GetStreamConfigById(s.id)
 }
 
-func (s *StreamBase[T]) GetEnvironment() ServiceExecutionEnvironment {
+func (s *ServiceStream[T]) GetEnvironment() ServiceExecutionEnvironment {
 	return s.environment
 }
 
-func (s *StreamBase[T]) GetTransformationName() string {
+func (s *ServiceStream[T]) GetTransformationName() string {
 	return s.GetConfig().GetTransformationName()
 }
 
 type ConsumedStream[T any] struct {
-	StreamBase[T]
+	ServiceStream[T]
 	caller   Caller[T]
 	serde    serde.StreamSerde[T]
 	consumer TypedStreamConsumer[T]
@@ -634,7 +634,7 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 
 func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	if s.consumer != nil {
-		consumer.GetEnvironment().Log().Fatalf("consumer already assigned to the stream %s", s.StreamBase.GetConfig().Name)
+		consumer.GetEnvironment().Log().Fatalf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().Name)
 	}
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.environment, s)

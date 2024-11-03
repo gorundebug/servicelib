@@ -88,6 +88,7 @@ type JoinStream[K comparable, T1, T2, R any] struct {
 	source      TypedStream[datastruct.KeyValue[K, T1]]
 	joinStorage store.JoinStorage[K]
 	joinType    api.JoinType
+	joinLink    *JoinLink[K, T1, T2, R]
 }
 
 func (s *JoinStream[K, T1, T2, R]) consume(key K, index int, value interface{}) {
@@ -138,10 +139,6 @@ func (s *JoinStream[K, T1, T2, R]) Out(value R) {
 	}
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetJoinStorageType() api.JoinStorageType {
-	return *s.GetConfig().JoinStorage
-}
-
 func (s *JoinStream[K, T1, T2, R]) GetTTL() time.Duration {
 	ttl := time.Duration(0)
 	if s.GetConfig().Ttl != nil {
@@ -176,7 +173,7 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	}
 	joinStream := &JoinStream[K, T1, T2, R]{
 		ConsumedStream: ConsumedStream[R]{
-			StreamBase: StreamBase[R]{
+			ServiceStream: ServiceStream[R]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
@@ -189,12 +186,12 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}
-	joinStream.joinStorage = store.MakeJoinStorage[K](env, joinStream)
+	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, joinStream)
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)
 
-	_ = joinLink[K, T1, T2, R](joinStream, streamRight)
+	joinStream.joinLink = joinLink[K, T1, T2, R](joinStream, streamRight)
 	return joinStream
 }

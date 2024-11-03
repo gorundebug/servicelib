@@ -22,7 +22,7 @@ func MakeLinkStream[T any](name string, env ServiceExecutionEnvironment) *LinkSt
 	}
 	linkStream := &LinkStream[T]{
 		ConsumedStream: ConsumedStream[T]{
-			StreamBase: StreamBase[T]{
+			ServiceStream: ServiceStream[T]{
 				environment: env,
 				id:          streamConfig.Id,
 			},
