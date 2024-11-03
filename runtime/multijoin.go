@@ -15,10 +15,6 @@ import (
 	"time"
 )
 
-type MultiJoinFunction[K comparable, T, R any] interface {
-	MultiJoin(Stream, K, [][]interface{}, Collect[R]) bool
-}
-
 type MultiJoinFunctionContext[K comparable, T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]

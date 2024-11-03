@@ -11,10 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
-type MapFunction[T, R any] interface {
-	Map(Stream, T) R
-}
-
 type MapFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]

@@ -11,10 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
-type FlatMapFunction[T, R any] interface {
-	FlatMap(Stream, T, Collect[R])
-}
-
 type FlatMapFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]

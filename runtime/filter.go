@@ -7,10 +7,6 @@
 
 package runtime
 
-type FilterFunction[T any] interface {
-	Filter(Stream, T) bool
-}
-
 type FilterFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]

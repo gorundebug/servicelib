@@ -11,10 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
-type ParallelsFunction[T, R any] interface {
-	Parallels(Stream, T, Collect[R])
-}
-
 type ParallelsFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]

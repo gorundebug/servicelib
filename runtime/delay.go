@@ -11,10 +11,6 @@ import (
 	"time"
 )
 
-type DelayFunction[T any] interface {
-	Duration(Stream, T) time.Duration
-}
-
 type DelayFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]

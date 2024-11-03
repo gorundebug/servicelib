@@ -12,10 +12,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
-type KeyByFunction[T any, K comparable, V any] interface {
-	KeyBy(Stream, T) datastruct.KeyValue[K, V]
-}
-
 type KeyByFunctionContext[T any, K comparable, V any] struct {
 	StreamFunction[datastruct.KeyValue[K, V]]
 	context TypedStream[datastruct.KeyValue[K, V]]

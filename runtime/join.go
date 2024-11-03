@@ -16,10 +16,6 @@ import (
 	"time"
 )
 
-type JoinFunction[K comparable, T1, T2, R any] interface {
-	Join(Stream, K, []T1, []T2, Collect[R]) bool
-}
-
 type JoinFunctionContext[K comparable, T1, T2, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]
