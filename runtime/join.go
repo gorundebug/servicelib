@@ -88,6 +88,7 @@ type JoinStream[K comparable, T1, T2, R any] struct {
 	source      TypedStream[datastruct.KeyValue[K, T1]]
 	joinStorage store.JoinStorage[K]
 	joinType    api.JoinType
+	joinLink    *JoinLink[K, T1, T2, R]
 }
 
 func (s *JoinStream[K, T1, T2, R]) consume(key K, index int, value interface{}) {
@@ -191,6 +192,6 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 	stream.SetConsumer(joinStream)
 	runtime.registerStream(joinStream)
 
-	_ = joinLink[K, T1, T2, R](joinStream, streamRight)
+	joinStream.joinLink = joinLink[K, T1, T2, R](joinStream, streamRight)
 	return joinStream
 }
