@@ -62,7 +62,8 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 }
 
 func (s *KeyByStream[T, K, V]) Consume(value T) {
+	kv := s.f.call(value)
 	if s.caller != nil {
-		s.caller.Consume(s.f.call(value))
+		s.caller.Consume(kv)
 	}
 }

@@ -60,7 +60,5 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 }
 
 func (s *FlatMapStream[T, R]) Consume(value T) {
-	if s.caller != nil {
-		s.f.call(value, makeCollector[R](s.caller))
-	}
+	s.f.call(value, makeCollector[R](s.caller))
 }

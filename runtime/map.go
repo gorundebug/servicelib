@@ -61,7 +61,8 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 }
 
 func (s *MapStream[T, R]) Consume(value T) {
+	v := s.f.call(value)
 	if s.caller != nil {
-		s.caller.Consume(s.f.call(value))
+		s.caller.Consume(v)
 	}
 }

@@ -16,7 +16,9 @@ type collector[T any] struct {
 }
 
 func (c *collector[T]) Out(value T) {
-	c.caller.Consume(value)
+	if c.caller != nil {
+		c.caller.Consume(value)
+	}
 }
 
 func makeCollector[T any](
@@ -31,9 +33,11 @@ type parallelsCollector[T any] struct {
 }
 
 func (c *parallelsCollector[T]) Out(value T) {
-	go func(value T) {
-		c.caller.Consume(value)
-	}(value)
+	if c.caller != nil {
+		go func(value T) {
+			c.caller.Consume(value)
+		}(value)
+	}
 }
 
 func makeParallelsCollector[T any](

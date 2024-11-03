@@ -61,7 +61,5 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 }
 
 func (s *ParallelsStream[T, R]) Consume(value T) {
-	if s.caller != nil {
-		s.f.call(value, makeParallelsCollector[R](s.caller))
-	}
+	s.f.call(value, makeParallelsCollector[R](s.caller))
 }
