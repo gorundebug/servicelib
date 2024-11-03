@@ -135,20 +135,30 @@ func (s *JoinStream[K, T1, T2, R]) Out(value R) {
 	}
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetTTL() time.Duration {
+type joinStorageConfig struct {
+	stream Stream
+}
+
+func (jsc *joinStorageConfig) GetTTL() time.Duration {
 	ttl := time.Duration(0)
-	if s.GetConfig().Ttl != nil {
-		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
+	cfg := jsc.stream.GetConfig()
+	if cfg.Ttl != nil {
+		ttl = time.Duration(*cfg.Ttl) * time.Millisecond
 	}
 	return ttl
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetRenewTTL() bool {
+func (jsc *joinStorageConfig) GetRenewTTL() bool {
 	renewTTL := false
-	if s.GetConfig().RenewTTL != nil {
-		renewTTL = *s.GetConfig().RenewTTL
+	cfg := jsc.stream.GetConfig()
+	if cfg.RenewTTL != nil {
+		renewTTL = *cfg.RenewTTL
 	}
 	return renewTTL
+}
+
+func (jsc *joinStorageConfig) GetName() string {
+	return jsc.stream.GetName()
 }
 
 func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream[datastruct.KeyValue[K, T1]],
@@ -182,7 +192,8 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}
-	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, joinStream)
+
+	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, &joinStorageConfig{stream: joinStream})
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)

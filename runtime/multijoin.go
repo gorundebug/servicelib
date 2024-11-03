@@ -12,7 +12,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
-	"time"
 )
 
 type MultiJoinFunctionContext[K comparable, T, R any] struct {
@@ -138,7 +137,7 @@ func MakeMultiJoinStream[K comparable, T, R any](
 			f: f,
 		},
 	}
-	multiJoinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, multiJoinStream)
+	multiJoinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, &joinStorageConfig{stream: multiJoinStream})
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
@@ -168,20 +167,4 @@ func (s *MultiJoinStream[K, T, R]) Out(value R) {
 	if s.caller != nil {
 		s.caller.Consume(value)
 	}
-}
-
-func (s *MultiJoinStream[K, T, R]) GetTTL() time.Duration {
-	ttl := time.Duration(0)
-	if s.GetConfig().Ttl != nil {
-		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
-	}
-	return ttl
-}
-
-func (s *MultiJoinStream[K, T, R]) GetRenewTTL() bool {
-	renewTTL := false
-	if s.GetConfig().RenewTTL != nil {
-		renewTTL = *s.GetConfig().RenewTTL
-	}
-	return renewTTL
 }
