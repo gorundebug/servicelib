@@ -9,7 +9,6 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
 type MergeStream[T any] struct {
@@ -64,8 +63,8 @@ func (s *MergeLink[T]) GetTypeName() string {
 	return s.mergeStream.GetTypeName()
 }
 
-func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
-	env := streams[0].GetEnvironment()
+func MakeMergeStream[T any](name string, stream TypedStream[T], streams ...TypedStream[T]) *MergeStream[T] {
+	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
@@ -73,10 +72,8 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
-	var ser serde.StreamSerde[T]
-	if len(streams) > 0 {
-		ser = streams[0].GetSerde()
-	}
+	ser := stream.GetSerde()
+
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			ServiceStream: ServiceStream[T]{
@@ -87,12 +84,17 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		},
 	}
 	runtime.registerStream(mergeStream)
-	for index, stream := range streams {
-		link := mergeLink[T](index, mergeStream, stream)
-		stream.SetConsumer(link)
-		mergeStream.links = append(mergeStream.links, link)
+	mergeStream.addLink(0, stream)
+	for i, s := range streams {
+		mergeStream.addLink(i+1, s)
 	}
 	return mergeStream
+}
+
+func (s *MergeStream[T]) addLink(index int, stream TypedStream[T]) {
+	link := mergeLink[T](index, s, stream)
+	stream.SetConsumer(link)
+	s.links = append(s.links, link)
 }
 
 func (s *MergeStream[T]) Consume(value T) {
