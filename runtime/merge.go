@@ -14,6 +14,7 @@ import (
 
 type MergeStream[T any] struct {
 	ConsumedStream[T]
+	links []*MergeLink[T]
 }
 
 type MergeLink[T any] struct {
@@ -89,6 +90,7 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 	for index, stream := range streams {
 		link := mergeLink[T](index, mergeStream, stream)
 		stream.SetConsumer(link)
+		mergeStream.links = append(mergeStream.links, link)
 	}
 	return mergeStream
 }
