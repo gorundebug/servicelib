@@ -23,12 +23,13 @@ type MergeLink[T any] struct {
 }
 
 func mergeLink[T any](index int, mergeSteam *MergeStream[T], stream TypedStream[T]) *MergeLink[T] {
-	mergeLink := MergeLink[T]{
+	mergeLink := &MergeLink[T]{
 		mergeStream: mergeSteam,
 		source:      stream,
 		index:       index,
 	}
-	return &mergeLink
+	stream.SetConsumer(mergeLink)
+	return mergeLink
 }
 
 func (s *MergeLink[T]) Consume(value T) {
@@ -84,17 +85,12 @@ func MakeMergeStream[T any](name string, stream TypedStream[T], streams ...Typed
 		},
 	}
 	runtime.registerStream(mergeStream)
-	mergeStream.addLink(0, stream)
+	mergeStream.links = make([]*MergeLink[T], len(streams)+1)
+	mergeStream.links[0] = mergeLink[T](0, mergeStream, stream)
 	for i, s := range streams {
-		mergeStream.addLink(i+1, s)
+		mergeStream.links[i+1] = mergeLink[T](i+1, mergeStream, s)
 	}
 	return mergeStream
-}
-
-func (s *MergeStream[T]) addLink(index int, stream TypedStream[T]) {
-	link := mergeLink[T](index, s, stream)
-	stream.SetConsumer(link)
-	s.links = append(s.links, link)
 }
 
 func (s *MergeStream[T]) Consume(value T) {
