@@ -9,7 +9,6 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
-	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
 type KeyByFunctionContext[T any, K comparable, V any] struct {
@@ -27,9 +26,8 @@ func (f *KeyByFunctionContext[T, K, V]) call(value T) datastruct.KeyValue[K, V] 
 
 type KeyByStream[T any, K comparable, V any] struct {
 	ConsumedStream[datastruct.KeyValue[K, V]]
-	serdeIn serde.StreamSerde[T]
-	source  TypedStream[T]
-	f       KeyByFunctionContext[T, K, V]
+	source TypedStream[T]
+	f      KeyByFunctionContext[T, K, V]
 }
 
 func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream[T], f KeyByFunction[T, K, V]) *KeyByStream[T, K, V] {
@@ -49,8 +47,7 @@ func MakeKeyByStream[T any, K comparable, V any](name string, stream TypedStream
 			},
 			serde: MakeKeyValueSerde[K, V](runtime),
 		},
-		serdeIn: stream.GetSerde(),
-		source:  stream,
+		source: stream,
 		f: KeyByFunctionContext[T, K, V]{
 			f: f,
 		},

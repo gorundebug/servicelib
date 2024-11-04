@@ -11,7 +11,6 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"time"
 )
@@ -31,7 +30,6 @@ func (f *JoinFunctionContext[K, T1, T2, R]) call(key K, leftValue []T1, rightVal
 
 type JoinLink[K comparable, T1, T2, R any] struct {
 	joinStream *JoinStream[K, T1, T2, R]
-	serde      serde.StreamSerde[datastruct.KeyValue[K, T2]]
 	source     TypedStream[datastruct.KeyValue[K, T2]]
 }
 
@@ -39,7 +37,6 @@ func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R],
 	joinLink := &JoinLink[K, T1, T2, R]{
 		joinStream: joinStream,
 		source:     stream,
-		serde:      stream.GetSerde(),
 	}
 	stream.SetConsumer(joinLink)
 	return joinLink
@@ -80,7 +77,6 @@ func (s *JoinLink[K, T1, T2, R]) GetTypeName() string {
 type JoinStream[K comparable, T1, T2, R any] struct {
 	ConsumedStream[R]
 	f           JoinFunctionContext[K, T1, T2, R]
-	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T1]]
 	source      TypedStream[datastruct.KeyValue[K, T1]]
 	joinStorage store.JoinStorage[K]
 	joinType    api.JoinType
@@ -188,7 +184,6 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		f: JoinFunctionContext[K, T1, T2, R]{
 			f: f,
 		},
-		serdeIn:  stream.GetSerde(),
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}

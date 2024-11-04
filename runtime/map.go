@@ -7,10 +7,6 @@
 
 package runtime
 
-import (
-	"github.com/gorundebug/servicelib/runtime/serde"
-)
-
 type MapFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]
@@ -26,9 +22,8 @@ func (f *MapFunctionContext[T, R]) call(value T) R {
 
 type MapStream[T, R any] struct {
 	ConsumedStream[R]
-	serdeIn serde.StreamSerde[T]
-	source  TypedStream[T]
-	f       MapFunctionContext[T, R]
+	source TypedStream[T]
+	f      MapFunctionContext[T, R]
 }
 
 func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T, R]) *MapStream[T, R] {
@@ -48,8 +43,7 @@ func MakeMapStream[T, R any](name string, stream TypedStream[T], f MapFunction[T
 			},
 			serde: MakeSerde[R](runtime),
 		},
-		source:  stream,
-		serdeIn: stream.GetSerde(),
+		source: stream,
 		f: MapFunctionContext[T, R]{
 			f: f,
 		},
