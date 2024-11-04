@@ -7,14 +7,6 @@
 
 package runtime
 
-import (
-	"github.com/gorundebug/servicelib/runtime/serde"
-)
-
-type ParallelsFunction[T, R any] interface {
-	Parallels(Stream, T, Collect[R])
-}
-
 type ParallelsFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]
@@ -29,9 +21,8 @@ func (f *ParallelsFunctionContext[T, R]) call(value T, out Collect[R]) {
 
 type ParallelsStream[T, R any] struct {
 	ConsumedStream[R]
-	source  TypedStream[T]
-	serdeIn serde.StreamSerde[T]
-	f       ParallelsFunctionContext[T, R]
+	source TypedStream[T]
+	f      ParallelsFunctionContext[T, R]
 }
 
 func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f ParallelsFunction[T, R]) *ParallelsStream[T, R] {
@@ -52,8 +43,7 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 			},
 			serde: MakeSerde[R](runtime),
 		},
-		serdeIn: stream.GetSerde(),
-		source:  stream,
+		source: stream,
 		f: ParallelsFunctionContext[T, R]{
 			f: f,
 		},
@@ -65,7 +55,5 @@ func MakeParallelsStream[T, R any](name string, stream TypedStream[T], f Paralle
 }
 
 func (s *ParallelsStream[T, R]) Consume(value T) {
-	if s.caller != nil {
-		s.f.call(value, makeParallelsCollector[R](s.caller))
-	}
+	s.f.call(value, makeParallelsCollector[R](s.caller))
 }

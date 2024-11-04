@@ -11,14 +11,9 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"time"
 )
-
-type JoinFunction[K comparable, T1, T2, R any] interface {
-	Join(Stream, K, []T1, []T2, Collect[R]) bool
-}
 
 type JoinFunctionContext[K comparable, T1, T2, R any] struct {
 	StreamFunction[R]
@@ -35,7 +30,6 @@ func (f *JoinFunctionContext[K, T1, T2, R]) call(key K, leftValue []T1, rightVal
 
 type JoinLink[K comparable, T1, T2, R any] struct {
 	joinStream *JoinStream[K, T1, T2, R]
-	serde      serde.StreamSerde[datastruct.KeyValue[K, T2]]
 	source     TypedStream[datastruct.KeyValue[K, T2]]
 }
 
@@ -43,7 +37,6 @@ func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R],
 	joinLink := &JoinLink[K, T1, T2, R]{
 		joinStream: joinStream,
 		source:     stream,
-		serde:      stream.GetSerde(),
 	}
 	stream.SetConsumer(joinLink)
 	return joinLink
@@ -84,7 +77,6 @@ func (s *JoinLink[K, T1, T2, R]) GetTypeName() string {
 type JoinStream[K comparable, T1, T2, R any] struct {
 	ConsumedStream[R]
 	f           JoinFunctionContext[K, T1, T2, R]
-	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T1]]
 	source      TypedStream[datastruct.KeyValue[K, T1]]
 	joinStorage store.JoinStorage[K]
 	joinType    api.JoinType
@@ -139,20 +131,30 @@ func (s *JoinStream[K, T1, T2, R]) Out(value R) {
 	}
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetTTL() time.Duration {
+type joinStorageConfig struct {
+	stream Stream
+}
+
+func (jsc *joinStorageConfig) GetTTL() time.Duration {
 	ttl := time.Duration(0)
-	if s.GetConfig().Ttl != nil {
-		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
+	cfg := jsc.stream.GetConfig()
+	if cfg.Ttl != nil {
+		ttl = time.Duration(*cfg.Ttl) * time.Millisecond
 	}
 	return ttl
 }
 
-func (s *JoinStream[K, T1, T2, R]) GetRenewTTL() bool {
+func (jsc *joinStorageConfig) GetRenewTTL() bool {
 	renewTTL := false
-	if s.GetConfig().RenewTTL != nil {
-		renewTTL = *s.GetConfig().RenewTTL
+	cfg := jsc.stream.GetConfig()
+	if cfg.RenewTTL != nil {
+		renewTTL = *cfg.RenewTTL
 	}
 	return renewTTL
+}
+
+func (jsc *joinStorageConfig) GetName() string {
+	return jsc.stream.GetName()
 }
 
 func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream[datastruct.KeyValue[K, T1]],
@@ -182,11 +184,11 @@ func MakeJoinStream[K comparable, T1, T2, R any](name string, stream TypedStream
 		f: JoinFunctionContext[K, T1, T2, R]{
 			f: f,
 		},
-		serdeIn:  stream.GetSerde(),
 		source:   stream,
 		joinType: *streamConfig.JoinType,
 	}
-	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, joinStream)
+
+	joinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, &joinStorageConfig{stream: joinStream})
 	runtime.registerStorage(joinStream.joinStorage)
 	joinStream.f.context = joinStream
 	stream.SetConsumer(joinStream)

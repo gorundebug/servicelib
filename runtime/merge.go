@@ -9,11 +9,11 @@ package runtime
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
 type MergeStream[T any] struct {
 	ConsumedStream[T]
+	links []*MergeLink[T]
 }
 
 type MergeLink[T any] struct {
@@ -23,12 +23,13 @@ type MergeLink[T any] struct {
 }
 
 func mergeLink[T any](index int, mergeSteam *MergeStream[T], stream TypedStream[T]) *MergeLink[T] {
-	mergeLink := MergeLink[T]{
+	mergeLink := &MergeLink[T]{
 		mergeStream: mergeSteam,
 		source:      stream,
 		index:       index,
 	}
-	return &mergeLink
+	stream.SetConsumer(mergeLink)
+	return mergeLink
 }
 
 func (s *MergeLink[T]) Consume(value T) {
@@ -63,8 +64,8 @@ func (s *MergeLink[T]) GetTypeName() string {
 	return s.mergeStream.GetTypeName()
 }
 
-func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream[T] {
-	env := streams[0].GetEnvironment()
+func MakeMergeStream[T any](name string, stream TypedStream[T], streams ...TypedStream[T]) *MergeStream[T] {
+	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
@@ -72,10 +73,8 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
-	var ser serde.StreamSerde[T]
-	if len(streams) > 0 {
-		ser = streams[0].GetSerde()
-	}
+	ser := stream.GetSerde()
+
 	mergeStream := &MergeStream[T]{
 		ConsumedStream: ConsumedStream[T]{
 			ServiceStream: ServiceStream[T]{
@@ -86,9 +85,10 @@ func MakeMergeStream[T any](name string, streams ...TypedStream[T]) *MergeStream
 		},
 	}
 	runtime.registerStream(mergeStream)
-	for index, stream := range streams {
-		link := mergeLink[T](index, mergeStream, stream)
-		stream.SetConsumer(link)
+	mergeStream.links = make([]*MergeLink[T], len(streams)+1)
+	mergeStream.links[0] = mergeLink[T](0, mergeStream, stream)
+	for i, s := range streams {
+		mergeStream.links[i+1] = mergeLink[T](i+1, mergeStream, s)
 	}
 	return mergeStream
 }

@@ -8,14 +8,12 @@
 package runtime
 
 import (
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"reflect"
 )
 
 type FlatMapIterableStream[T, R any] struct {
 	ConsumedStream[R]
-	serdeIn serde.StreamSerde[T]
-	source  TypedStream[T] //nolint:unused
+	source TypedStream[T] //nolint:unused
 }
 
 func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *FlatMapIterableStream[T, R] {
@@ -48,7 +46,6 @@ func MakeFlatMapIterableStream[T, R any](name string, stream TypedStream[T]) *Fl
 			},
 			serde: MakeSerde[R](runtime),
 		},
-		serdeIn: stream.GetSerde(),
 	}
 	stream.SetConsumer(flatMapStreamIterable)
 	runtime.registerStream(flatMapStreamIterable)

@@ -55,8 +55,9 @@ func Link[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.T
 	return runtime.MakeLinkStream[T](name, env)
 }
 
-func Merge[T any](name string, streams ...runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
-	return runtime.MakeMergeStream[T](name, streams...)
+func Merge[T any](name string, stream runtime.TypedStream[T],
+	streams ...runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
+	return runtime.MakeMergeStream[T](name, stream, streams...)
 }
 
 func MultiJoin[K comparable, T, R any](

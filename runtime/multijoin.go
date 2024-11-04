@@ -12,12 +12,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
-	"time"
 )
-
-type MultiJoinFunction[K comparable, T, R any] interface {
-	MultiJoin(Stream, K, [][]interface{}, Collect[R]) bool
-}
 
 type MultiJoinFunctionContext[K comparable, T, R any] struct {
 	StreamFunction[R]
@@ -40,7 +35,6 @@ type multiJoinLinkStream interface {
 type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
 	multiJoinStream *MultiJoinStream[K, T1, R]
 	index           int
-	serdeIn         serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]
 	serdeValue      serde.Serde[T2]
 	source          TypedStream[datastruct.KeyValue[K, T2]]
 }
@@ -55,7 +49,6 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 		multiJoinStream: multiJoinStream,
 		index:           len(multiJoinStream.links),
 		source:          stream,
-		serdeIn:         stream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]),
 		serdeValue:      stream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]).ValueSerializer().(serde.Serde[T2]),
 	}
 	stream.SetConsumer(link)
@@ -107,7 +100,6 @@ type MultiJoinStream[K comparable, T, R any] struct {
 	ConsumedStream[R]
 	f           MultiJoinFunctionContext[K, T, R]
 	links       []multiJoinLinkStream
-	serdeIn     serde.StreamSerde[datastruct.KeyValue[K, T]]
 	source      TypedStream[datastruct.KeyValue[K, T]]
 	joinStorage store.JoinStorage[K]
 }
@@ -136,13 +128,12 @@ func MakeMultiJoinStream[K comparable, T, R any](
 			},
 			serde: MakeSerde[R](runtime),
 		},
-		serdeIn: leftStream.GetSerde(),
-		source:  leftStream,
+		source: leftStream,
 		f: MultiJoinFunctionContext[K, T, R]{
 			f: f,
 		},
 	}
-	multiJoinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, multiJoinStream)
+	multiJoinStream.joinStorage = store.MakeJoinStorage[K](*streamConfig.JoinStorage, env, &joinStorageConfig{stream: multiJoinStream})
 	runtime.registerStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.context = multiJoinStream
 	leftStream.SetConsumer(multiJoinStream)
@@ -172,20 +163,4 @@ func (s *MultiJoinStream[K, T, R]) Out(value R) {
 	if s.caller != nil {
 		s.caller.Consume(value)
 	}
-}
-
-func (s *MultiJoinStream[K, T, R]) GetTTL() time.Duration {
-	ttl := time.Duration(0)
-	if s.GetConfig().Ttl != nil {
-		ttl = time.Duration(*s.GetConfig().Ttl) * time.Millisecond
-	}
-	return ttl
-}
-
-func (s *MultiJoinStream[K, T, R]) GetRenewTTL() bool {
-	renewTTL := false
-	if s.GetConfig().RenewTTL != nil {
-		renewTTL = *s.GetConfig().RenewTTL
-	}
-	return renewTTL
 }

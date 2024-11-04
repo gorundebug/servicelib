@@ -7,15 +7,10 @@
 
 package runtime
 
-import (
-	"github.com/gorundebug/servicelib/runtime/serde"
-)
-
 type SinkStream[T any] struct {
 	ServiceStream[T]
 	source   TypedStream[T]
 	consumer Consumer[T]
-	serde    serde.StreamSerde[T]
 }
 
 func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
@@ -32,7 +27,6 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 			environment: env,
 			id:          streamConfig.Id,
 		},
-		serde:  stream.GetSerde(),
 		source: stream,
 	}
 	stream.SetConsumer(sinkStream)

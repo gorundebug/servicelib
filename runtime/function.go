@@ -7,12 +7,43 @@
 
 package runtime
 
-type StreamFunction[T any] struct {
-	context ServiceStream[T] //nolint:unused
+import (
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"time"
+)
+
+type FilterFunction[T any] interface {
+	Filter(Stream, T) bool
 }
 
-func (f *StreamFunction[T]) BeforeCall() {
+type FlatMapFunction[T, R any] interface {
+	FlatMap(Stream, T, Collect[R])
 }
 
-func (f *StreamFunction[T]) AfterCall() {
+type JoinFunction[K comparable, T1, T2, R any] interface {
+	Join(Stream, K, []T1, []T2, Collect[R]) bool
+}
+
+type KeyByFunction[T any, K comparable, V any] interface {
+	KeyBy(Stream, T) datastruct.KeyValue[K, V]
+}
+
+type MapFunction[T, R any] interface {
+	Map(Stream, T) R
+}
+
+type MultiJoinFunction[K comparable, T, R any] interface {
+	MultiJoin(Stream, K, [][]interface{}, Collect[R]) bool
+}
+
+type ParallelsFunction[T, R any] interface {
+	Parallels(Stream, T, Collect[R])
+}
+
+type ForEachFunction[T any] interface {
+	ForEach(Stream, T)
+}
+
+type DelayFunction[T any] interface {
+	Duration(Stream, T) time.Duration
 }

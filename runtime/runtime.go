@@ -643,3 +643,13 @@ func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {
 	return s.consumer
 }
+
+type StreamFunction[T any] struct {
+	context ServiceStream[T] //nolint:unused
+}
+
+func (f *StreamFunction[T]) BeforeCall() {
+}
+
+func (f *StreamFunction[T]) AfterCall() {
+}

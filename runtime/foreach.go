@@ -7,10 +7,6 @@
 
 package runtime
 
-type ForEachFunction[T any] interface {
-	ForEach(Stream, T)
-}
-
 type ForEachFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]

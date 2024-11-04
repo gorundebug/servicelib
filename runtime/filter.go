@@ -7,10 +7,6 @@
 
 package runtime
 
-type FilterFunction[T any] interface {
-	Filter(Stream, T) bool
-}
-
 type FilterFunctionContext[T any] struct {
 	StreamFunction[T]
 	context TypedStream[T]
@@ -59,8 +55,8 @@ func MakeFilterStream[T any](name string, stream TypedStream[T], f FilterFunctio
 }
 
 func (s *FilterStream[T]) Consume(value T) {
-	if s.caller != nil {
-		if s.f.call(value) {
+	if s.f.call(value) {
+		if s.caller != nil {
 			s.caller.Consume(value)
 		}
 	}

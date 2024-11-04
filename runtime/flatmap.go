@@ -7,14 +7,6 @@
 
 package runtime
 
-import (
-	"github.com/gorundebug/servicelib/runtime/serde"
-)
-
-type FlatMapFunction[T, R any] interface {
-	FlatMap(Stream, T, Collect[R])
-}
-
 type FlatMapFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]
@@ -29,9 +21,8 @@ func (f FlatMapFunctionContext[T, R]) call(value T, out Collect[R]) {
 
 type FlatMapStream[T, R any] struct {
 	ConsumedStream[R]
-	serdeIn serde.StreamSerde[T]
-	source  TypedStream[T]
-	f       FlatMapFunctionContext[T, R]
+	source TypedStream[T]
+	f      FlatMapFunctionContext[T, R]
 }
 
 func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFunction[T, R]) *FlatMapStream[T, R] {
@@ -51,8 +42,7 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 			},
 			serde: MakeSerde[R](runtime),
 		},
-		serdeIn: stream.GetSerde(),
-		source:  stream,
+		source: stream,
 		f: FlatMapFunctionContext[T, R]{
 			f: f,
 		},
@@ -64,7 +54,5 @@ func MakeFlatMapStream[T, R any](name string, stream TypedStream[T], f FlatMapFu
 }
 
 func (s *FlatMapStream[T, R]) Consume(value T) {
-	if s.caller != nil {
-		s.f.call(value, makeCollector[R](s.caller))
-	}
+	s.f.call(value, makeCollector[R](s.caller))
 }
