@@ -67,7 +67,7 @@ func MultiJoin[K comparable, T, R any](
 }
 
 func MultiJoinLink[K comparable, T1, T2, R any](
-	multiJoin runtime.TypedStream[R],
+	multiJoin runtime.TypedMultiJoinConsumedStream[K, T1, R],
 	stream runtime.TypedStream[datastruct.KeyValue[K, T2]]) {
 	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoin, stream)
 }
