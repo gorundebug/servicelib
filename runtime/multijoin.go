@@ -31,6 +31,7 @@ type multiJoinLinkStream interface {
 	Stream
 	serializeValue(value interface{}) ([]byte, error)
 	deserializeValue([]byte) (interface{}, error)
+	setIndex(index int)
 }
 
 type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
@@ -41,19 +42,19 @@ type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
 }
 
 func MakeMultiJoinLink[K comparable, T1, T2, R any](
-	multiJoin TypedMultiJoinConsumedStream[K, T1, R],
-	stream TypedStream[datastruct.KeyValue[K, T2]]) {
+	multiJoinStream TypedMultiJoinConsumedStream[K, T1, R],
+	rightStream TypedStream[datastruct.KeyValue[K, T2]]) {
 
-	multiJoinStream := multiJoin.(*MultiJoinStream[K, T1, R])
+	multiJoin := multiJoinStream.(*MultiJoinStream[K, T1, R])
 
 	link := &MultiJoinLinkStream[K, T1, T2, R]{
-		multiJoinStream: multiJoinStream,
-		index:           len(multiJoinStream.links),
-		source:          stream,
-		serdeValue:      stream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]).ValueSerializer().(serde.Serde[T2]),
+		multiJoinStream: multiJoin,
+		index:           0,
+		source:          rightStream,
+		serdeValue:      rightStream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]).ValueSerializer().(serde.Serde[T2]),
 	}
-	stream.SetConsumer(link)
-	multiJoinStream.links = append(multiJoinStream.links, link)
+	rightStream.SetConsumer(link)
+	multiJoin.addLink(link)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) serializeValue(value interface{}) ([]byte, error) {
@@ -95,6 +96,10 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTransformationName() string {
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTypeName() string {
 	return s.multiJoinStream.GetTypeName()
+}
+
+func (s *MultiJoinLinkStream[K, T1, T2, R]) setIndex(index int) {
+	s.index = index
 }
 
 type MultiJoinStream[K comparable, T, R any] struct {
@@ -152,12 +157,17 @@ func (s *MultiJoinStream[K, T, R]) consume(key K, index int, value interface{}) 
 	})
 }
 
+func (s *MultiJoinStream[K, T, R]) addLink(link multiJoinLinkStream) {
+	link.setIndex(len(s.links) + 1)
+	s.links = append(s.links, link)
+}
+
 func (s *MultiJoinStream[K, T, R]) Consume(value datastruct.KeyValue[K, T]) {
 	s.consume(value.Key, 0, value.Value)
 }
 
 func (s *MultiJoinStream[K, T, R]) ConsumeRight(index int, value datastruct.KeyValue[K, interface{}]) {
-	s.consume(value.Key, index+1, value.Value)
+	s.consume(value.Key, index, value.Value)
 }
 
 func (s *MultiJoinStream[K, T, R]) Out(value R) {
