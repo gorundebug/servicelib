@@ -28,6 +28,7 @@ func (f *MultiJoinFunctionContext[K, T, R]) call(key K, values [][]interface{}, 
 }
 
 type multiJoinLinkStream interface {
+	Stream
 	serializeValue(value interface{}) ([]byte, error)
 	deserializeValue([]byte) (interface{}, error)
 }
@@ -40,7 +41,7 @@ type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
 }
 
 func MakeMultiJoinLink[K comparable, T1, T2, R any](
-	multiJoin TypedStream[R],
+	multiJoin TypedMultiJoinConsumedStream[K, T1, R],
 	stream TypedStream[datastruct.KeyValue[K, T2]]) {
 
 	multiJoinStream := multiJoin.(*MultiJoinStream[K, T1, R])
