@@ -8,6 +8,7 @@
 package runtime
 
 import (
+	"fmt"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
@@ -40,6 +41,10 @@ func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
 func (s *SplitLink[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
 	s.caller = makeCaller[T](s.splitStream.environment, s)
+}
+
+func (s *SplitLink[T]) Validate() error {
+	return nil
 }
 
 func (s *SplitLink[T]) GetTransformationName() string {
@@ -203,4 +208,13 @@ func (s *SplitStream[T]) GetConsumers() []Stream {
 		consumers[i] = s.links[i].GetConsumer()
 	}
 	return consumers
+}
+
+func (s *SplitStream[T]) Validate() error {
+	for i := 0; i < len(s.links); i++ {
+		if s.links[i].GetConsumer() == nil {
+			return fmt.Errorf("link with index %d for the SplitStream %q does not have consumer", i, s.GetName())
+		}
+	}
+	return nil
 }

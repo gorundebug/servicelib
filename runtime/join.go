@@ -74,6 +74,10 @@ func (s *JoinLink[K, T1, T2, R]) GetTypeName() string {
 	return s.joinStream.GetTypeName()
 }
 
+func (s *JoinLink[K, T1, T2, R]) Validate() error {
+	return nil
+}
+
 type JoinStream[K comparable, T1, T2, R any] struct {
 	ConsumedStream[R]
 	f           JoinFunctionContext[K, T1, T2, R]

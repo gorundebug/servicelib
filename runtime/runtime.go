@@ -614,6 +614,10 @@ func (s *ServiceStream[T]) GetTransformationName() string {
 	return s.GetConfig().GetTransformationName()
 }
 
+func (s *ServiceStream[T]) Validate() error {
+	return nil
+}
+
 type ConsumedStream[T any] struct {
 	ServiceStream[T]
 	caller   Caller[T]

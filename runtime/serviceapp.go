@@ -420,6 +420,12 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error
 }
 
 func (app *ServiceApp) Start(ctx context.Context) error {
+	for _, stream := range app.streams {
+		if err := stream.Validate(); err != nil {
+			return err
+		}
+	}
+
 	serviceConfig := app.getServiceConfig()
 
 	addr := app.httpServer.Addr

@@ -67,9 +67,9 @@ func MultiJoin[K comparable, T, R any](
 }
 
 func MultiJoinLink[K comparable, T1, T2, R any](
-	multiJoin runtime.TypedMultiJoinConsumedStream[K, T1, R],
-	stream runtime.TypedStream[datastruct.KeyValue[K, T2]]) {
-	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoin, stream)
+	multiJoinStream runtime.TypedMultiJoinConsumedStream[K, T1, R],
+	rightStream runtime.TypedStream[datastruct.KeyValue[K, T2]]) {
+	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoinStream, rightStream)
 }
 
 func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.ParallelsFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {

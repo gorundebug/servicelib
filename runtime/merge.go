@@ -32,6 +32,10 @@ func mergeLink[T any](index int, mergeSteam *MergeStream[T], stream TypedStream[
 	return mergeLink
 }
 
+func (s *MergeLink[T]) Validate() error {
+	return nil
+}
+
 func (s *MergeLink[T]) Consume(value T) {
 	s.mergeStream.Consume(value)
 }
