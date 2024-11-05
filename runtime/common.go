@@ -74,6 +74,7 @@ type Stream interface {
 	GetConfig() *config.StreamConfig
 	GetEnvironment() ServiceExecutionEnvironment
 	GetConsumers() []Stream
+	Validate() error
 }
 
 type TypedStream[T any] interface {
