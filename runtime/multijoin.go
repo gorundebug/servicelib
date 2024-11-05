@@ -31,7 +31,6 @@ type multiJoinLinkStream interface {
 	Stream
 	serializeValue(value interface{}) ([]byte, error)
 	deserializeValue([]byte) (interface{}, error)
-	setIndex(index int)
 }
 
 type MultiJoinLinkStream[K comparable, T1, T2, R any] struct {
@@ -54,7 +53,7 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 		serdeValue:      rightStream.GetSerde().(serde.StreamKeyValueSerde[datastruct.KeyValue[K, T2]]).ValueSerializer().(serde.Serde[T2]),
 	}
 	rightStream.SetConsumer(link)
-	multiJoin.addLink(link)
+	link.index = multiJoin.addLink(link)
 }
 
 func (s *MultiJoinLinkStream[K, T1, T2, R]) Validate() error {
@@ -161,9 +160,10 @@ func (s *MultiJoinStream[K, T, R]) consume(key K, index int, value interface{}) 
 	})
 }
 
-func (s *MultiJoinStream[K, T, R]) addLink(link multiJoinLinkStream) {
-	link.setIndex(len(s.links) + 1)
+func (s *MultiJoinStream[K, T, R]) addLink(link multiJoinLinkStream) int {
+	index := len(s.links) + 1
 	s.links = append(s.links, link)
+	return index
 }
 
 func (s *MultiJoinStream[K, T, R]) Consume(value datastruct.KeyValue[K, T]) {
