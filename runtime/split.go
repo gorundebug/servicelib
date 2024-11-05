@@ -188,12 +188,12 @@ func (s *SplitStream[T]) AddStream() TypedConsumedStream[T] {
 	index := len(s.links)
 	link := splitLink[T](index, s)
 	s.links = append(s.links, link)
-	return s.links[index]
+	return link
 }
 
 func (s *SplitStream[T]) Consume(value T) {
-	for i := 0; i < len(s.links); i++ {
-		s.links[i].Consume(value)
+	for _, link := range s.links {
+		link.Consume(value)
 	}
 }
 
