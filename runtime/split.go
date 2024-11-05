@@ -100,7 +100,7 @@ func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 	t, err := s.serde.Deserialize(data)
 	if err != nil {
 		s.environment.Log().Errorln(err)
-	} else {
+	} else if s.caller != nil {
 		s.caller.Consume(t)
 	}
 }
@@ -109,7 +109,7 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 	t, err := s.serdeKV.DeserializeKeyValue(key, value)
 	if err != nil {
 		s.environment.Log().Errorln(err)
-	} else {
+	} else if s.caller != nil {
 		s.caller.Consume(t)
 	}
 }
