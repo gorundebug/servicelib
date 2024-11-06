@@ -100,7 +100,7 @@ func (s *InputSplitStream[T]) ConsumeBinary(data []byte) {
 	t, err := s.serde.Deserialize(data)
 	if err != nil {
 		s.environment.Log().Errorln(err)
-	} else {
+	} else if s.caller != nil {
 		s.caller.Consume(t)
 	}
 }
@@ -109,7 +109,7 @@ func (s *InputKVSplitStream[T]) ConsumeBinary(key []byte, value []byte) {
 	t, err := s.serdeKV.DeserializeKeyValue(key, value)
 	if err != nil {
 		s.environment.Log().Errorln(err)
-	} else {
+	} else if s.caller != nil {
 		s.caller.Consume(t)
 	}
 }
@@ -147,6 +147,13 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
+
+	ser := MakeSerde[T](runtime)
+	if ser.ValueSerializer().IsStub() {
+		env.Log().Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer",
+			serde.GetSerdeType[T]().Name(), name)
+	}
+
 	inputSplitStream := &InputSplitStream[T]{
 		SplitStream: &SplitStream[T]{
 			ConsumedStream: ConsumedStream[T]{
@@ -154,7 +161,7 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 					environment: env,
 					id:          streamConfig.Id,
 				},
-				serde: MakeSerde[T](runtime),
+				serde: ser,
 			},
 			links: make([]*SplitLink[T], 0, 1),
 		},
@@ -163,7 +170,8 @@ func MakeInputSplitStream[T any](name string, env ServiceExecutionEnvironment) *
 	return inputSplitStream
 }
 
-func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecutionEnvironment) *InputKVSplitStream[datastruct.KeyValue[K, V]] {
+func MakeInputKVSplitStream[K comparable, V any](name string,
+	env ServiceExecutionEnvironment) *InputKVSplitStream[datastruct.KeyValue[K, V]] {
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
 	streamConfig := cfg.GetStreamConfigByName(name)
@@ -172,6 +180,14 @@ func MakeInputKVSplitStream[K comparable, V any](name string, env ServiceExecuti
 		return nil
 	}
 	serdeKV := MakeKeyValueSerde[K, V](runtime)
+	if serdeKV.KeySerializer().IsStub() {
+		env.Log().Fatalf("Serializer for the key type '%q in the stream %q can't be a stub serializer",
+			serde.GetSerdeType[K]().Name(), name)
+	}
+	if serdeKV.ValueSerializer().IsStub() {
+		env.Log().Fatalf("Serializer for the value type %q in the stream %q can't be a stub serializer",
+			serde.GetSerdeType[V]().Name(), name)
+	}
 	inputKVSplitStream := &InputKVSplitStream[datastruct.KeyValue[K, V]]{
 		SplitStream: &SplitStream[datastruct.KeyValue[K, V]]{
 			ConsumedStream: ConsumedStream[datastruct.KeyValue[K, V]]{
@@ -213,7 +229,8 @@ func (s *SplitStream[T]) GetConsumers() []Stream {
 func (s *SplitStream[T]) Validate() error {
 	for i := 0; i < len(s.links); i++ {
 		if s.links[i].GetConsumer() == nil {
-			return fmt.Errorf("link with index %d for the SplitStream %q does not have consumer", i, s.GetName())
+			return fmt.Errorf("link with index %d for the SplitStream %q does not have consumer",
+				i, s.GetName())
 		}
 	}
 	return nil
