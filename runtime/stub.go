@@ -173,7 +173,7 @@ func MakeOutStubStream[T any](name string, stream TypedStream[T],
 		return nil
 	}
 
-	ser := MakeSerde[T](runtime)
+	ser := stream.GetSerde()
 
 	outStubStream := &OutStubStream[T]{
 		ConsumedStream: ConsumedStream[T]{
@@ -202,7 +202,7 @@ func MakeOutStubBinaryStream[T any](name string, stream TypedStream[T],
 		return nil
 	}
 
-	ser := MakeSerde[T](runtime)
+	ser := stream.GetSerde()
 	if ser.ValueSerializer().IsStub() {
 		env.Log().Fatalf("Serializer for the type %q in the stream %q can't be a stub serializer",
 			serde.GetSerdeType[T]().Name(), name)
@@ -234,7 +234,7 @@ func MakeOutStubBinaryKVStream[T any](name string, stream TypedStream[T],
 		env.Log().Fatalf("Config for the stream with name=%q does not exists", name)
 		return nil
 	}
-	serdeKV := MakeSerde[T](runtime).(serde.StreamKeyValueSerde[T])
+	serdeKV := stream.GetSerde().(serde.StreamKeyValueSerde[T])
 	if serdeKV.KeySerializer().IsStub() {
 		env.Log().Fatalf("Serializer for the key type %q in the stream %q can't be a stub serializer",
 			serde.GetSerdeType[T]().Name(), name)
