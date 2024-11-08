@@ -38,7 +38,6 @@ type Caller[T any] interface {
 
 type ConsumeStatistics interface {
 	Count() int64
-	LinkId() config.LinkId
 }
 
 type ServiceLoader interface {
@@ -55,7 +54,7 @@ type ServiceExecutionRuntime interface {
 	registerStream(stream Stream)
 	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
-	registerConsumeStatistics(statistics ConsumeStatistics)
+	registerConsumeStatistics(linkId config.LinkId, statistics ConsumeStatistics)
 	registerStorage(storage store.Storage)
 	getTaskPool(name string) pool.TaskPool
 	getPriorityTaskPool(name string) pool.PriorityTaskPool
@@ -466,17 +465,17 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		callSemantics = *link.IncomeCallSemantics
 	}
 	var streamCaller Caller[T]
-	var consumeStat ConsumeStatistics
+	consumeStat := &consumeStatistics{}
 	switch callSemantics {
 	case api.FunctionCall:
 		c := &directCaller[T]{
 			caller: caller[T]{
-				runtime:  runtime,
-				source:   source,
-				consumer: consumer,
+				runtime:    runtime,
+				source:     source,
+				consumer:   consumer,
+				statistics: consumeStat,
 			},
 		}
-		consumeStat = c
 		streamCaller = c
 
 	case api.TaskPool:
@@ -488,13 +487,13 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		}
 		c := &taskPoolCaller[T]{
 			caller: caller[T]{
-				runtime:  runtime,
-				source:   source,
-				consumer: consumer,
+				runtime:    runtime,
+				source:     source,
+				consumer:   consumer,
+				statistics: consumeStat,
 			},
 			pool: taskPool,
 		}
-		consumeStat = c
 		streamCaller = c
 
 	case api.PriorityTaskPool:
@@ -509,21 +508,21 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		}
 		c := &priorityTaskPoolCaller[T]{
 			caller: caller[T]{
-				runtime:  runtime,
-				source:   source,
-				consumer: consumer,
+				runtime:    runtime,
+				source:     source,
+				consumer:   consumer,
+				statistics: consumeStat,
 			},
 			pool:     priorityTaskPool,
 			priority: priority,
 		}
-		consumeStat = c
 		streamCaller = c
 
 	default:
 		env.Log().Fatalf("undefined callSemantics [%d] ", callSemantics)
 	}
 
-	runtime.registerConsumeStatistics(consumeStat)
+	runtime.registerConsumeStatistics(config.LinkId{From: source.GetId(), To: consumer.GetId()}, consumeStat)
 	return streamCaller
 }
 
@@ -540,10 +539,10 @@ func (s *consumeStatistics) Inc() {
 }
 
 type caller[T any] struct {
-	consumeStatistics
-	runtime  ServiceExecutionRuntime
-	source   TypedStream[T]
-	consumer TypedStreamConsumer[T]
+	statistics *consumeStatistics
+	runtime    ServiceExecutionRuntime
+	source     TypedStream[T]
+	consumer   TypedStreamConsumer[T]
 }
 
 func (c *caller[T]) LinkId() config.LinkId {
@@ -555,7 +554,7 @@ type directCaller[T any] struct {
 }
 
 func (c *directCaller[T]) Consume(value T) {
-	c.Inc()
+	c.statistics.Inc()
 	c.consumer.Consume(value)
 }
 
@@ -565,7 +564,7 @@ type taskPoolCaller[T any] struct {
 }
 
 func (c *taskPoolCaller[T]) Consume(value T) {
-	c.Inc()
+	c.statistics.Inc()
 	c.pool.AddTask(func() {
 		c.consumer.Consume(value)
 	})
@@ -578,7 +577,7 @@ type priorityTaskPoolCaller[T any] struct {
 }
 
 func (c *priorityTaskPoolCaller[T]) Consume(value T) {
-	c.Inc()
+	c.statistics.Inc()
 	c.pool.AddTask(c.priority, func() {
 		c.consumer.Consume(value)
 	})
