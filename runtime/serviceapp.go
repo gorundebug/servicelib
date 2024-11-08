@@ -108,8 +108,8 @@ func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) serde.StreamSerialize
 	return app.serdes[tp]
 }
 
-func (app *ServiceApp) registerConsumeStatistics(statistics ConsumeStatistics) {
-	app.consumeStatistics[statistics.LinkId()] = statistics
+func (app *ServiceApp) registerConsumeStatistics(linkId config.LinkId, statistics ConsumeStatistics) {
+	app.consumeStatistics[linkId] = statistics
 }
 
 func (app *ServiceApp) Log() log.Logger {
