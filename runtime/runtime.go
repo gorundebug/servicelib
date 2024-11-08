@@ -447,7 +447,8 @@ func IsKeyValueType[T any]() bool {
 	return tp.PkgPath() == "github.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
 }
 
-func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) Caller[T] {
+func makeCaller[T any](source TypedStream[T]) Caller[T] {
+	env := source.GetEnvironment()
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
 	serviceConfig := env.ServiceConfig()
@@ -457,7 +458,7 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		env.Log().Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
 		return nil
 	}
-	streamFrom := cfg.GetStreamConfigById(link.From)
+	streamFrom := source.GetConfig()
 	var callSemantics api.CallSemantics
 	if streamFrom.IdService == serviceConfig.Id {
 		callSemantics = link.CallSemantics
@@ -470,7 +471,6 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 	case api.FunctionCall:
 		c := &directCaller[T]{
 			caller: caller[T]{
-				runtime:    runtime,
 				source:     source,
 				consumer:   consumer,
 				statistics: consumeStat,
@@ -487,7 +487,6 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		}
 		c := &taskPoolCaller[T]{
 			caller: caller[T]{
-				runtime:    runtime,
 				source:     source,
 				consumer:   consumer,
 				statistics: consumeStat,
@@ -508,7 +507,6 @@ func makeCaller[T any](env ServiceExecutionEnvironment, source TypedStream[T]) C
 		}
 		c := &priorityTaskPoolCaller[T]{
 			caller: caller[T]{
-				runtime:    runtime,
 				source:     source,
 				consumer:   consumer,
 				statistics: consumeStat,
@@ -540,13 +538,8 @@ func (s *consumeStatistics) Inc() {
 
 type caller[T any] struct {
 	statistics *consumeStatistics
-	runtime    ServiceExecutionRuntime
 	source     TypedStream[T]
 	consumer   TypedStreamConsumer[T]
-}
-
-func (c *caller[T]) LinkId() config.LinkId {
-	return config.LinkId{From: c.source.GetId(), To: c.consumer.GetId()}
 }
 
 type directCaller[T any] struct {
@@ -640,7 +633,7 @@ func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 		consumer.GetEnvironment().Log().Fatalf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().Name)
 	}
 	s.consumer = consumer
-	s.caller = makeCaller[T](s.environment, s)
+	s.caller = makeCaller[T](s)
 }
 
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {

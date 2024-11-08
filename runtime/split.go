@@ -40,7 +40,7 @@ func (s *SplitLink[T]) GetConfig() *config.StreamConfig {
 
 func (s *SplitLink[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
 	s.consumer = consumer
-	s.caller = makeCaller[T](s.splitStream.environment, s)
+	s.caller = makeCaller[T](s)
 }
 
 func (s *SplitLink[T]) Validate() error {
