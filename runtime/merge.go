@@ -23,13 +23,13 @@ type MergeLink[T any] struct {
 }
 
 func mergeLink[T any](index int, mergeSteam *MergeStream[T], stream TypedStream[T]) *MergeLink[T] {
-	mergeLink := &MergeLink[T]{
+	link := &MergeLink[T]{
 		mergeStream: mergeSteam,
 		source:      stream,
 		index:       index,
 	}
-	stream.SetConsumer(mergeLink)
-	return mergeLink
+	stream.SetConsumer(link)
+	return link
 }
 
 func (s *MergeLink[T]) Validate() error {
