@@ -86,6 +86,24 @@ func BenchmarkRange(b *testing.B) {
 	}
 }
 
+func BenchmarkRangeWithCopy(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		aCopy := make([]int, len(a))
+		copy(aCopy, a)
+		sum := 0
+		for _, v := range aCopy {
+			sum += v
+		}
+	}
+}
+
 func BenchmarkSeq(b *testing.B) {
 	arraySize := 100000
 	a := make([]int, arraySize)
