@@ -41,8 +41,9 @@ type CustomEndpoint struct {
 
 func (ds *CustomDataSink) Start(ctx context.Context) error {
 	endpoints := ds.OutputDataSink.GetEndpoints()
-	for _, endpoint := range endpoints {
-		if err := endpoint.(CustomSinkEndpoint).Start(ctx); err != nil {
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
+		if err := endpoints.At(i).(CustomSinkEndpoint).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -52,12 +53,13 @@ func (ds *CustomDataSink) Start(ctx context.Context) error {
 func (ds *CustomDataSink) Stop(ctx context.Context) {
 	endpoints := ds.OutputDataSink.GetEndpoints()
 	var wg sync.WaitGroup
-	for _, endpoint := range endpoints {
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
 		wg.Add(1)
 		go func(endpoint CustomSinkEndpoint) {
 			defer wg.Done()
 			endpoint.Stop(ctx)
-		}(endpoint.(CustomSinkEndpoint))
+		}(endpoints.At(i).(CustomSinkEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
@@ -73,8 +75,9 @@ func (ds *CustomDataSink) Stop(ctx context.Context) {
 
 func (ep *CustomEndpoint) Start(ctx context.Context) error {
 	endpointConsumers := ep.GetEndpointConsumers()
-	for _, endpointConsumer := range endpointConsumers {
-		if err := endpointConsumer.(CustomEndpointConsumer).Start(ctx); err != nil {
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		if err := endpointConsumers.At(i).(CustomEndpointConsumer).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -83,8 +86,9 @@ func (ep *CustomEndpoint) Start(ctx context.Context) error {
 
 func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	endpointConsumers := ep.GetEndpointConsumers()
-	for _, endpointConsumer := range endpointConsumers {
-		endpointConsumer.(CustomEndpointConsumer).Stop(ctx)
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		endpointConsumers.At(i).(CustomEndpointConsumer).Stop(ctx)
 	}
 }
 

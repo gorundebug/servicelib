@@ -153,7 +153,7 @@ func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironmen
 		env.Log().Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg.Id, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {
@@ -246,10 +246,11 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestData := netHTTPEndpointRequestData{
 			w:         w,
 			r:         r,
-			optimized: len(endpointConsumers) == 1,
+			optimized: endpointConsumers.Len() == 1,
 		}
-		for _, endpointConsumer := range endpointConsumers {
-			if err := endpointConsumer.(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
+		length := endpointConsumers.Len()
+		for i := 0; i < length; i++ {
+			if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				ep.GetEnvironment().Log().Warnln(err)
 				return
