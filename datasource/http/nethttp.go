@@ -246,10 +246,11 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestData := netHTTPEndpointRequestData{
 			w:         w,
 			r:         r,
-			optimized: len(endpointConsumers) == 1,
+			optimized: endpointConsumers.Len() == 1,
 		}
-		for _, endpointConsumer := range endpointConsumers {
-			if err := endpointConsumer.(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
+		length := endpointConsumers.Len()
+		for i := 0; i < length; i++ {
+			if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				ep.GetEnvironment().Log().Warnln(err)
 				return

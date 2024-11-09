@@ -86,6 +86,40 @@ func BenchmarkRange(b *testing.B) {
 	}
 }
 
+type ImmutableSlice[T any] struct {
+	data []T
+}
+
+func NewImmutableSlice[T any](data []T) ImmutableSlice[T] {
+	return ImmutableSlice[T]{data: data}
+}
+
+func (s ImmutableSlice[T]) Len() int {
+	return len(s.data)
+}
+
+func (s ImmutableSlice[T]) At(i int) T {
+	return s.data[i]
+}
+
+func BenchmarkRangeWithWrapper(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		aWrapper := NewImmutableSlice(a)
+		sum := 0
+		l := aWrapper.Len()
+		for j := 0; j < l; j++ {
+			sum += aWrapper.At(j)
+		}
+	}
+}
+
 func BenchmarkRangeWithCopy(b *testing.B) {
 	arraySize := 100000
 	a := make([]int, arraySize)

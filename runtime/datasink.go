@@ -22,7 +22,7 @@ type DataSink interface {
 	GetEnvironment() ServiceExecutionEnvironment
 	AddEndpoint(SinkEndpoint)
 	GetEndpoint(id int) SinkEndpoint
-	GetEndpoints() []SinkEndpoint
+	GetEndpoints() Collection[SinkEndpoint]
 }
 
 type SinkEndpoint interface {
@@ -31,7 +31,7 @@ type SinkEndpoint interface {
 	GetEnvironment() ServiceExecutionEnvironment
 	GetDataSink() DataSink
 	AddEndpointConsumer(consumer OutputEndpointConsumer)
-	GetEndpointConsumers() []OutputEndpointConsumer
+	GetEndpointConsumers() Collection[OutputEndpointConsumer]
 }
 
 type OutputEndpointConsumer interface {
@@ -72,8 +72,8 @@ func (ds *OutputDataSink) GetEndpoint(id int) SinkEndpoint {
 	return ds.endpoints[id]
 }
 
-func (ds *OutputDataSink) GetEndpoints() []SinkEndpoint {
-	return maps.Values(ds.endpoints)
+func (ds *OutputDataSink) GetEndpoints() Collection[SinkEndpoint] {
+	return NewCollection(maps.Values(ds.endpoints))
 }
 
 func (ds *OutputDataSink) AddEndpoint(endpoint SinkEndpoint) {
@@ -124,8 +124,8 @@ func (ep *DataSinkEndpoint) AddEndpointConsumer(endpointConsumer OutputEndpointC
 	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
 
-func (ep *DataSinkEndpoint) GetEndpointConsumers() []OutputEndpointConsumer {
-	return ep.endpointConsumers
+func (ep *DataSinkEndpoint) GetEndpointConsumers() Collection[OutputEndpointConsumer] {
+	return NewCollection(ep.endpointConsumers)
 }
 
 type DataSinkEndpointConsumer[T any] struct {

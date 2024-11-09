@@ -49,8 +49,9 @@ type CustomEndpoint struct {
 
 func (ep *CustomEndpoint) Start(ctx context.Context) error {
 	endpointConsumers := ep.GetEndpointConsumers()
-	for _, endpointConsumer := range endpointConsumers {
-		if err := endpointConsumer.(CustomEndpointConsumer).Start(ctx); err != nil {
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		if err := endpointConsumers.At(i).(CustomEndpointConsumer).Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -59,8 +60,9 @@ func (ep *CustomEndpoint) Start(ctx context.Context) error {
 
 func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	endpointConsumers := ep.GetEndpointConsumers()
-	for _, endpointConsumer := range endpointConsumers {
-		endpointConsumer.(CustomEndpointConsumer).Stop(ctx)
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		endpointConsumers.At(i).(CustomEndpointConsumer).Stop(ctx)
 	}
 }
 
@@ -99,9 +101,9 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 
 func (ds *CustomDataSource) Start(ctx context.Context) error {
 	endpoints := ds.InputDataSource.GetEndpoints()
-	for _, endpoint := range endpoints {
-		if err := endpoint.(CustomInputEndpoint).Start(ctx); err != nil {
-			return err
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
+		if err := endpoints.At(i).(CustomInputEndpoint).Start(ctx); err != nil {
 		}
 	}
 	return nil
@@ -113,12 +115,13 @@ func (ds *CustomDataSource) WaitGroup() *sync.WaitGroup {
 
 func (ds *CustomDataSource) Stop(ctx context.Context) {
 	endpoints := ds.InputDataSource.GetEndpoints()
-	for _, endpoint := range endpoints {
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
 		ds.wg.Add(1)
 		go func(endpoint CustomInputEndpoint) {
 			defer ds.wg.Done()
 			endpoint.Stop(ctx)
-		}(endpoint.(CustomInputEndpoint))
+		}(endpoints.At(i).(CustomInputEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {

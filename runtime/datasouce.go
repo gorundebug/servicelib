@@ -22,7 +22,7 @@ type DataSource interface {
 	GetEnvironment() ServiceExecutionEnvironment
 	AddEndpoint(InputEndpoint)
 	GetEndpoint(id int) InputEndpoint
-	GetEndpoints() []InputEndpoint
+	GetEndpoints() Collection[InputEndpoint]
 }
 
 type InputEndpoint interface {
@@ -31,7 +31,7 @@ type InputEndpoint interface {
 	GetEnvironment() ServiceExecutionEnvironment
 	GetDataSource() DataSource
 	AddEndpointConsumer(consumer InputEndpointConsumer)
-	GetEndpointConsumers() []InputEndpointConsumer
+	GetEndpointConsumers() Collection[InputEndpointConsumer]
 }
 
 type InputEndpointConsumer interface {
@@ -72,8 +72,8 @@ func (ds *InputDataSource) GetEndpoint(id int) InputEndpoint {
 	return ds.endpoints[id]
 }
 
-func (ds *InputDataSource) GetEndpoints() []InputEndpoint {
-	return maps.Values(ds.endpoints)
+func (ds *InputDataSource) GetEndpoints() Collection[InputEndpoint] {
+	return NewCollection(maps.Values(ds.endpoints))
 }
 
 func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
@@ -124,8 +124,8 @@ func (ep *DataSourceEndpoint) AddEndpointConsumer(endpointConsumer InputEndpoint
 	ep.endpointConsumers = append(ep.endpointConsumers, endpointConsumer)
 }
 
-func (ep *DataSourceEndpoint) GetEndpointConsumers() []InputEndpointConsumer {
-	return ep.endpointConsumers
+func (ep *DataSourceEndpoint) GetEndpointConsumers() Collection[InputEndpointConsumer] {
+	return NewCollection(ep.endpointConsumers)
 }
 
 type DataSourceEndpointConsumer[T any] struct {
