@@ -87,10 +87,10 @@ type DataSourceEndpoint struct {
 	endpointConsumers []InputEndpointConsumer
 }
 
-func MakeDataSourceEndpoint(dataSource DataSource, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSourceEndpoint {
+func MakeDataSourceEndpoint(dataSource DataSource, id int, environment ServiceExecutionEnvironment) *DataSourceEndpoint {
 	return &DataSourceEndpoint{
 		dataSource:        dataSource,
-		id:                config.Id,
+		id:                id,
 		environment:       environment,
 		endpointConsumers: make([]InputEndpointConsumer, 0),
 	}

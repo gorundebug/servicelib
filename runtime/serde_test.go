@@ -15,6 +15,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/stretchr/testify/assert"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -69,7 +70,58 @@ func mockService(environment string) *MockService {
 
 var testMockService = mockService("TestEnvironment")
 
+func BenchmarkRange(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sum := 0
+		for _, v := range a {
+			sum += v
+		}
+	}
+}
+
+func BenchmarkSeq(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+	it := slices.Values(a)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sum := 0
+		for v := range it {
+			sum += v
+		}
+	}
+}
+
+func BenchmarkSeq2(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+	it := slices.All(a)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sum := 0
+		for _, v := range it {
+			sum += v
+		}
+	}
+}
+
 func TestIsKeyValueType(t *testing.T) {
+
 	assert.Equal(t, true, IsKeyValueType[datastruct.KeyValue[int, int]]())
 	assert.Equal(t, false, IsKeyValueType[int]())
 }

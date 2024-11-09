@@ -153,7 +153,7 @@ func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironmen
 		env.Log().Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg.Id, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {

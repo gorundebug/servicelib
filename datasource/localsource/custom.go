@@ -154,7 +154,7 @@ func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment
 		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg, env),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg.Id, env),
 		delay:              time.Duration(*cfg.Delay) * time.Microsecond,
 	}
 	var inputEndpoint CustomInputEndpoint = customEndpoint
