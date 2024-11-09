@@ -143,7 +143,7 @@ func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSink
 		endpoint: endpoint,
 		stream:   stream,
 	}
-	writer := endpoint.GetEnvironment().GetEndpointReader(endpoint, stream, serde.GetSerdeType[T]())
+	writer := endpoint.GetEnvironment().GetEndpointWriter(endpoint, stream, serde.GetSerdeType[T]())
 	if writer != nil {
 		ec.writer = writer.(TypedEndpointWriter[T])
 	}
