@@ -70,6 +70,24 @@ func mockService(environment string) *MockService {
 
 var testMockService = mockService("TestEnvironment")
 
+func BenchmarkFor(b *testing.B) {
+	arraySize := 100000
+	a := make([]int, arraySize)
+	for i := range a {
+		a[i] = i
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sum := 0
+		length := len(a)
+		for j := 0; j < length; j++ {
+			sum += a[j]
+		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
+	}
+}
+
 func BenchmarkRange(b *testing.B) {
 	arraySize := 100000
 	a := make([]int, arraySize)
@@ -83,26 +101,11 @@ func BenchmarkRange(b *testing.B) {
 		for _, v := range a {
 			sum += v
 		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
 	}
 }
 
-type ImmutableSlice[T any] struct {
-	data []T
-}
-
-func NewImmutableSlice[T any](data []T) ImmutableSlice[T] {
-	return ImmutableSlice[T]{data: data}
-}
-
-func (s ImmutableSlice[T]) Len() int {
-	return len(s.data)
-}
-
-func (s ImmutableSlice[T]) At(i int) T {
-	return s.data[i]
-}
-
-func BenchmarkRangeWithWrapper(b *testing.B) {
+func BenchmarkRangeWithCollection(b *testing.B) {
 	arraySize := 100000
 	a := make([]int, arraySize)
 	for i := range a {
@@ -111,12 +114,13 @@ func BenchmarkRangeWithWrapper(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		aWrapper := NewImmutableSlice(a)
+		col := NewCollection(a)
 		sum := 0
-		l := aWrapper.Len()
+		l := col.Len()
 		for j := 0; j < l; j++ {
-			sum += aWrapper.At(j)
+			sum += col.At(j)
 		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
 	}
 }
 
@@ -135,6 +139,7 @@ func BenchmarkRangeWithCopy(b *testing.B) {
 		for _, v := range aCopy {
 			sum += v
 		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
 	}
 }
 
@@ -144,14 +149,15 @@ func BenchmarkSeq(b *testing.B) {
 	for i := range a {
 		a[i] = i
 	}
-	it := slices.Values(a)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		it := slices.Values(a)
 		sum := 0
 		for v := range it {
 			sum += v
 		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
 	}
 }
 
@@ -161,14 +167,15 @@ func BenchmarkSeq2(b *testing.B) {
 	for i := range a {
 		a[i] = i
 	}
-	it := slices.All(a)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		it := slices.All(a)
 		sum := 0
 		for _, v := range it {
 			sum += v
 		}
+		assert.Equal(b, sum, (arraySize*(arraySize-1))/2)
 	}
 }
 
