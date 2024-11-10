@@ -104,6 +104,7 @@ func (ds *CustomDataSource) Start(ctx context.Context) error {
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
 		if err := endpoints.At(i).(CustomInputEndpoint).Start(ctx); err != nil {
+			return err
 		}
 	}
 	return nil
