@@ -409,7 +409,7 @@ components:
     DataFormat:
       type: string
       enum: [ 'json',
-              'gorilla/schema'
+              'schema'
       ]
 
     Endpoint:

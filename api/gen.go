@@ -42,8 +42,8 @@ const (
 
 // Defines values for DataFormat.
 const (
-	Gorillaschema DataFormat = "gorilla/schema"
-	Json          DataFormat = "json"
+	Json   DataFormat = "json"
+	Schema DataFormat = "schema"
 )
 
 // Defines values for DataType.
