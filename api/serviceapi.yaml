@@ -374,6 +374,7 @@ components:
       type: string
       enum: [ 'net/http',
               'FastHTTP',
+              'aiohttp',
               'function'
       ]
 

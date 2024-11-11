@@ -26,6 +26,7 @@ const (
 
 // Defines values for DataConnectorImplementation.
 const (
+	Aiohttp  DataConnectorImplementation = "aiohttp"
 	FastHTTP DataConnectorImplementation = "FastHTTP"
 	Function DataConnectorImplementation = "function"
 	Nethttp  DataConnectorImplementation = "net/http"
