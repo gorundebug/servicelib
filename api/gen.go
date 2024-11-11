@@ -26,6 +26,7 @@ const (
 
 // Defines values for DataConnectorImplementation.
 const (
+	Aiohttp  DataConnectorImplementation = "aiohttp"
 	FastHTTP DataConnectorImplementation = "FastHTTP"
 	Function DataConnectorImplementation = "function"
 	Nethttp  DataConnectorImplementation = "net/http"
@@ -41,8 +42,8 @@ const (
 
 // Defines values for DataFormat.
 const (
-	Gorillaschema DataFormat = "gorilla/schema"
-	Json          DataFormat = "json"
+	Json   DataFormat = "json"
+	Schema DataFormat = "schema"
 )
 
 // Defines values for DataType.
@@ -171,7 +172,6 @@ type Endpoint struct {
 	IdDataConnector     int         `json:"idDataConnector"`
 	Method              *string     `json:"method,omitempty"`
 	Name                string      `json:"name"`
-	Param               *string     `json:"param,omitempty"`
 	Path                *string     `json:"path,omitempty"`
 	PublicFunction      *bool       `json:"publicFunction,omitempty"`
 }

@@ -57,6 +57,7 @@ type ServiceApp struct {
 	loader            ServiceLoader
 	logsEngine        log.LogsEngine
 	log               log.Logger
+	dep               environment.ServiceDependency
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
@@ -83,6 +84,10 @@ func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
 
 func (app *ServiceApp) ServiceConfig() *config.ServiceConfig {
 	return app.getServiceConfig()
+}
+
+func (app *ServiceApp) ServiceDependency() environment.ServiceDependency {
+	return nil
 }
 
 func (app *ServiceApp) ReloadConfig(config config.Config) {
@@ -128,6 +133,7 @@ func (app *ServiceApp) serviceInit(name string,
 
 	var err error
 
+	app.dep = dep
 	app.loader = loader
 	app.environment = env
 
@@ -139,6 +145,8 @@ func (app *ServiceApp) serviceInit(name string,
 		return fmt.Errorf("cannot find service config for %s", name)
 	}
 	app.id = serviceConfig.Id
+
+	dep = env.ServiceDependency()
 
 	if dep != nil {
 		app.logsEngine = dep.LogsEngine(env)

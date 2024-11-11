@@ -109,10 +109,9 @@ type NetHTTPEndpointTypedConsumer[T any] struct {
 type NetHTTPEndpointJsonConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
 	tType reflect.Type
-	param *string
 }
 
-type NetHTTPEndpointGorillaSchemaConsumer[T any] struct {
+type NetHTTPEndpointSchemaConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
 	tType   reflect.Type
 	decoder *schema.Decoder
@@ -262,39 +261,26 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
 	var t T
-	if requestData.GetMethod() == http.MethodPost || ec.param == nil || len(*ec.param) == 0 {
-		if reader, err := requestData.GetBody(); err != nil {
-			return fmt.Errorf("unable to read request: %s", err.Error())
-		} else {
-			t, err = func(reader io.ReadCloser) (T, error) {
-				defer func() {
-					if err := reader.Close(); err != nil {
-						ec.Endpoint().GetEnvironment().Log().Warnln(err)
-					}
-				}()
-				return ec.DeserializeJsonBody(reader)
-			}(reader)
-			if err != nil {
-				return fmt.Errorf("invalid request body: %s", err.Error())
-			}
-		}
+	if reader, err := requestData.GetBody(); err != nil {
+		return fmt.Errorf("unable to read request: %s", err.Error())
 	} else {
-		query := requestData.GetQuery()
-		data := query.Get(*ec.param)
-		if data == "" {
-			return fmt.Errorf("missing %q parameter", *ec.param)
-		}
-		var err error
-		t, err = ec.DeserializeJson(data)
+		t, err = func(reader io.ReadCloser) (T, error) {
+			defer func() {
+				if err := reader.Close(); err != nil {
+					ec.Endpoint().GetEnvironment().Log().Warnln(err)
+				}
+			}()
+			return ec.DeserializeJsonBody(reader)
+		}(reader)
 		if err != nil {
-			return fmt.Errorf("error deserializing %q parameter: %s", *ec.param, err.Error())
+			return fmt.Errorf("invalid request body: %s", err.Error())
 		}
 	}
 	ec.Consume(t)
 	return nil
 }
 
-func (ec *NetHTTPEndpointGorillaSchemaConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
+func (ec *NetHTTPEndpointSchemaConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
 	var form url.Values
 	var err error
 	if form, err = requestData.GetForm(); err != nil {
@@ -326,24 +312,23 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 
 	var consumer runtime.Consumer[T]
 	var netHTTPEndpointConsumer NetHTTPEndpointConsumer
-	if endpoint.GetConfig().Format == nil {
+	if cfg.Format == nil {
 		env.Log().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
 	}
-	switch *endpoint.GetConfig().Format {
+	switch *cfg.Format {
 	case "json":
 		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 				isTypePtr:                  serde.IsTypePtr[T](),
 			},
-			param: cfg.Param,
 			tType: serde.GetSerdeTypeWithoutPtr[T](),
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
 
-	case "gorilla/schema":
-		endpointConsumer := &NetHTTPEndpointGorillaSchemaConsumer[T]{
+	case "schema":
+		endpointConsumer := &NetHTTPEndpointSchemaConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 				isTypePtr:                  serde.IsTypePtr[T](),

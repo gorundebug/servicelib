@@ -374,6 +374,7 @@ components:
       type: string
       enum: [ 'net/http',
               'FastHTTP',
+              'aiohttp',
               'function'
       ]
 
@@ -408,7 +409,7 @@ components:
     DataFormat:
       type: string
       enum: [ 'json',
-              'gorilla/schema'
+              'schema'
       ]
 
     Endpoint:
@@ -430,8 +431,6 @@ components:
           type: string
         format:
           $ref: '#/components/schemas/DataFormat'
-        param:
-          type: string
         functionName:
           type: string
         functionPackage:

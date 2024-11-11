@@ -41,4 +41,6 @@ type Logger interface {
 	Errorln(args ...interface{})
 	Fatalln(args ...interface{})
 	Panicln(args ...interface{})
+
+	NativeLogger() interface{}
 }

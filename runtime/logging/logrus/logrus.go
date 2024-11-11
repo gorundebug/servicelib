@@ -21,8 +21,16 @@ type LogEngine struct {
 	environment environment.ServiceEnvironment
 }
 
+type Logger struct {
+	*logrus.Logger
+}
+
+func (logger *Logger) NativeLogger() interface{} {
+	return logger.Logger
+}
+
 func (l *LogEngine) DefaultLogger(cfg *log.Config) log.Logger {
-	return logrus.StandardLogger()
+	return &Logger{Logger: logrus.StandardLogger()}
 }
 
 func CreateLogsEngine(env environment.ServiceEnvironment) log.LogsEngine {
