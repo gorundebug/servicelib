@@ -138,6 +138,10 @@ func (ec *DataSinkEndpointConsumer[T]) Endpoint() SinkEndpoint {
 	return ec.endpoint
 }
 
+func (ec *DataSinkEndpointConsumer[T]) Stream() TypedSinkStream[T] {
+	return ec.stream
+}
+
 func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSinkStream[T]) *DataSinkEndpointConsumer[T] {
 	ec := &DataSinkEndpointConsumer[T]{
 		endpoint: endpoint,

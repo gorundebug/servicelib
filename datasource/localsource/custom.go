@@ -75,6 +75,7 @@ func (ep *CustomEndpoint) NextMessage() {
 type TypedCustomEndpointConsumer[T any] struct {
 	*runtime.DataSourceEndpointConsumer[T]
 	dataProducer DataProducer[T]
+	wg           sync.WaitGroup
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
@@ -86,8 +87,12 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 	endpoint := ep.Endpoint()
 	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
 	dataSource.WaitGroup().Add(1)
+	ep.wg.Add(1)
 	go func() {
-		defer dataSource.WaitGroup().Done()
+		defer func() {
+			ep.wg.Done()
+			dataSource.WaitGroup().Done()
+		}()
 		if err := ep.dataProducer.Start(ctx, ep); err != nil {
 			dataSource.GetEnvironment().Log().Fatalln(err)
 		}
@@ -96,7 +101,32 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
-	ep.dataProducer.Stop(ctx)
+	endpoint := ep.Endpoint()
+	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
+	dataSource.WaitGroup().Add(1)
+	ep.wg.Add(1)
+	go func() {
+		defer func() {
+			ep.wg.Done()
+		}()
+		ep.dataProducer.Stop(ctx)
+	}()
+	go func() {
+		defer dataSource.WaitGroup().Done()
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			ep.wg.Wait()
+		}()
+		select {
+		case <-c:
+		case <-ctx.Done():
+			dataSource.GetEnvironment().Log().Warnf(
+				"Custom data source endpoint %q for the stream %q stopped by timeout.",
+				endpoint.GetName(),
+				ep.Stream().GetName())
+		}
+	}()
 }
 
 func (ds *CustomDataSource) Start(ctx context.Context) error {
@@ -104,6 +134,7 @@ func (ds *CustomDataSource) Start(ctx context.Context) error {
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
 		if err := endpoints.At(i).(CustomInputEndpoint).Start(ctx); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -131,7 +162,7 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf("Stop custom datasource %q after timeout.", ds.GetName())
+		ds.GetEnvironment().Log().Warnf("Stop custom data source %q after timeout.", ds.GetName())
 	}
 }
 

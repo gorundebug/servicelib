@@ -142,6 +142,10 @@ func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
 	return ec.endpoint
 }
 
+func (ec *DataSourceEndpointConsumer[T]) Stream() TypedInputStream[T] {
+	return ec.inputStream
+}
+
 func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream TypedInputStream[T]) *DataSourceEndpointConsumer[T] {
 	ec := &DataSourceEndpointConsumer[T]{
 		inputStream: inputStream,
