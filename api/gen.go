@@ -172,7 +172,6 @@ type Endpoint struct {
 	IdDataConnector     int         `json:"idDataConnector"`
 	Method              *string     `json:"method,omitempty"`
 	Name                string      `json:"name"`
-	Param               *string     `json:"param,omitempty"`
 	Path                *string     `json:"path,omitempty"`
 	PublicFunction      *bool       `json:"publicFunction,omitempty"`
 }
