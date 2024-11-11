@@ -142,7 +142,7 @@ func (ec *DataSourceEndpointConsumer[T]) Endpoint() InputEndpoint {
 	return ec.endpoint
 }
 
-func (ec *DataSourceEndpointConsumer[T]) InputStream() TypedInputStream[T] {
+func (ec *DataSourceEndpointConsumer[T]) Stream() TypedInputStream[T] {
 	return ec.inputStream
 }
 

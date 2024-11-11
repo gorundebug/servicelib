@@ -19,6 +19,11 @@ type DataConsumer[T any] interface {
 	Stop(context.Context)
 }
 
+type CustomOutputDataSink interface {
+	runtime.DataSink
+	WaitGroup() *sync.WaitGroup
+}
+
 type CustomEndpointConsumer interface {
 	runtime.OutputEndpointConsumer
 	Start(context.Context) error
@@ -33,6 +38,7 @@ type CustomSinkEndpoint interface {
 
 type CustomDataSink struct {
 	*runtime.OutputDataSink
+	wg sync.WaitGroup
 }
 
 type CustomEndpoint struct {
@@ -52,25 +58,28 @@ func (ds *CustomDataSink) Start(ctx context.Context) error {
 
 func (ds *CustomDataSink) Stop(ctx context.Context) {
 	endpoints := ds.OutputDataSink.GetEndpoints()
-	var wg sync.WaitGroup
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		wg.Add(1)
+		ds.wg.Add(1)
 		go func(endpoint CustomSinkEndpoint) {
-			defer wg.Done()
+			defer ds.wg.Done()
 			endpoint.Stop(ctx)
 		}(endpoints.At(i).(CustomSinkEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
 		defer close(c)
-		wg.Wait()
+		ds.wg.Wait()
 	}()
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf("Stop custom datasink %q after timeout.", ds.GetName())
+		ds.GetEnvironment().Log().Warnf("Stop custom data sink %q after timeout.", ds.GetName())
 	}
+}
+
+func (ds *CustomDataSink) WaitGroup() *sync.WaitGroup {
+	return &ds.wg
 }
 
 func (ep *CustomEndpoint) Start(ctx context.Context) error {
@@ -109,20 +118,46 @@ func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
 }
 
 func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
-	ep.dataConsumer.Stop(ctx)
+	endpoint := ep.Endpoint()
+	dataSink := endpoint.GetDataSink().(CustomOutputDataSink)
+	dataSink.WaitGroup().Add(1)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer func() {
+			wg.Done()
+		}()
+		ep.dataConsumer.Stop(ctx)
+	}()
+	go func() {
+		defer dataSink.WaitGroup().Done()
+		c := make(chan struct{})
+		go func() {
+			defer close(c)
+			wg.Wait()
+		}()
+		select {
+		case <-c:
+		case <-ctx.Done():
+			dataSink.GetEnvironment().Log().Warnf(
+				"Custom data sink endpoint %q for the stream %q stopped by timeout.",
+				endpoint.GetName(),
+				ep.Stream().GetName())
+		}
+	}()
 }
 
-func getCustomDataSink(id int, execRuntime runtime.ServiceExecutionEnvironment) runtime.DataSink {
-	dataSink := execRuntime.GetDataSink(id)
+func getCustomDataSink(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSink {
+	dataSink := env.GetDataSink(id)
 	if dataSink != nil {
 		return dataSink
 	}
-	cfg := execRuntime.AppConfig().GetDataConnectorById(id)
+	cfg := env.AppConfig().GetDataConnectorById(id)
 	customDataSink := &CustomDataSink{
-		OutputDataSink: runtime.MakeOutputDataSink(cfg, execRuntime),
+		OutputDataSink: runtime.MakeOutputDataSink(cfg, env),
 	}
-	var outputDataSink runtime.DataSink = customDataSink
-	execRuntime.AddDataSink(outputDataSink)
+	var outputDataSink CustomOutputDataSink = customDataSink
+	env.AddDataSink(outputDataSink)
 	return customDataSink
 }
 

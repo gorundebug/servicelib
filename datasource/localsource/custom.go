@@ -112,6 +112,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 		ep.dataProducer.Stop(ctx)
 	}()
 	go func() {
+		defer dataSource.WaitGroup().Done()
 		c := make(chan struct{})
 		go func() {
 			defer close(c)
@@ -120,12 +121,11 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 		select {
 		case <-c:
 		case <-ctx.Done():
-			ep.Endpoint().GetDataSource().GetEnvironment().Log().Warnf(
-				"Custom datasource endpoint %q for the stream %q stopped by timeout.",
-				ep.Endpoint().GetName(),
-				ep.InputStream().GetName())
+			dataSource.GetEnvironment().Log().Warnf(
+				"Custom data source endpoint %q for the stream %q stopped by timeout.",
+				endpoint.GetName(),
+				ep.Stream().GetName())
 		}
-		dataSource.WaitGroup().Done()
 	}()
 }
 
@@ -162,7 +162,7 @@ func (ds *CustomDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf("Stop custom datasource %q after timeout.", ds.GetName())
+		ds.GetEnvironment().Log().Warnf("Stop custom data source %q after timeout.", ds.GetName())
 	}
 }
 
