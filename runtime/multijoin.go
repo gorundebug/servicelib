@@ -101,10 +101,6 @@ func (s *MultiJoinLinkStream[K, T1, T2, R]) GetTypeName() string {
 	return s.multiJoinStream.GetTypeName()
 }
 
-func (s *MultiJoinLinkStream[K, T1, T2, R]) setIndex(index int) {
-	s.index = index
-}
-
 type MultiJoinStream[K comparable, T, R any] struct {
 	ConsumedStream[R]
 	f           MultiJoinFunctionContext[K, T, R]
