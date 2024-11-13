@@ -42,8 +42,8 @@ const (
 
 // Defines values for DataFormat.
 const (
-	Json   DataFormat = "json"
-	Schema DataFormat = "schema"
+	Form DataFormat = "form"
+	Json DataFormat = "json"
 )
 
 // Defines values for DataType.

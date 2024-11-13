@@ -236,12 +236,10 @@ func (app *ServiceApp) serviceInit(name string,
 					if _, ok := app.taskPools[poolName]; !ok {
 						app.taskPools[poolName] = pool.MakeTaskPool(env, poolName)
 					}
-				} else if callSemantics == api.PriorityTaskPool {
+				} else {
 					if _, ok := app.priorityTaskPools[poolName]; !ok {
 						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(env, poolName)
 					}
-				} else {
-					return fmt.Errorf("invalid call semantics %d for link{from=%d, to=%d}", callSemantics, link.From, link.To)
 				}
 			}
 		}

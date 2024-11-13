@@ -111,7 +111,7 @@ type NetHTTPEndpointJsonConsumer[T any] struct {
 	tType reflect.Type
 }
 
-type NetHTTPEndpointSchemaConsumer[T any] struct {
+type NetHTTPEndpointFormConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
 	tType   reflect.Type
 	decoder *schema.Decoder
@@ -280,7 +280,7 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 	return nil
 }
 
-func (ec *NetHTTPEndpointSchemaConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
+func (ec *NetHTTPEndpointFormConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
 	var form url.Values
 	var err error
 	if form, err = requestData.GetForm(); err != nil {
@@ -327,8 +327,8 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
 
-	case "schema":
-		endpointConsumer := &NetHTTPEndpointSchemaConsumer[T]{
+	case "form":
+		endpointConsumer := &NetHTTPEndpointFormConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 				isTypePtr:                  serde.IsTypePtr[T](),
