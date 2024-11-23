@@ -12,6 +12,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"io"
 	"reflect"
@@ -27,6 +28,8 @@ type ServiceExecutionEnvironment interface {
 	Stop(context.Context)
 	AddDataSource(dataSource DataSource)
 	GetDataSource(id int) DataSource
+	GetTaskPool(name string) pool.TaskPool
+	GetPriorityTaskPool(name string) pool.PriorityTaskPool
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
 	GetConsumeTimeout(from int, to int) time.Duration

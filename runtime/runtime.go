@@ -56,8 +56,6 @@ type ServiceExecutionRuntime interface {
 	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(linkId config.LinkId, statistics ConsumeStatistics)
 	registerStorage(storage store.Storage)
-	getTaskPool(name string) pool.TaskPool
-	getPriorityTaskPool(name string) pool.PriorityTaskPool
 	getLog() log.Logger
 }
 
@@ -481,9 +479,9 @@ func makeCaller[T any](source TypedStream[T]) Caller[T] {
 	case api.TaskPool:
 		var taskPool pool.TaskPool
 		if streamFrom.IdService == serviceConfig.Id {
-			taskPool = runtime.getTaskPool(*link.PoolName)
+			taskPool = env.GetTaskPool(*link.PoolName)
 		} else {
-			taskPool = runtime.getTaskPool(*link.IncomePoolName)
+			taskPool = env.GetTaskPool(*link.IncomePoolName)
 		}
 		c := &taskPoolCaller[T]{
 			caller: caller[T]{
@@ -499,10 +497,10 @@ func makeCaller[T any](source TypedStream[T]) Caller[T] {
 		var priorityTaskPool pool.PriorityTaskPool
 		var priority int
 		if streamFrom.IdService == serviceConfig.Id {
-			priorityTaskPool = runtime.getPriorityTaskPool(*link.PoolName)
+			priorityTaskPool = env.GetPriorityTaskPool(*link.PoolName)
 			priority = *link.Priority
 		} else {
-			priorityTaskPool = runtime.getPriorityTaskPool(*link.IncomePoolName)
+			priorityTaskPool = env.GetPriorityTaskPool(*link.IncomePoolName)
 			priority = *link.IncomePriority
 		}
 		c := &priorityTaskPoolCaller[T]{

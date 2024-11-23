@@ -11,125 +11,35 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gorundebug/servicelib/datasource"
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/gorundebug/servicelib/transformation"
+	"github.com/gorundebug/servicelib/tests/mockservice"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
-	"os"
-	"os/signal"
-	"reflect"
-	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
 
-type RequestData struct {
-	Text string `json:"text,omitempty"`
+func TestMain(m *testing.M) {
+	mockservice.Main(func() int {
+		return m.Run()
+	})
 }
 
-type RequestDataSerde struct{}
-
-func (s *RequestDataSerde) IsStub() bool {
-	return false
-}
-
-func (s *RequestDataSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
-	v, ok := value.(*RequestData)
-	if !ok {
-		return nil, fmt.Errorf("value is not *RequestData")
-	}
-	return s.Serialize(v, b)
-}
-
-func (s *RequestDataSerde) DeserializeObj(data []byte) (interface{}, error) {
-	return s.Deserialize(data)
-}
-
-func (s *RequestDataSerde) Serialize(value *RequestData, b []byte) ([]byte, error) {
-	return b, nil
-}
-
-func (s *RequestDataSerde) Deserialize(data []byte) (*RequestData, error) {
-	value := &RequestData{}
-	return value, nil
-}
-
-type MockServiceConfig struct {
-	config.ServiceAppConfig `mapstructure:",squash"`
-}
-
-type MockService struct {
-	runtime.ServiceApp
-	serviceConfig          *MockServiceConfig //nolint:unused
-	done                   chan struct{}
-	appSink                runtime.TypedStreamConsumer[*RequestData]
-	inputRequest           runtime.TypedInputStream[*RequestData]
-	inputRequestDataSource runtime.Consumer[*RequestData]
-	requestData            *RequestData
-}
-
-func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error) {
-	switch valueType {
-	case serde.GetSerdeType[RequestData](), serde.GetSerdeType[*RequestData]():
-		{
-			var ser serde.Serde[*RequestData] = &RequestDataSerde{}
-			return ser, nil
-		}
-	}
-	return nil, nil
-}
-
-func (s *MockService) StreamsInit(ctx context.Context) {
-	s.done = make(chan struct{})
-	s.inputRequest = transformation.Input[*RequestData]("InputRequest", s)
-	s.inputRequestDataSource = datasource.NetHTTPEndpointConsumer[*RequestData](s.inputRequest)
-	s.appSink = transformation.AppSink[*RequestData]("AppSink", s.inputRequest, s.consume)
-}
-
-func (s *MockService) consume(value *RequestData) error {
-	s.requestData = value
-	s.done <- struct{}{}
-	return nil
-}
-
-func (s *MockService) SetConfig(config config.Config) {
-}
-
-func (s *MockService) StartService(ctx context.Context) error {
-	s.StreamsInit(ctx)
-	return s.ServiceApp.Start(ctx)
-}
-
-func (s *MockService) StopService(ctx context.Context) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.ServiceConfig().ShutdownTimeout)*time.Millisecond)
-	defer cancel()
-	wg := sync.WaitGroup{}
-	done := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		s.ServiceApp.Stop(timeoutCtx)
-	}()
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-timeoutCtx.Done():
-	}
-}
-
-func (s *MockService) sendRequest() error {
+func sendRequest() error {
 	url := "http://localhost:8080/data"
 	data := []byte(`{"text":"OK"}`)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(data))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("error creating request: %s", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request: %s", err)
 	}
@@ -141,44 +51,19 @@ func (s *MockService) sendRequest() error {
 	if err != nil {
 		return fmt.Errorf("error reading response: %s", err)
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("status code is %d", resp.StatusCode)
 	}
+
 	return nil
 }
 
 func TestNetHTTPEndpointConsumer(t *testing.T) {
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	signal.Notify(stop, syscall.SIGTERM)
-
-	mainCtx := context.Background()
-	timeoutCtx, cancel := context.WithTimeout(mainCtx, time.Duration(1000)*time.Second)
-	defer cancel()
-
-	configSettings := config.ConfigSettings{}
-	service, err := runtime.MakeService[*MockService, *MockServiceConfig]("IncomeService", nil, &configSettings)
-	if err != nil {
-		assert.Equal(t, err, nil)
-		return
+	service := mockservice.GetMockService()
+	assert.Equal(t, nil, sendRequest())
+	assert.NotNilf(t, service.RequestData, "request data is nil")
+	if service.RequestData != nil {
+		assert.Equal(t, "OK", service.RequestData.Text)
 	}
-
-	if err := service.StartService(mainCtx); err != nil {
-		assert.Equal(t, nil, err)
-		return
-	}
-	go func() {
-		defer func() { service.done <- struct{}{} }()
-		assert.Equal(t, nil, service.sendRequest())
-		assert.NotNilf(t, service.requestData, "request data is nil")
-		if service.requestData != nil {
-			assert.Equal(t, "OK", service.requestData.Text)
-		}
-	}()
-	select {
-	case <-service.done:
-	case <-timeoutCtx.Done():
-		t.Errorf("TestNetHTTPEndpointConsumer timeout: %s", timeoutCtx.Err())
-	}
-	service.StopService(mainCtx)
 }

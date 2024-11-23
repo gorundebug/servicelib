@@ -67,9 +67,8 @@ func makeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
 }
 
 func (p *TaskPoolImpl) AddTask(fn func()) *Task {
-	p.lock.Lock()
-	defer p.lock.Unlock()
 	task := &Task{fn: fn}
+	p.lock.Lock()
 	if p.tail != nil {
 		task.prev = p.tail
 		p.tail.next = task
@@ -78,6 +77,7 @@ func (p *TaskPoolImpl) AddTask(fn func()) *Task {
 	}
 	p.tail = task
 	p.count++
+	p.lock.Unlock()
 	p.cond.Signal()
 	p.gaugeQueueLength.Inc()
 	return task
@@ -111,8 +111,8 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 				task.next = nil
 				p.count--
-				p.gaugeQueueLength.Dec()
 				p.lock.Unlock()
+				p.gaugeQueueLength.Dec()
 				task.fn()
 			}
 		}()

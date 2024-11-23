@@ -245,7 +245,6 @@ func (app *ServiceApp) serviceInit(name string,
 		}
 	}
 	env.SetConfig(cfg)
-
 	return nil
 }
 
@@ -595,10 +594,10 @@ func (app *ServiceApp) Delay(duration time.Duration, f func()) {
 	_ = app.delayPool.Delay(duration, f)
 }
 
-func (app *ServiceApp) getTaskPool(name string) pool.TaskPool {
+func (app *ServiceApp) GetTaskPool(name string) pool.TaskPool {
 	return app.taskPools[name]
 }
 
-func (app *ServiceApp) getPriorityTaskPool(name string) pool.PriorityTaskPool {
+func (app *ServiceApp) GetPriorityTaskPool(name string) pool.PriorityTaskPool {
 	return app.priorityTaskPools[name]
 }
