@@ -1,5 +1,5 @@
 pools:
-- executorsCount: 1
+- executorsCount: 8
   name: Default
 dataConnectors:
 - host: $httpServerHost

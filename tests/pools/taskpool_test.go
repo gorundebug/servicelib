@@ -9,6 +9,7 @@ package pools
 
 import (
 	"github.com/gorundebug/servicelib/tests/mockservice"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 func TestMain(m *testing.M) {
 	mockservice.Main(func() int {
+		runtime.GOMAXPROCS(8)
 		return m.Run()
 	})
 }
@@ -30,6 +32,7 @@ func BenchmarkWithTaskPool(b *testing.B) {
 
 	task := func() {
 		defer wg.Done()
+		runtime.Gosched()
 		counter.Add(1)
 	}
 
@@ -56,6 +59,7 @@ func BenchmarkWithoutTaskPool(b *testing.B) {
 
 	task := func() {
 		defer wg.Done()
+		runtime.Gosched()
 		counter.Add(1)
 	}
 
