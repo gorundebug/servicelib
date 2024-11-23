@@ -53,6 +53,24 @@ streams:
   type: 14
   xPos: -1285
   yPos: -62
+- id: 3
+  idEndpoint: 1
+  idService: 1
+  idSource: 0
+  idSources: []
+  name: InputRequest2
+  type: 1
+  valueType: RequestData
+  xPos: -1
+  yPos: 36
+- id: 4
+  idService: 1
+  idSource: 1
+  idSources: [ ]
+  name: AppSink2
+  type: 14
+  xPos: -1285
+  yPos: -62
 types:
 - definitionFormat: 2
   name: RequestData
@@ -61,8 +79,14 @@ types:
   transferByValue: false
   type: struct
 links:
-- callSemantics: 2
+- callSemantics: 3
+  priority: 0
   from: 1
   inheritedCallSemantics: false
   poolName: "Default"
   to: 2
+- callSemantics: 2
+  from: 3
+  inheritedCallSemantics: false
+  poolName: "Default"
+  to: 4

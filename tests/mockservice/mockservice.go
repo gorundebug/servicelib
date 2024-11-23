@@ -16,6 +16,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/transformation"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -121,8 +122,8 @@ func GetMockService() *MockService {
 	return service
 }
 
-func Main(run func() int) int {
-	_ = os.Chdir("../mockservice")
+func Main(dir string, run func() int) int {
+	_ = os.Chdir(path.Join(dir, "mockservice"))
 
 	mainCtx := context.Background()
 

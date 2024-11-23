@@ -20,7 +20,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	mockservice.Main(func() int {
+	mockservice.Main("..", func() int {
 		return m.Run()
 	})
 }

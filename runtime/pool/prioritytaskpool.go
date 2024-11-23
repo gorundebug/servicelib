@@ -103,8 +103,8 @@ func (p *PriorityTaskPoolImpl) AddTask(priority int, fn func()) *PriorityTask {
 		priority: priority,
 	}
 	p.lock.Lock()
-	defer p.lock.Unlock()
 	heap.Push(p.pq, task)
+	p.lock.Unlock()
 	p.gaugeQueueLength.Inc()
 	p.cond.Signal()
 	return task
