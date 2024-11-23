@@ -133,6 +133,7 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 				p.gaugeQueueLength.Dec()
 				p.lock.Unlock()
 				task.fn()
+				task.fn = nil
 			}
 		}()
 	}
