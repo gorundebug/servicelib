@@ -17,7 +17,7 @@ import (
 
 func TestMain(m *testing.M) {
 	mockservice.Main("../..", func() int {
-		runtime.GOMAXPROCS(8)
+		runtime.GOMAXPROCS(16)
 		return m.Run()
 	})
 }
