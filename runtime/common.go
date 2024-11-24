@@ -112,8 +112,7 @@ type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
 }
 
 type TypedLinkStream[T any] interface {
-	TypedStream[T]
-	Consumer[T]
+	TypedConsumedStream[T]
 	SetSource(TypedConsumedStream[T])
 }
 
@@ -133,8 +132,7 @@ type TypedBinaryKVSplitStream[T any] interface {
 }
 
 type TypedInputStream[T any] interface {
-	TypedStream[T]
-	Consumer[T]
+	TypedConsumedStream[T]
 	GetEndpointId() int
 }
 

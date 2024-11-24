@@ -40,7 +40,7 @@ func Input[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.
 	return runtime.MakeInputStream[T](name, env)
 }
 
-func AppInput[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedStream[T] {
+func AppInput[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedConsumedStream[T] {
 	return runtime.MakeAppInputStream[T](name, env)
 }
 
