@@ -106,6 +106,7 @@ const (
 
 // Defines values for TransformationType.
 const (
+	TransformationTypeAppInput        TransformationType = 17
 	TransformationTypeAppSink         TransformationType = 14
 	TransformationTypeCycleLink       TransformationType = 15
 	TransformationTypeDelay           TransformationType = 16

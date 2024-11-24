@@ -1,0 +1,92 @@
+pools:
+- executorsCount: 4
+  name: Default
+dataConnectors:
+- host: $httpServerHost
+  id: 1
+  implementation: net/http
+  name: HttpServer
+  port: $httpServerPort
+  programmingLanguage: 1
+  type: 1
+endpoints:
+- format: json
+  id: 1
+  idDataConnector: 1
+  method: POST
+  name: Data
+  path: /data
+services:
+- color: '#D2E5FF'
+  defaultCallSemantics: 1
+  defaultGrpcTimeout: 0
+  grpcHost: 127.0.0.1
+  grpcPort: $incomeServiceGrpcPort
+  id: 1
+  monitoringHost: 127.0.0.1
+  monitoringPort: $incomeServiceMonitoringPort
+  name: IncomeService
+  programmingLanguage: 1
+  shutdownTimeout: 30000
+  metricsEngine: 1
+  environment: nethttp_test
+settings:
+  golangVersion: 1.22.3
+  modulePath: test.com
+  name: FilterWords
+streams:
+- id: 1
+  idEndpoint: 1
+  idService: 1
+  idSource: 0
+  idSources: []
+  name: InputRequest
+  type: 1
+  valueType: RequestData
+  xPos: -1
+  yPos: 36
+- id: 2
+  idService: 1
+  idSource: 1
+  idSources: [ ]
+  name: AppSink
+  type: 14
+  xPos: -1285
+  yPos: -62
+- id: 3
+  idEndpoint: 1
+  idService: 1
+  idSource: 0
+  idSources: []
+  name: InputRequest2
+  type: 1
+  valueType: RequestData
+  xPos: -1
+  yPos: 36
+- id: 4
+  idService: 1
+  idSource: 1
+  idSources: [ ]
+  name: AppSink2
+  type: 14
+  xPos: -1285
+  yPos: -62
+types:
+- definitionFormat: 2
+  name: RequestData
+  package: ""
+  publicType: false
+  transferByValue: false
+  type: struct
+links:
+- callSemantics: 3
+  priority: 0
+  from: 1
+  inheritedCallSemantics: false
+  poolName: "Default"
+  to: 2
+- callSemantics: 2
+  from: 3
+  inheritedCallSemantics: false
+  poolName: "Default"
+  to: 4

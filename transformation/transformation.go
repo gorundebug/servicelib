@@ -40,6 +40,10 @@ func Input[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.
 	return runtime.MakeInputStream[T](name, env)
 }
 
+func AppInput[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedConsumedStream[T] {
+	return runtime.MakeAppInputStream[T](name, env)
+}
+
 func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[datastruct.KeyValue[K, T1]],
 	streamRight runtime.TypedStream[datastruct.KeyValue[K, T2]],
 	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedJoinConsumedStream[K, T1, T2, R] {

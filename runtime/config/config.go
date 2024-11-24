@@ -59,6 +59,8 @@ var transformationNameMap = map[api.TransformationType]string{
 	api.TransformationTypeMultiJoin:       "multiJoin",
 	api.TransformationTypeParallels:       "parallels",
 	api.TransformationTypeSplit:           "split",
+	api.TransformationTypeDelay:           "delay",
+	api.TransformationTypeAppInput:        "appInput",
 }
 
 func (s *StreamConfig) GetTransformationName() string {
