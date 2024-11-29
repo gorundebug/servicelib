@@ -23,8 +23,10 @@ services:
   grpcHost: 127.0.0.1
   grpcPort: $incomeServiceGrpcPort
   id: 1
-  monitoringHost: 127.0.0.1
-  monitoringPort: $incomeServiceMonitoringPort
+  httpHost: 127.0.0.1
+  httpPort: $incomeServiceMonitoringPort
+  metricsHandler: metrics
+  statusHandler: status
   name: IncomeService
   programmingLanguage: 1
   shutdownTimeout: 30000

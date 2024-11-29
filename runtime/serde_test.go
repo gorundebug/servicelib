@@ -51,8 +51,10 @@ func mockService(environment string) *MockService {
 				{
 					Service: api.Service{
 						Name:           "MockService",
-						MonitoringHost: "127.0.0.1",
-						MonitoringPort: 9000,
+						HttpHost:       "127.0.0.1",
+						HttpPort:       9000,
+						MetricsHandler: "metrics",
+						StatusHandler:  "status",
 						Environment:    environment,
 						DelayExecutors: 1,
 					},

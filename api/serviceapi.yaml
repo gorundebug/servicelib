@@ -141,11 +141,15 @@ components:
           $ref: '#/components/schemas/ProgrammingLanguage'
         defaultCallSemantics:
           $ref: '#/components/schemas/CallSemantics'
-        monitoringPort:
+        httpPort:
           type: integer
-          minimum: 80
+          minimum: 0
           maximum: 65535
-        monitoringHost:
+        httpHost:
+          type: string
+        statusHandler:
+          type: string
+        metricsHandler:
           type: string
         grpcPort:
           type: integer
@@ -173,8 +177,8 @@ components:
         - name
         - programmingLanguage
         - defaultCallSemantics
-        - monitoringHost
-        - monitoringPort
+        - httpHost
+        - httpPort
         - grpcHost
         - grpcPort
         - defaultGrpcTimeout
@@ -182,6 +186,8 @@ components:
         - delayExecutors
         - environment
         - color
+        - statusHandler
+        - metricsHandler
 
     JoinStorageType:
       type: integer
@@ -221,6 +227,23 @@ components:
         - Left
         - Right
         - Outer
+
+    AppInputType:
+      type: integer
+      enum: [ 0, 1, 2]
+      x-enum-varnames:
+        - Function
+        - HttpHandler
+        - GrpcHandler
+
+    GrpcMethodType:
+      type: integer
+      enum: [ 0, 1, 2, 4 ]
+      x-enum-varnames:
+        - NoStreaming
+        - ClientStreaming
+        - ServerStreaming
+        - BidirectionalStreaming
 
     CallSemantics:
       type: integer
@@ -299,6 +322,12 @@ components:
           $ref: '#/components/schemas/JoinType'
         joinStorage:
           $ref: '#/components/schemas/JoinStorageType'
+        appInputType:
+          $ref: '#/components/schemas/AppInputType'
+        grpcMethodType:
+          $ref: '#/components/schemas/GrpcMethodType'
+        path:
+          type: string
         xPos:
           type: integer
         yPos:
