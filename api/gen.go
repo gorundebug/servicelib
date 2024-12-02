@@ -264,7 +264,6 @@ type Service struct {
 type Stream struct {
 	AppInputType        *AppInputType      `json:"appInputType,omitempty"`
 	Duration            *int               `json:"duration,omitempty"`
-	Endpoint            *string            `json:"endpoint,omitempty"`
 	FunctionDescription *string            `json:"functionDescription,omitempty"`
 	FunctionName        *string            `json:"functionName,omitempty"`
 	FunctionPackage     *string            `json:"functionPackage,omitempty"`
@@ -278,6 +277,7 @@ type Stream struct {
 	JoinType            *JoinType          `json:"joinType,omitempty"`
 	KeyType             *string            `json:"keyType,omitempty"`
 	Name                string             `json:"name"`
+	Path                *string            `json:"path,omitempty"`
 	PublicFunction      *bool              `json:"publicFunction,omitempty"`
 	RenewTTL            *bool              `json:"renewTTL,omitempty"`
 	Ttl                 *int               `json:"ttl,omitempty"`
