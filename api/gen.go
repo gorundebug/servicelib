@@ -10,6 +10,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Defines values for AppInputType.
+const (
+	AppInputTypeFunction    AppInputType = 0
+	AppInputTypeGrpcHandler AppInputType = 2
+	AppInputTypeHttpHandler AppInputType = 1
+)
+
 // Defines values for CallSemantics.
 const (
 	FunctionCall     CallSemantics = 1
@@ -26,10 +33,10 @@ const (
 
 // Defines values for DataConnectorImplementation.
 const (
-	Aiohttp  DataConnectorImplementation = "aiohttp"
-	FastHTTP DataConnectorImplementation = "FastHTTP"
-	Function DataConnectorImplementation = "function"
-	Nethttp  DataConnectorImplementation = "net/http"
+	DataConnectorImplementationAiohttp  DataConnectorImplementation = "aiohttp"
+	DataConnectorImplementationFastHTTP DataConnectorImplementation = "FastHTTP"
+	DataConnectorImplementationFunction DataConnectorImplementation = "function"
+	DataConnectorImplementationNethttp  DataConnectorImplementation = "net/http"
 )
 
 // Defines values for DataConnectorType.
@@ -70,6 +77,14 @@ const (
 	DataTypeUint8         DataType = "uint8"
 	DataTypeUnicodeChar   DataType = "unicode char"
 	DataTypeUnicodeString DataType = "unicode string"
+)
+
+// Defines values for GrpcMethodType.
+const (
+	BidirectionalStreaming GrpcMethodType = 4
+	ClientStreaming        GrpcMethodType = 1
+	NoStreaming            GrpcMethodType = 0
+	ServerStreaming        GrpcMethodType = 2
 )
 
 // Defines values for JoinStorageType.
@@ -133,6 +148,9 @@ const (
 	Protobuf    TypeDefinitionFormat = 2
 )
 
+// AppInputType defines model for AppInputType.
+type AppInputType int
+
 // CallSemantics defines model for CallSemantics.
 type CallSemantics int
 
@@ -176,6 +194,9 @@ type Endpoint struct {
 	Path                *string     `json:"path,omitempty"`
 	PublicFunction      *bool       `json:"publicFunction,omitempty"`
 }
+
+// GrpcMethodType defines model for GrpcMethodType.
+type GrpcMethodType int
 
 // JoinStorageType defines model for JoinStorageType.
 type JoinStorageType int
@@ -228,21 +249,25 @@ type Service struct {
 	Environment          string              `json:"environment"`
 	GrpcHost             string              `json:"grpcHost"`
 	GrpcPort             int                 `json:"grpcPort"`
+	HttpHost             string              `json:"httpHost"`
+	HttpPort             int                 `json:"httpPort"`
 	Id                   int                 `json:"id"`
 	LogLevel             *LogLevel           `json:"logLevel,omitempty"`
-	MonitoringHost       string              `json:"monitoringHost"`
-	MonitoringPort       int                 `json:"monitoringPort"`
+	MetricsHandler       string              `json:"metricsHandler"`
 	Name                 string              `json:"name"`
 	ProgrammingLanguage  ProgrammingLanguage `json:"programmingLanguage"`
 	ShutdownTimeout      int                 `json:"shutdownTimeout"`
+	StatusHandler        string              `json:"statusHandler"`
 }
 
 // Stream defines model for Stream.
 type Stream struct {
+	AppInputType        *AppInputType      `json:"appInputType,omitempty"`
 	Duration            *int               `json:"duration,omitempty"`
 	FunctionDescription *string            `json:"functionDescription,omitempty"`
 	FunctionName        *string            `json:"functionName,omitempty"`
 	FunctionPackage     *string            `json:"functionPackage,omitempty"`
+	GrpcMethodType      *GrpcMethodType    `json:"grpcMethodType,omitempty"`
 	Id                  int                `json:"id"`
 	IdEndpoint          *int               `json:"idEndpoint,omitempty"`
 	IdService           int                `json:"idService"`
@@ -252,6 +277,7 @@ type Stream struct {
 	JoinType            *JoinType          `json:"joinType,omitempty"`
 	KeyType             *string            `json:"keyType,omitempty"`
 	Name                string             `json:"name"`
+	Path                *string            `json:"path,omitempty"`
 	PublicFunction      *bool              `json:"publicFunction,omitempty"`
 	RenewTTL            *bool              `json:"renewTTL,omitempty"`
 	Ttl                 *int               `json:"ttl,omitempty"`

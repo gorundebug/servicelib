@@ -16,6 +16,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/httproute"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/logging"
@@ -58,6 +59,7 @@ type ServiceApp struct {
 	logsEngine        log.LogsEngine
 	log               log.Logger
 	dep               environment.ServiceDependency
+	httpRoute         httproute.HttpRoute
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
@@ -97,6 +99,10 @@ func (app *ServiceApp) Metrics() metrics.Metrics {
 	return app.metrics
 }
 
+func (app *ServiceApp) GetHttpRoute() httproute.HttpRoute {
+	return app.httpRoute
+}
+
 func (app *ServiceApp) registerStream(stream Stream) {
 	app.streams[stream.GetId()] = stream
 }
@@ -125,6 +131,10 @@ func (app *ServiceApp) getLog() log.Logger {
 	return app.log
 }
 
+func (app *ServiceApp) ServiceInit() error {
+	return nil
+}
+
 func (app *ServiceApp) serviceInit(name string,
 	env ServiceExecutionEnvironment,
 	dep environment.ServiceDependency,
@@ -151,6 +161,7 @@ func (app *ServiceApp) serviceInit(name string,
 	if dep != nil {
 		app.logsEngine = dep.LogsEngine(env)
 		app.metricsEngine = dep.MetricsEngine(env)
+		app.httpRoute = dep.HttpRouter(env)
 	}
 
 	if app.logsEngine == nil {
@@ -180,15 +191,24 @@ func (app *ServiceApp) serviceInit(name string,
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	app.mux = http.NewServeMux()
-	app.httpServerDone = make(chan struct{})
-	app.httpServer = &http.Server{
-		Handler: app.mux,
-		Addr:    fmt.Sprintf("%s:%d", serviceConfig.MonitoringHost, serviceConfig.MonitoringPort),
+	if app.httpRoute == nil && serviceConfig.HttpPort > 0 {
+		app.mux = http.NewServeMux()
+		app.httpServerDone = make(chan struct{})
+		app.httpServer = &http.Server{
+			Handler: app.mux,
+			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
+		}
+		app.httpRoute = app.mux
 	}
-	app.mux.Handle("/status", http.HandlerFunc(app.statusHandler))
-	app.mux.Handle("/data", http.HandlerFunc(app.dataHandler))
-	app.mux.Handle("/metrics", app.metricsEngine.MetricsHandler())
+
+	if len(serviceConfig.StatusHandler) > 0 {
+		app.httpRoute.Handle(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
+		app.httpRoute.Handle(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
+	}
+
+	if len(serviceConfig.MetricsHandler) > 0 {
+		app.httpRoute.Handle(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
+	}
 
 	for idx := range appConfig.Links {
 		link := &appConfig.Links[idx]
@@ -245,7 +265,7 @@ func (app *ServiceApp) serviceInit(name string,
 		}
 	}
 	env.SetConfig(cfg)
-	return nil
+	return env.ServiceInit()
 }
 
 //go:embed status.html
@@ -433,23 +453,25 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 
 	serviceConfig := app.getServiceConfig()
 
-	addr := app.httpServer.Addr
-	if addr == "" {
-		addr = ":http"
-	}
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-	go func() {
-		app.Log().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
-
-		err := app.httpServer.Serve(ln)
-		if !errors.Is(err, http.ErrServerClosed) {
-			app.Log().Fatalln(err)
+	if app.httpServer != nil {
+		addr := app.httpServer.Addr
+		if addr == "" {
+			addr = ":http"
 		}
-		app.httpServerDone <- struct{}{}
-	}()
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			return err
+		}
+		go func() {
+			app.Log().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+
+			err := app.httpServer.Serve(ln)
+			if !errors.Is(err, http.ErrServerClosed) {
+				app.Log().Fatalln(err)
+			}
+			app.httpServerDone <- struct{}{}
+		}()
+	}
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
 			app.Log().Fatalln(err)
@@ -525,20 +547,22 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		}()
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	if app.httpServer != nil {
+		wg.Add(1)
 		go func() {
-			if err := app.httpServer.Shutdown(ctx); err != nil {
-				app.Log().Warnf("server shutdown: %s", err.Error())
+			defer wg.Done()
+			go func() {
+				if err := app.httpServer.Shutdown(ctx); err != nil {
+					app.Log().Warnf("server shutdown: %s", err.Error())
+				}
+			}()
+			select {
+			case <-app.httpServerDone:
+			case <-ctx.Done():
+				app.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 			}
 		}()
-		select {
-		case <-app.httpServerDone:
-		case <-ctx.Done():
-			app.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
-		}
-	}()
+	}
 
 	done := make(chan struct{})
 	go func() {

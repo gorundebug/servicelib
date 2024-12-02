@@ -114,7 +114,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				p.lock.Unlock()
 				p.gaugeQueueLength.Dec()
 				task.fn()
-				task = nil
+				task.fn = nil
 			}
 		}()
 	}
