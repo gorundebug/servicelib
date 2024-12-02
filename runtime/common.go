@@ -12,6 +12,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/httproute"
 	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"io"
@@ -22,6 +23,7 @@ import (
 type ServiceExecutionEnvironment interface {
 	environment.ServiceEnvironment
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
+	ServiceInit() error
 	StreamsInit(ctx context.Context)
 	SetConfig(config config.Config)
 	Start(context.Context) error
@@ -38,6 +40,7 @@ type ServiceExecutionEnvironment interface {
 	Delay(duration time.Duration, f func())
 	GetRuntime() ServiceExecutionRuntime
 	Release()
+	GetHttpRoute() httproute.HttpRoute
 }
 
 type DelayFunc[T any] func(T) error

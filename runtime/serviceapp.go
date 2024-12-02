@@ -99,6 +99,10 @@ func (app *ServiceApp) Metrics() metrics.Metrics {
 	return app.metrics
 }
 
+func (app *ServiceApp) GetHttpRoute() httproute.HttpRoute {
+	return app.httpRoute
+}
+
 func (app *ServiceApp) registerStream(stream Stream) {
 	app.streams[stream.GetId()] = stream
 }
@@ -125,6 +129,10 @@ func (app *ServiceApp) Log() log.Logger {
 
 func (app *ServiceApp) getLog() log.Logger {
 	return app.log
+}
+
+func (app *ServiceApp) ServiceInit() error {
+	return nil
 }
 
 func (app *ServiceApp) serviceInit(name string,
@@ -257,7 +265,7 @@ func (app *ServiceApp) serviceInit(name string,
 		}
 	}
 	env.SetConfig(cfg)
-	return nil
+	return env.ServiceInit()
 }
 
 //go:embed status.html
