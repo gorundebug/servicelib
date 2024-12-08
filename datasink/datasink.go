@@ -12,6 +12,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 )
 
-func CustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer localsink.DataConsumer[T]) runtime.Consumer[T] {
-	return localsink.MakeCustomEndpointSink[T](stream, dataConsumer)
+func CustomEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], dataConsumer localsink.DataConsumer[T]) runtime.SinkConsumer[T] {
+	return localsink.MakeCustomEndpointSink[T, R](stream, dataConsumer)
 }

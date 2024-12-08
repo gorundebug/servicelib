@@ -32,6 +32,10 @@ type MapFunction[T, R any] interface {
 	Map(Stream, T) R
 }
 
+type SinkErrorFunction[T, R any] interface {
+	SinkError(Stream, T, error, Collect[R])
+}
+
 type MultiJoinFunction[K comparable, T, R any] interface {
 	MultiJoin(Stream, K, [][]interface{}, Collect[R]) bool
 }

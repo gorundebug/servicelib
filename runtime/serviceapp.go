@@ -272,6 +272,10 @@ func (app *ServiceApp) serviceInit(name string,
 var statusHtml []byte
 
 func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(statusHtml); err != nil {
@@ -382,6 +386,11 @@ type NetworkData struct {
 }
 
 func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	networkData := NetworkData{
 		Nodes: make([]*Node, 0, len(app.streams)),
 		Edges: make([]*Edge, 0, len(app.streams)*2),

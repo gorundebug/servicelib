@@ -14,7 +14,7 @@ import (
 )
 
 type DataConsumer[T any] interface {
-	runtime.Consumer[T]
+	runtime.SinkConsumer[T]
 	Start(context.Context) error
 	Stop(context.Context)
 }
@@ -101,23 +101,23 @@ func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	}
 }
 
-type TypedCustomEndpointConsumer[T any] struct {
-	*runtime.DataSinkEndpointConsumer[T]
+type TypedCustomEndpointConsumer[T, R any] struct {
+	*runtime.DataSinkEndpointConsumer[T, R]
 	dataConsumer DataConsumer[T]
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
-	ep.dataConsumer.Consume(value)
+func (ep *TypedCustomEndpointConsumer[T, R]) Consume(value T) error {
+	return ep.dataConsumer.Consume(value)
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
+func (ep *TypedCustomEndpointConsumer[T, R]) Start(ctx context.Context) error {
 	if err := ep.dataConsumer.Start(ctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
+func (ep *TypedCustomEndpointConsumer[T, R]) Stop(ctx context.Context) {
 	endpoint := ep.Endpoint()
 	dataSink := endpoint.GetDataSink().(CustomOutputDataSink)
 	dataSink.WaitGroup().Add(1)
@@ -176,18 +176,18 @@ func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runt
 	return customEndpoint
 }
 
-func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer DataConsumer[T]) runtime.Consumer[T] {
+func MakeCustomEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], dataConsumer DataConsumer[T]) runtime.SinkConsumer[T] {
 	env := stream.GetEnvironment()
 	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), env)
-	var consumer runtime.Consumer[T]
+	var consumer runtime.SinkConsumer[T]
 	var endpointConsumer CustomEndpointConsumer
-	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
-		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T](endpoint, stream),
+	typedEndpointConsumer := &TypedCustomEndpointConsumer[T, R]{
+		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
 		dataConsumer:             dataConsumer,
 	}
 	endpointConsumer = typedEndpointConsumer
 	consumer = typedEndpointConsumer
-	stream.SetConsumer(typedEndpointConsumer)
+	stream.SetSinkConsumer(typedEndpointConsumer)
 	endpoint.AddEndpointConsumer(endpointConsumer)
 	return consumer
 }

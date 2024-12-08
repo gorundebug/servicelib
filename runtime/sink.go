@@ -7,13 +7,26 @@
 
 package runtime
 
-type SinkStream[T any] struct {
-	ServiceStream[T]
-	source   TypedStream[T]
-	consumer Consumer[T]
+type SinkErrorFunctionContext[T, R any] struct {
+	StreamFunction[R]
+	context TypedStream[R]
+	f       SinkErrorFunction[T, R]
 }
 
-func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
+func (f *SinkErrorFunctionContext[T, R]) call(value T, err error, out Collect[R]) {
+	f.BeforeCall()
+	f.f.SinkError(f.context, value, err, out)
+	f.AfterCall()
+}
+
+type SinkStream[T, R any] struct {
+	ConsumedStream[R]
+	source       TypedStream[T]
+	sinkConsumer SinkConsumer[T]
+	f            SinkErrorFunctionContext[T, R]
+}
+
+func MakeSinkStream[T, R any](name string, stream TypedStream[T], f SinkErrorFunction[T, R]) *SinkStream[T, R] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
@@ -22,30 +35,34 @@ func MakeSinkStream[T any](name string, stream TypedStream[T]) *SinkStream[T] {
 		env.Log().Fatalf("Config for the stream with name=%s does not exists", name)
 		return nil
 	}
-	sinkStream := &SinkStream[T]{
-		ServiceStream: ServiceStream[T]{
-			environment: env,
-			id:          streamConfig.Id,
+	sinkStream := &SinkStream[T, R]{
+		ConsumedStream: ConsumedStream[R]{
+			ServiceStream: ServiceStream[R]{
+				environment: env,
+				id:          streamConfig.Id,
+			},
+			serde: MakeSerde[R](runtime),
 		},
 		source: stream,
+		f: SinkErrorFunctionContext[T, R]{
+			f: f,
+		},
 	}
 	stream.SetConsumer(sinkStream)
 	runtime.registerStream(sinkStream)
 	return sinkStream
 }
 
-func (s *SinkStream[T]) Consume(value T) {
-	s.consumer.Consume(value)
+func (s *SinkStream[T, R]) Consume(value T) {
+	if err := s.sinkConsumer.Consume(value); err != nil {
+		s.f.call(value, err, makeCollector[R](s.caller))
+	}
 }
 
-func (s *SinkStream[T]) SetConsumer(consumer Consumer[T]) {
-	s.consumer = consumer
+func (s *SinkStream[T, R]) SetSinkConsumer(sinkConsumer SinkConsumer[T]) {
+	s.sinkConsumer = sinkConsumer
 }
 
-func (s *SinkStream[T]) GetConsumers() []Stream {
-	return []Stream{}
-}
-
-func (s *SinkStream[T]) GetEndpointId() int {
+func (s *SinkStream[T, R]) GetEndpointId() int {
 	return *s.GetConfig().IdEndpoint
 }

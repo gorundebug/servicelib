@@ -128,22 +128,22 @@ func (ep *DataSinkEndpoint) GetEndpointConsumers() Collection[OutputEndpointCons
 	return NewCollection(ep.endpointConsumers)
 }
 
-type DataSinkEndpointConsumer[T any] struct {
+type DataSinkEndpointConsumer[T, R any] struct {
 	endpoint SinkEndpoint
-	stream   TypedSinkStream[T]
+	stream   TypedSinkStream[T, R]
 	writer   TypedEndpointWriter[T]
 }
 
-func (ec *DataSinkEndpointConsumer[T]) Endpoint() SinkEndpoint {
+func (ec *DataSinkEndpointConsumer[T, R]) Endpoint() SinkEndpoint {
 	return ec.endpoint
 }
 
-func (ec *DataSinkEndpointConsumer[T]) Stream() TypedSinkStream[T] {
+func (ec *DataSinkEndpointConsumer[T, R]) Stream() TypedSinkStream[T, R] {
 	return ec.stream
 }
 
-func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSinkStream[T]) *DataSinkEndpointConsumer[T] {
-	ec := &DataSinkEndpointConsumer[T]{
+func MakeDataSinkEndpointConsumer[T, R any](endpoint SinkEndpoint, stream TypedSinkStream[T, R]) *DataSinkEndpointConsumer[T, R] {
+	ec := &DataSinkEndpointConsumer[T, R]{
 		endpoint: endpoint,
 		stream:   stream,
 	}
@@ -154,6 +154,6 @@ func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSink
 	return ec
 }
 
-func (ec *DataSinkEndpointConsumer[T]) GetEndpointWriter() TypedEndpointWriter[T] {
+func (ec *DataSinkEndpointConsumer[T, R]) GetEndpointWriter() TypedEndpointWriter[T] {
 	return ec.writer
 }
