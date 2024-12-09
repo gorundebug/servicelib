@@ -9,6 +9,7 @@ package datasource
 
 import (
 	"github.com/gorundebug/servicelib/datasource/http"
+	"github.com/gorundebug/servicelib/datasource/kafka"
 	"github.com/gorundebug/servicelib/datasource/localsource"
 	"github.com/gorundebug/servicelib/runtime"
 )
@@ -17,6 +18,10 @@ func CustomEndpointConsumer[T any](stream runtime.TypedInputStream[T], dataProdu
 	return localsource.MakeCustomEndpointConsumer(stream, dataProducer)
 }
 
-func NetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runtime.Consumer[T] {
-	return http.MakeNetHTTPEndpointConsumer(stream)
+func NetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T], handler http.NetHTTPEndpointHandler[T]) runtime.Consumer[T] {
+	return http.MakeNetHTTPEndpointConsumer(stream, handler)
+}
+
+func SaramaKafkaEndpointConsumer[T any](stream runtime.TypedInputStream[T], handler kafka.SaramaKafkaEndpointHandler[T]) runtime.Consumer[T] {
+	return kafka.MakeSaramaKafkaEndpointConsumer(stream, handler)
 }

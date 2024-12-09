@@ -79,7 +79,7 @@ func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error)
 
 func (s *MockService) StreamsInit(ctx context.Context) {
 	s.inputRequest = transformation.Input[*RequestData]("InputRequest", s)
-	s.inputRequestDataSource = datasource.NetHTTPEndpointConsumer[*RequestData](s.inputRequest)
+	s.inputRequestDataSource = datasource.NetHTTPEndpointConsumer[*RequestData](s.inputRequest, nil)
 	s.appSink = transformation.AppSink[*RequestData]("AppSink", s.inputRequest, s.consume)
 }
 

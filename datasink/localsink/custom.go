@@ -14,7 +14,7 @@ import (
 )
 
 type DataConsumer[T any] interface {
-	runtime.Consumer[T]
+	Consume(T) error
 	Start(context.Context) error
 	Stop(context.Context)
 }
@@ -101,23 +101,31 @@ func (ep *CustomEndpoint) Stop(ctx context.Context) {
 	}
 }
 
-type TypedCustomEndpointConsumer[T any] struct {
-	*runtime.DataSinkEndpointConsumer[T]
+type TypedCustomEndpointConsumer[T, R any] struct {
+	*runtime.DataSinkEndpointConsumer[T, R]
 	dataConsumer DataConsumer[T]
+	sinkCallback runtime.SinkCallback[T]
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
-	ep.dataConsumer.Consume(value)
+func (ep *TypedCustomEndpointConsumer[T, R]) SetSinkCallback(callback runtime.SinkCallback[T]) {
+	ep.sinkCallback = callback
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
+func (ep *TypedCustomEndpointConsumer[T, R]) Consume(value T) {
+	err := ep.dataConsumer.Consume(value)
+	if ep.sinkCallback != nil {
+		ep.sinkCallback.Done(value, err)
+	}
+}
+
+func (ep *TypedCustomEndpointConsumer[T, R]) Start(ctx context.Context) error {
 	if err := ep.dataConsumer.Start(ctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
+func (ep *TypedCustomEndpointConsumer[T, R]) Stop(ctx context.Context) {
 	endpoint := ep.Endpoint()
 	dataSink := endpoint.GetDataSink().(CustomOutputDataSink)
 	dataSink.WaitGroup().Add(1)
@@ -153,6 +161,9 @@ func getCustomDataSink(id int, env runtime.ServiceExecutionEnvironment) runtime.
 		return dataSink
 	}
 	cfg := env.AppConfig().GetDataConnectorById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for datasink with id=%d not found", id)
+	}
 	customDataSink := &CustomDataSink{
 		OutputDataSink: runtime.MakeOutputDataSink(cfg, env),
 	}
@@ -163,31 +174,32 @@ func getCustomDataSink(id int, env runtime.ServiceExecutionEnvironment) runtime.
 
 func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.SinkEndpoint {
 	cfg := env.AppConfig().GetEndpointConfigById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for sink endpoint with id=%d not found", id)
+	}
 	dataSink := getCustomDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
-		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, cfg, env),
+		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, id, env),
 	}
 	var sinkEndpoint CustomSinkEndpoint = customEndpoint
 	dataSink.AddEndpoint(sinkEndpoint)
 	return customEndpoint
 }
 
-func MakeCustomEndpointSink[T any](stream runtime.TypedSinkStream[T], dataConsumer DataConsumer[T]) runtime.Consumer[T] {
+func MakeCustomEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], dataConsumer DataConsumer[T]) runtime.SinkConsumer[T] {
 	env := stream.GetEnvironment()
 	endpoint := getCustomSinkEndpoint(stream.GetEndpointId(), env)
-	var consumer runtime.Consumer[T]
-	var endpointConsumer CustomEndpointConsumer
-	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
-		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T](endpoint, stream),
+	typedEndpointConsumer := &TypedCustomEndpointConsumer[T, R]{
+		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
 		dataConsumer:             dataConsumer,
 	}
-	endpointConsumer = typedEndpointConsumer
-	consumer = typedEndpointConsumer
-	stream.SetConsumer(typedEndpointConsumer)
+	var endpointConsumer CustomEndpointConsumer = typedEndpointConsumer
+	var consumer runtime.SinkConsumer[T] = typedEndpointConsumer
+	stream.SetSinkConsumer(typedEndpointConsumer)
 	endpoint.AddEndpointConsumer(endpointConsumer)
 	return consumer
 }

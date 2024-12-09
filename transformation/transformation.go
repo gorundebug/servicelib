@@ -80,8 +80,8 @@ func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.P
 	return runtime.MakeParallelsStream[T, R](name, stream, f)
 }
 
-func Sink[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSinkStream[T] {
-	return runtime.MakeSinkStream[T](name, stream)
+func Sink[T, R any](name string, stream runtime.TypedStream[T], f runtime.SinkErrorFunction[T, R]) runtime.TypedSinkStream[T, R] {
+	return runtime.MakeSinkStream[T, R](name, stream, f)
 }
 
 func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplitStream[T] {

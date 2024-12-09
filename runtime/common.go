@@ -94,6 +94,15 @@ type Consumer[T any] interface {
 	Consume(T)
 }
 
+type SinkCallback[T any] interface {
+	Done(T, error)
+}
+
+type SinkConsumer[T any] interface {
+	Consumer[T]
+	SetSinkCallback(SinkCallback[T])
+}
+
 type TypedConsumedStream[T any] interface {
 	TypedStream[T]
 	Consumer[T]
@@ -139,10 +148,10 @@ type TypedInputStream[T any] interface {
 	GetEndpointId() int
 }
 
-type TypedSinkStream[T any] interface {
-	TypedStreamConsumer[T]
+type TypedSinkStream[T, R any] interface {
+	TypedTransformConsumedStream[T, R]
 	GetEndpointId() int
-	SetConsumer(Consumer[T])
+	SetSinkConsumer(SinkConsumer[T])
 }
 
 type BinaryConsumer interface {

@@ -37,6 +37,7 @@ const (
 	DataConnectorImplementationFastHTTP DataConnectorImplementation = "FastHTTP"
 	DataConnectorImplementationFunction DataConnectorImplementation = "function"
 	DataConnectorImplementationNethttp  DataConnectorImplementation = "net/http"
+	DataConnectorImplementationSarama   DataConnectorImplementation = "sarama"
 )
 
 // Defines values for DataConnectorType.
@@ -45,12 +46,14 @@ const (
 	DataConnectorTypeGRPC   DataConnectorType = 2
 	DataConnectorTypeHTTP   DataConnectorType = 1
 	DataConnectorTypeKafka  DataConnectorType = 3
+	DataConnectorTypeN5     DataConnectorType = 5
 )
 
 // Defines values for DataFormat.
 const (
-	Form DataFormat = "form"
-	Json DataFormat = "json"
+	DataFormatCustom DataFormat = "custom"
+	DataFormatForm   DataFormat = "form"
+	DataFormatJson   DataFormat = "json"
 )
 
 // Defines values for DataType.
@@ -121,23 +124,23 @@ const (
 
 // Defines values for TransformationType.
 const (
-	TransformationTypeAppInput        TransformationType = 17
-	TransformationTypeAppSink         TransformationType = 14
-	TransformationTypeCycleLink       TransformationType = 15
-	TransformationTypeDelay           TransformationType = 16
-	TransformationTypeFilter          TransformationType = 3
-	TransformationTypeFlatMap         TransformationType = 7
-	TransformationTypeFlatMapIterable TransformationType = 8
-	TransformationTypeForEach         TransformationType = 6
-	TransformationTypeInput           TransformationType = 1
-	TransformationTypeJoin            TransformationType = 4
-	TransformationTypeKeyBy           TransformationType = 9
-	TransformationTypeMap             TransformationType = 2
-	TransformationTypeMerge           TransformationType = 10
-	TransformationTypeMultiJoin       TransformationType = 5
-	TransformationTypeParallels       TransformationType = 12
-	TransformationTypeSink            TransformationType = 13
-	TransformationTypeSplit           TransformationType = 11
+	AppInput        TransformationType = 17
+	AppSink         TransformationType = 14
+	CycleLink       TransformationType = 15
+	Delay           TransformationType = 16
+	Filter          TransformationType = 3
+	FlatMap         TransformationType = 7
+	FlatMapIterable TransformationType = 8
+	ForEach         TransformationType = 6
+	Input           TransformationType = 1
+	Join            TransformationType = 4
+	KeyBy           TransformationType = 9
+	Map             TransformationType = 2
+	Merge           TransformationType = 10
+	MultiJoin       TransformationType = 5
+	Parallels       TransformationType = 12
+	Sink            TransformationType = 13
+	Split           TransformationType = 11
 )
 
 // Defines values for TypeDefinitionFormat.
@@ -159,6 +162,9 @@ type CommunicationProtocol int
 
 // DataConnector defines model for DataConnector.
 type DataConnector struct {
+	Async               *bool                       `json:"async,omitempty"`
+	Brokers             *string                     `json:"brokers,omitempty"`
+	DialTimeout         *float32                    `json:"dialTimeout,omitempty"`
 	Host                *string                     `json:"host,omitempty"`
 	Id                  int                         `json:"id"`
 	Implementation      DataConnectorImplementation `json:"implementation"`
@@ -166,6 +172,8 @@ type DataConnector struct {
 	Port                *int                        `json:"port,omitempty"`
 	ProgrammingLanguage *ProgrammingLanguage        `json:"programmingLanguage,omitempty"`
 	Type                DataConnectorType           `json:"type"`
+	UsePartitioner      *bool                       `json:"usePartitioner,omitempty"`
+	Version             *string                     `json:"version,omitempty"`
 }
 
 // DataConnectorImplementation defines model for DataConnectorImplementation.
@@ -182,6 +190,8 @@ type DataType string
 
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
+	ConsumerGroup       *string     `json:"consumerGroup,omitempty"`
+	CreateTopic         *bool       `json:"createTopic,omitempty"`
 	Delay               *int        `json:"delay,omitempty"`
 	Format              *DataFormat `json:"format,omitempty"`
 	FunctionDescription *string     `json:"functionDescription,omitempty"`
@@ -191,8 +201,12 @@ type Endpoint struct {
 	IdDataConnector     int         `json:"idDataConnector"`
 	Method              *string     `json:"method,omitempty"`
 	Name                string      `json:"name"`
+	Partitions          *int        `json:"partitions,omitempty"`
 	Path                *string     `json:"path,omitempty"`
 	PublicFunction      *bool       `json:"publicFunction,omitempty"`
+	ReplicationFactor   *int        `json:"replicationFactor,omitempty"`
+	Topic               *string     `json:"topic,omitempty"`
+	UseHandler          *bool       `json:"useHandler,omitempty"`
 }
 
 // GrpcMethodType defines model for GrpcMethodType.

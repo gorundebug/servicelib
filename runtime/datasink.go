@@ -10,7 +10,6 @@ package runtime
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"golang.org/x/exp/maps"
 )
 
@@ -87,10 +86,10 @@ type DataSinkEndpoint struct {
 	endpointConsumers []OutputEndpointConsumer
 }
 
-func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
+func MakeDataSinkEndpoint(dataSink DataSink, id int, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
 	return &DataSinkEndpoint{
 		dataSink:          dataSink,
-		id:                config.Id,
+		id:                id,
 		environment:       environment,
 		endpointConsumers: make([]OutputEndpointConsumer, 0),
 	}
@@ -128,32 +127,23 @@ func (ep *DataSinkEndpoint) GetEndpointConsumers() Collection[OutputEndpointCons
 	return NewCollection(ep.endpointConsumers)
 }
 
-type DataSinkEndpointConsumer[T any] struct {
+type DataSinkEndpointConsumer[T, R any] struct {
 	endpoint SinkEndpoint
-	stream   TypedSinkStream[T]
-	writer   TypedEndpointWriter[T]
+	stream   TypedSinkStream[T, R]
 }
 
-func (ec *DataSinkEndpointConsumer[T]) Endpoint() SinkEndpoint {
+func (ec *DataSinkEndpointConsumer[T, R]) Endpoint() SinkEndpoint {
 	return ec.endpoint
 }
 
-func (ec *DataSinkEndpointConsumer[T]) Stream() TypedSinkStream[T] {
+func (ec *DataSinkEndpointConsumer[T, R]) Stream() TypedSinkStream[T, R] {
 	return ec.stream
 }
 
-func MakeDataSinkEndpointConsumer[T any](endpoint SinkEndpoint, stream TypedSinkStream[T]) *DataSinkEndpointConsumer[T] {
-	ec := &DataSinkEndpointConsumer[T]{
+func MakeDataSinkEndpointConsumer[T, R any](endpoint SinkEndpoint, stream TypedSinkStream[T, R]) *DataSinkEndpointConsumer[T, R] {
+	ec := &DataSinkEndpointConsumer[T, R]{
 		endpoint: endpoint,
 		stream:   stream,
 	}
-	writer := endpoint.GetEnvironment().GetEndpointWriter(endpoint, stream, serde.GetSerdeType[T]())
-	if writer != nil {
-		ec.writer = writer.(TypedEndpointWriter[T])
-	}
 	return ec
-}
-
-func (ec *DataSinkEndpointConsumer[T]) GetEndpointWriter() TypedEndpointWriter[T] {
-	return ec.writer
 }

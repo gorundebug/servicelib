@@ -10,7 +10,6 @@ package runtime
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"golang.org/x/exp/maps"
 )
 
@@ -131,7 +130,6 @@ func (ep *DataSourceEndpoint) GetEndpointConsumers() Collection[InputEndpointCon
 type DataSourceEndpointConsumer[T any] struct {
 	inputStream TypedInputStream[T]
 	endpoint    InputEndpoint
-	reader      TypedEndpointReader[T]
 }
 
 func (ec *DataSourceEndpointConsumer[T]) Consume(value T) {
@@ -151,13 +149,5 @@ func MakeDataSourceEndpointConsumer[T any](endpoint InputEndpoint, inputStream T
 		inputStream: inputStream,
 		endpoint:    endpoint,
 	}
-	reader := endpoint.GetEnvironment().GetEndpointReader(endpoint, inputStream, serde.GetSerdeType[T]())
-	if reader != nil {
-		ec.reader = reader.(TypedEndpointReader[T])
-	}
 	return ec
-}
-
-func (ec *DataSourceEndpointConsumer[T]) GetEndpointReader() TypedEndpointReader[T] {
-	return ec.reader
 }
