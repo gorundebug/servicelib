@@ -174,6 +174,7 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 	cfg := env.AppConfig().GetDataConnectorById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for data source with id=%d not found", id)
+		return nil
 	}
 	customDataSource := &CustomDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
@@ -187,6 +188,7 @@ func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment
 	cfg := env.AppConfig().GetEndpointConfigById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for source endpoint with id=%d not found", id)
+		return nil
 	}
 	dataSource := getCustomDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
