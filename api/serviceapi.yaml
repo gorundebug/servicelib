@@ -263,7 +263,7 @@ components:
 
     DataConnectorType:
       type: integer
-      enum: [ 1, 2, 3, 4 ]
+      enum: [ 1, 2, 3, 4, 5 ]
       x-enum-varnames:
         - HTTP
         - gRPC
@@ -405,7 +405,8 @@ components:
       enum: [ 'net/http',
               'FastHTTP',
               'aiohttp',
-              'function'
+              'function',
+              'sarama'
       ]
 
     DataConnector:
@@ -430,6 +431,18 @@ components:
           type: integer
           minimum: 80
           maximum: 65535
+        brokers:
+          type: string
+        version:
+          type: string
+        dialTimeout:
+          type: number
+          minimum: 0
+          maximum: 3600000
+        usePartitioner:
+          type: boolean
+        async:
+          type: boolean
       required:
         - id
         - name
@@ -439,7 +452,8 @@ components:
     DataFormat:
       type: string
       enum: [ 'json',
-              'form'
+              'form',
+              'custom'
       ]
 
     Endpoint:
@@ -471,7 +485,22 @@ components:
           type: string
         delay:
           type: integer
-
+        topic:
+          type: string
+        partitions:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        createTopic:
+          type: boolean
+        replicationFactor:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        useHandler:
+          type: boolean
+        consumerGroup:
+          type: string
       required:
         - id
         - name

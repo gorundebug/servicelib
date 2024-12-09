@@ -78,45 +78,45 @@ type TypedCustomEndpointConsumer[T any] struct {
 	wg           sync.WaitGroup
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Consume(value T) {
-	ep.Endpoint().(CustomInputEndpoint).NextMessage()
-	ep.DataSourceEndpointConsumer.Consume(value)
+func (ec *TypedCustomEndpointConsumer[T]) Consume(value T) {
+	ec.Endpoint().(CustomInputEndpoint).NextMessage()
+	ec.DataSourceEndpointConsumer.Consume(value)
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
-	endpoint := ep.Endpoint()
+func (ec *TypedCustomEndpointConsumer[T]) Start(ctx context.Context) error {
+	endpoint := ec.Endpoint()
 	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
 	dataSource.WaitGroup().Add(1)
-	ep.wg.Add(1)
+	ec.wg.Add(1)
 	go func() {
 		defer func() {
-			ep.wg.Done()
+			ec.wg.Done()
 			dataSource.WaitGroup().Done()
 		}()
-		if err := ep.dataProducer.Start(ctx, ep); err != nil {
+		if err := ec.dataProducer.Start(ctx, ec); err != nil {
 			dataSource.GetEnvironment().Log().Fatalln(err)
 		}
 	}()
 	return nil
 }
 
-func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
-	endpoint := ep.Endpoint()
+func (ec *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
+	endpoint := ec.Endpoint()
 	dataSource := endpoint.GetDataSource().(CustomInputDataSource)
 	dataSource.WaitGroup().Add(1)
-	ep.wg.Add(1)
+	ec.wg.Add(1)
 	go func() {
 		defer func() {
-			ep.wg.Done()
+			ec.wg.Done()
 		}()
-		ep.dataProducer.Stop(ctx)
+		ec.dataProducer.Stop(ctx)
 	}()
 	go func() {
 		defer dataSource.WaitGroup().Done()
 		c := make(chan struct{})
 		go func() {
 			defer close(c)
-			ep.wg.Wait()
+			ec.wg.Wait()
 		}()
 		select {
 		case <-c:
@@ -124,7 +124,7 @@ func (ep *TypedCustomEndpointConsumer[T]) Stop(ctx context.Context) {
 			dataSource.GetEnvironment().Log().Warnf(
 				"Custom data source endpoint %q for the stream %q stopped by timeout.",
 				endpoint.GetName(),
-				ep.Stream().GetName())
+				ec.Stream().GetName())
 		}
 	}()
 }
@@ -172,6 +172,9 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 		return dataSource
 	}
 	cfg := env.AppConfig().GetDataConnectorById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for data source with id=%d not found", id)
+	}
 	customDataSource := &CustomDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
 	}
@@ -182,13 +185,16 @@ func getCustomDataSource(id int, env runtime.ServiceExecutionEnvironment) runtim
 
 func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
 	cfg := env.AppConfig().GetEndpointConfigById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for source endpoint with id=%d not found", id)
+	}
 	dataSource := getCustomDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
 		return endpoint
 	}
 	customEndpoint := &CustomEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg.Id, env),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, id, env),
 		delay:              time.Duration(*cfg.Delay) * time.Microsecond,
 	}
 	var inputEndpoint CustomInputEndpoint = customEndpoint
@@ -199,14 +205,12 @@ func getCustomDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment
 func MakeCustomEndpointConsumer[T any](stream runtime.TypedInputStream[T], dataProducer DataProducer[T]) runtime.Consumer[T] {
 	env := stream.GetEnvironment()
 	endpoint := getCustomDataSourceEndpoint(stream.GetEndpointId(), env)
-	var consumer runtime.Consumer[T]
-	var endpointConsumer CustomEndpointConsumer
 	typedEndpointConsumer := &TypedCustomEndpointConsumer[T]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
 		dataProducer:               dataProducer,
 	}
-	endpointConsumer = typedEndpointConsumer
-	consumer = typedEndpointConsumer
+	var endpointConsumer CustomEndpointConsumer = typedEndpointConsumer
+	var consumer runtime.Consumer[T] = typedEndpointConsumer
 	endpoint.AddEndpointConsumer(endpointConsumer)
 	return consumer
 }

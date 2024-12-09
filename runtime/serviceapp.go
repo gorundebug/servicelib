@@ -355,8 +355,8 @@ func (app *ServiceApp) makeEdges(stream Stream) []*Edge {
 
 		cfg := consumer.GetConfig()
 
-		if cfg.Type == api.TransformationTypeJoin ||
-			cfg.Type == api.TransformationTypeMultiJoin {
+		if cfg.Type == api.Join ||
+			cfg.Type == api.MultiJoin {
 			if cfg.IdSource == stream.GetId() {
 				label = label + " (L)"
 			} else {

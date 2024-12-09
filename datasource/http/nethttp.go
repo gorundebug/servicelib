@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/schema"
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"io"
@@ -23,17 +24,35 @@ import (
 	"reflect"
 )
 
+type HandlerData struct {
+	Writer  http.ResponseWriter
+	Request *http.Request
+}
+
+type NetHTTPEndpointHandler[T any] interface {
+	Handler(*HandlerData, runtime.Collect[T])
+}
+
 type NetHTTPEndpointRequestData interface {
 	ResponseWriter() http.ResponseWriter
+	Request() *http.Request
 	GetBody() (io.ReadCloser, error)
 	GetForm() (url.Values, error)
 	GetQuery() url.Values
 	GetMethod() string
 }
 
+type NetHTTPInputEndpoint interface {
+	runtime.InputEndpoint
+	Start(context.Context) error
+	Stop(context.Context)
+}
+
 type NetHTTPEndpointConsumer interface {
 	runtime.InputEndpointConsumer
 	EndpointRequest(requestData NetHTTPEndpointRequestData) error
+	Start(context.Context) error
+	Stop(context.Context)
 }
 
 type NetHTTPInputDataSource interface {
@@ -101,6 +120,10 @@ func (d *netHTTPEndpointRequestData) GetQuery() url.Values {
 	return d.query
 }
 
+func (d *netHTTPEndpointRequestData) Request() *http.Request {
+	return d.r
+}
+
 type NetHTTPEndpointTypedConsumer[T any] struct {
 	*runtime.DataSourceEndpointConsumer[T]
 	isTypePtr bool
@@ -108,13 +131,20 @@ type NetHTTPEndpointTypedConsumer[T any] struct {
 
 type NetHTTPEndpointJsonConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
-	tType reflect.Type
+	reader runtime.TypedEndpointReader[T]
+	tType  reflect.Type
 }
 
 type NetHTTPEndpointFormConsumer[T any] struct {
 	NetHTTPEndpointTypedConsumer[T]
+	reader  runtime.TypedEndpointReader[T]
 	tType   reflect.Type
 	decoder *schema.Decoder
+}
+
+type NetHTTPEndpointCustomConsumer[T any] struct {
+	NetHTTPEndpointTypedConsumer[T]
+	handler NetHTTPEndpointHandler[T]
 }
 
 func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSource {
@@ -123,6 +153,9 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 		return dataSource
 	}
 	cfg := env.AppConfig().GetDataConnectorById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for datasource with id=%d not found", id)
+	}
 	mux := http.NewServeMux()
 	if cfg.Host == nil || cfg.Port == nil {
 		env.Log().Fatalf("no host or port specified for data connector with id %d", id)
@@ -143,6 +176,9 @@ func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runti
 
 func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
 	cfg := env.AppConfig().GetEndpointConfigById(id)
+	if cfg == nil {
+		env.Log().Fatalf("config for endpoint with id=%d not found", id)
+	}
 	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
@@ -152,7 +188,7 @@ func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironmen
 		env.Log().Fatalf("no method specified for http endpoint with id %d", id)
 	}
 	netHTTPEndpoint := &NetHTTPEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, cfg.Id, env),
+		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, id, env),
 		method:             *cfg.Method,
 	}
 	if cfg.Path == nil {
@@ -165,6 +201,14 @@ func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironmen
 }
 
 func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
+	endpoints := ds.InputDataSource.GetEndpoints()
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
+		if err := endpoints.At(i).(NetHTTPInputEndpoint).Start(ctx); err != nil {
+			return err
+		}
+	}
+
 	addr := ds.server.Addr
 	if addr == "" {
 		addr = ":http"
@@ -188,6 +232,12 @@ func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
 }
 
 func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
+	endpoints := ds.InputDataSource.GetEndpoints()
+	length := endpoints.Len()
+	for i := 0; i < length; i++ {
+		endpoints.At(i).(NetHTTPInputEndpoint).Stop(ctx)
+	}
+
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
 			ds.GetEnvironment().Log().Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
@@ -201,9 +251,8 @@ func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
 }
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error) {
-	epReader := ec.GetEndpointReader()
-	if epReader != nil {
-		return epReader.Read(bytes.NewReader([]byte(data)))
+	if ec.reader != nil {
+		return ec.reader.Read(bytes.NewReader([]byte(data)))
 	}
 	if !ec.isTypePtr {
 		var t T
@@ -215,9 +264,8 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error
 }
 
 func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) (T, error) {
-	epReader := ec.GetEndpointReader()
-	if epReader != nil {
-		return epReader.Read(reader)
+	if ec.reader != nil {
+		return ec.reader.Read(reader)
 	}
 	decoder := json.NewDecoder(reader)
 
@@ -230,6 +278,25 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) 
 	t := reflect.New(ec.tType).Interface().(T)
 	err := decoder.Decode(t)
 	return t, err
+}
+
+func (ep *NetHTTPEndpoint) Start(ctx context.Context) error {
+	endpointConsumers := ep.GetEndpointConsumers()
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).Start(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ep *NetHTTPEndpoint) Stop(ctx context.Context) {
+	endpointConsumers := ep.GetEndpointConsumers()
+	length := endpointConsumers.Len()
+	for i := 0; i < length; i++ {
+		endpointConsumers.At(i).(NetHTTPEndpointConsumer).Stop(ctx)
+	}
 }
 
 func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +318,7 @@ func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < length; i++ {
 			if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				ep.GetEnvironment().Log().Warnln(err)
+				ep.GetEnvironment().Log().Warnf("ServeHTTP error in endpoint with id=%d: %v", ep.GetId(), err)
 				return
 			}
 		}
@@ -280,6 +347,40 @@ func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 	return nil
 }
 
+func (ec *NetHTTPEndpointCustomConsumer[T]) Start(ctx context.Context) error {
+	return nil
+}
+
+func (ec *NetHTTPEndpointCustomConsumer[T]) Stop(ctx context.Context) {
+}
+
+func (ec *NetHTTPEndpointCustomConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
+	ec.handler.Handler(&HandlerData{
+		Writer:  requestData.ResponseWriter(),
+		Request: requestData.Request(),
+	}, ec)
+	return nil
+}
+
+func (ec *NetHTTPEndpointCustomConsumer[T]) Out(value T) {
+	ec.Stream().Consume(value)
+}
+
+func (ec *NetHTTPEndpointFormConsumer[T]) Start(ctx context.Context) error {
+	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
+	if reader != nil {
+		var ok bool
+		ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
+		if !ok {
+			return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
+		}
+	}
+	return nil
+}
+
+func (ec *NetHTTPEndpointFormConsumer[T]) Stop(ctx context.Context) {
+}
+
 func (ec *NetHTTPEndpointFormConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
 	var form url.Values
 	var err error
@@ -305,7 +406,22 @@ func (ec *NetHTTPEndpointFormConsumer[T]) EndpointRequest(requestData NetHTTPEnd
 	return nil
 }
 
-func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runtime.Consumer[T] {
+func (ec *NetHTTPEndpointJsonConsumer[T]) Start(ctx context.Context) error {
+	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
+	if reader != nil {
+		var ok bool
+		ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
+		if !ok {
+			return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
+		}
+	}
+	return nil
+}
+
+func (ec *NetHTTPEndpointJsonConsumer[T]) Stop(ctx context.Context) {
+}
+
+func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T], handler NetHTTPEndpointHandler[T]) runtime.Consumer[T] {
 	env := stream.GetEnvironment()
 	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), env)
 	cfg := endpoint.GetConfig()
@@ -315,8 +431,9 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 	if cfg.Format == nil {
 		env.Log().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
 	}
+
 	switch *cfg.Format {
-	case "json":
+	case api.DataFormatJson:
 		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
@@ -327,7 +444,7 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer
 
-	case "form":
+	case api.DataFormatForm:
 		endpointConsumer := &NetHTTPEndpointFormConsumer[T]{
 			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
 				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
@@ -335,6 +452,20 @@ func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T]) runt
 			},
 			decoder: schema.NewDecoder(),
 			tType:   serde.GetSerdeTypeWithoutPtr[T](),
+		}
+		consumer = endpointConsumer
+		netHTTPEndpointConsumer = endpointConsumer
+
+	case api.DataFormatCustom:
+		if handler == nil {
+			env.Log().Fatalf("handler is nil for custom format in the shttp endpoint with id=%d", endpoint.GetId())
+		}
+		endpointConsumer := &NetHTTPEndpointCustomConsumer[T]{
+			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
+				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
+				isTypePtr:                  serde.IsTypePtr[T](),
+			},
+			handler: handler,
 		}
 		consumer = endpointConsumer
 		netHTTPEndpointConsumer = endpointConsumer

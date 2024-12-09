@@ -10,7 +10,6 @@ package runtime
 import (
 	"context"
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"golang.org/x/exp/maps"
 )
 
@@ -87,10 +86,10 @@ type DataSinkEndpoint struct {
 	endpointConsumers []OutputEndpointConsumer
 }
 
-func MakeDataSinkEndpoint(dataSink DataSink, config *config.EndpointConfig, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
+func MakeDataSinkEndpoint(dataSink DataSink, id int, environment ServiceExecutionEnvironment) *DataSinkEndpoint {
 	return &DataSinkEndpoint{
 		dataSink:          dataSink,
-		id:                config.Id,
+		id:                id,
 		environment:       environment,
 		endpointConsumers: make([]OutputEndpointConsumer, 0),
 	}
@@ -131,7 +130,6 @@ func (ep *DataSinkEndpoint) GetEndpointConsumers() Collection[OutputEndpointCons
 type DataSinkEndpointConsumer[T, R any] struct {
 	endpoint SinkEndpoint
 	stream   TypedSinkStream[T, R]
-	writer   TypedEndpointWriter[T]
 }
 
 func (ec *DataSinkEndpointConsumer[T, R]) Endpoint() SinkEndpoint {
@@ -147,13 +145,5 @@ func MakeDataSinkEndpointConsumer[T, R any](endpoint SinkEndpoint, stream TypedS
 		endpoint: endpoint,
 		stream:   stream,
 	}
-	writer := endpoint.GetEnvironment().GetEndpointWriter(endpoint, stream, serde.GetSerdeType[T]())
-	if writer != nil {
-		ec.writer = writer.(TypedEndpointWriter[T])
-	}
 	return ec
-}
-
-func (ec *DataSinkEndpointConsumer[T, R]) GetEndpointWriter() TypedEndpointWriter[T] {
-	return ec.writer
 }

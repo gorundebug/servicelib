@@ -94,8 +94,13 @@ type Consumer[T any] interface {
 	Consume(T)
 }
 
+type SinkCallback[T any] interface {
+	Done(T, error)
+}
+
 type SinkConsumer[T any] interface {
-	Consume(T) error
+	Consumer[T]
+	SetSinkCallback(SinkCallback[T])
 }
 
 type TypedConsumedStream[T any] interface {

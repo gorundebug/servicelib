@@ -54,13 +54,16 @@ func MakeSinkStream[T, R any](name string, stream TypedStream[T], f SinkErrorFun
 }
 
 func (s *SinkStream[T, R]) Consume(value T) {
-	if err := s.sinkConsumer.Consume(value); err != nil {
-		s.f.call(value, err, makeCollector[R](s.caller))
-	}
+	s.sinkConsumer.Consume(value)
+}
+
+func (s *SinkStream[T, R]) Done(value T, err error) {
+	s.f.call(value, err, makeCollector[R](s.caller))
 }
 
 func (s *SinkStream[T, R]) SetSinkConsumer(sinkConsumer SinkConsumer[T]) {
 	s.sinkConsumer = sinkConsumer
+	sinkConsumer.SetSinkCallback(s)
 }
 
 func (s *SinkStream[T, R]) GetEndpointId() int {
