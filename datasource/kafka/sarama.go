@@ -140,10 +140,6 @@ func (ds *SaramaKafkaDataSource) Stop(ctx context.Context) {
 	}
 }
 
-func (ep *SaramaKafkaEndpoint) getDataSource() SaramaKafkaInputDataSource {
-	return ep.GetDataSource().(SaramaKafkaInputDataSource)
-}
-
 func (ep *SaramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
 	cfg := ep.GetConfig()
 	if cfg.Topic == nil {
@@ -191,10 +187,6 @@ func (ep *SaramaKafkaEndpoint) Stop(ctx context.Context) {
 	for i := 0; i < length; i++ {
 		endpointConsumers.At(i).(SaramaKafkaEndpointConsumer).Stop(ctx)
 	}
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) getEndpoint() SaramaKafkaInputEndpoint {
-	return ec.Endpoint().(SaramaKafkaInputEndpoint)
 }
 
 func (ec *TypedSaramaKafkaEndpointConsumer[T]) getDataSource() SaramaKafkaInputDataSource {
@@ -327,6 +319,7 @@ func getSaramaKafkaDataSource(id int, env runtime.ServiceExecutionEnvironment) r
 	cfg := env.AppConfig().GetDataConnectorById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for datasource with id=%d not found", id)
+		return nil
 	}
 	kafkaDataSource := &SaramaKafkaDataSource{
 		InputDataSource: runtime.MakeInputDataSource(cfg, env),
@@ -340,6 +333,7 @@ func getSaramaKafkaDataSourceEndpoint(id int, env runtime.ServiceExecutionEnviro
 	cfg := env.AppConfig().GetEndpointConfigById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for endpoint with id=%d not found", id)
+		return nil
 	}
 	dataSource := getSaramaKafkaDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)

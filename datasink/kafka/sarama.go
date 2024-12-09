@@ -371,6 +371,7 @@ func getSaramaKafkaDataSinkEndpoint(id int, env runtime.ServiceExecutionEnvironm
 	cfg := env.AppConfig().GetEndpointConfigById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for endpoint with id=%d not found", id)
+		return nil
 	}
 	dataSink := getSaramaKafkaDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)

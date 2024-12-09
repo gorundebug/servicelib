@@ -163,6 +163,7 @@ func getCustomDataSink(id int, env runtime.ServiceExecutionEnvironment) runtime.
 	cfg := env.AppConfig().GetDataConnectorById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for datasink with id=%d not found", id)
+		return nil
 	}
 	customDataSink := &CustomDataSink{
 		OutputDataSink: runtime.MakeOutputDataSink(cfg, env),
@@ -176,6 +177,7 @@ func getCustomSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runt
 	cfg := env.AppConfig().GetEndpointConfigById(id)
 	if cfg == nil {
 		env.Log().Fatalf("config for sink endpoint with id=%d not found", id)
+		return nil
 	}
 	dataSink := getCustomDataSink(cfg.IdDataConnector, env)
 	endpoint := dataSink.GetEndpoint(id)
