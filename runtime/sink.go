@@ -7,15 +7,15 @@
 
 package runtime
 
-type SinkErrorFunctionContext[T, R any] struct {
+type SinkFunctionContext[T, R any] struct {
 	StreamFunction[R]
 	context TypedStream[R]
-	f       SinkErrorFunction[T, R]
+	f       SinkFunction[T, R]
 }
 
-func (f *SinkErrorFunctionContext[T, R]) call(value T, err error, out Collect[R]) {
+func (f *SinkFunctionContext[T, R]) call(value T, err error, out Collect[R]) {
 	f.BeforeCall()
-	f.f.SinkError(f.context, value, err, out)
+	f.f.Sink(f.context, value, err, out)
 	f.AfterCall()
 }
 
@@ -23,10 +23,10 @@ type SinkStream[T, R any] struct {
 	ConsumedStream[R]
 	source       TypedStream[T]
 	sinkConsumer SinkConsumer[T]
-	f            SinkErrorFunctionContext[T, R]
+	f            SinkFunctionContext[T, R]
 }
 
-func MakeSinkStream[T, R any](name string, stream TypedStream[T], f SinkErrorFunction[T, R]) *SinkStream[T, R] {
+func MakeSinkStream[T, R any](name string, stream TypedStream[T], f SinkFunction[T, R]) *SinkStream[T, R] {
 	env := stream.GetEnvironment()
 	runtime := env.GetRuntime()
 	cfg := env.AppConfig()
@@ -44,7 +44,7 @@ func MakeSinkStream[T, R any](name string, stream TypedStream[T], f SinkErrorFun
 			serde: MakeSerde[R](runtime),
 		},
 		source: stream,
-		f: SinkErrorFunctionContext[T, R]{
+		f: SinkFunctionContext[T, R]{
 			f: f,
 		},
 	}
