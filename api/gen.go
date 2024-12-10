@@ -46,7 +46,6 @@ const (
 	DataConnectorTypeGRPC   DataConnectorType = 2
 	DataConnectorTypeHTTP   DataConnectorType = 1
 	DataConnectorTypeKafka  DataConnectorType = 3
-	DataConnectorTypeN5     DataConnectorType = 5
 )
 
 // Defines values for DataFormat.
