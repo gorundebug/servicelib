@@ -156,7 +156,9 @@ func (app *ServiceApp) serviceInit(name string,
 	}
 	app.id = serviceConfig.Id
 
-	dep = env.ServiceDependency()
+	if dep == nil {
+		dep = env.ServiceDependency()
+	}
 
 	if dep != nil {
 		app.logsEngine = dep.LogsEngine(env)
