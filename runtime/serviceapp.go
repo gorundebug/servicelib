@@ -143,6 +143,10 @@ func (app *ServiceApp) RouteHandler() http.Handler {
 	return app.mux
 }
 
+func (app *ServiceApp) ServiceContext() interface{} {
+	return app.environment
+}
+
 func (app *ServiceApp) serviceInit(name string,
 	env ServiceExecutionEnvironment,
 	dep environment.ServiceDependency,

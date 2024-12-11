@@ -26,4 +26,5 @@ type ServiceEnvironment interface {
 	Metrics() metrics.Metrics
 	Log() log.Logger
 	ServiceDependency() ServiceDependency
+	ServiceContext() interface{}
 }
