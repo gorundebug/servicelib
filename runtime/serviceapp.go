@@ -135,6 +135,14 @@ func (app *ServiceApp) ServiceInit() error {
 	return nil
 }
 
+func (app *ServiceApp) AddHandler(pattern string, handler http.Handler) {
+	app.mux.Handle(pattern, handler)
+}
+
+func (app *ServiceApp) RouteHandler() http.Handler {
+	return app.mux
+}
+
 func (app *ServiceApp) serviceInit(name string,
 	env ServiceExecutionEnvironment,
 	dep environment.ServiceDependency,
@@ -193,23 +201,24 @@ func (app *ServiceApp) serviceInit(name string,
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	if app.httpRoute == nil && serviceConfig.HttpPort > 0 {
+	if serviceConfig.HttpPort > 0 {
 		app.mux = http.NewServeMux()
-		app.httpServerDone = make(chan struct{})
-		app.httpServer = &http.Server{
-			Handler: app.mux,
-			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
-		}
-		app.httpRoute = app.mux
+		app.httpRoute = app
+	}
+
+	app.httpServerDone = make(chan struct{})
+	app.httpServer = &http.Server{
+		Handler: app.RouteHandler(),
+		Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
 	}
 
 	if len(serviceConfig.StatusHandler) > 0 {
-		app.httpRoute.Handle(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
-		app.httpRoute.Handle(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
+		app.httpRoute.AddHandler(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
+		app.httpRoute.AddHandler(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
 	}
 
 	if len(serviceConfig.MetricsHandler) > 0 {
-		app.httpRoute.Handle(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
+		app.httpRoute.AddHandler(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
 	}
 
 	for idx := range appConfig.Links {

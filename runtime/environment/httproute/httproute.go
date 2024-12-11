@@ -10,5 +10,6 @@ package httproute
 import "net/http"
 
 type HttpRoute interface {
-	Handle(pattern string, handler http.Handler)
+	AddHandler(pattern string, handler http.Handler)
+	RouteHandler() http.Handler
 }
