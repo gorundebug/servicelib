@@ -218,7 +218,7 @@ func (app *ServiceApp) serviceInit(name string,
 	if serviceConfig.HttpPort > 0 {
 		app.httpServerDone = make(chan struct{})
 		app.httpServer = &http.Server{
-			Handler: app.RouteHandler(),
+			Handler: app.httpRoute.RouteHandler(),
 			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
 		}
 	}
@@ -485,7 +485,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 		go func() {
-			app.Log().Infof("Monitoring for service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+			app.Log().Infof("Http service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
 
 			err := app.httpServer.Serve(ln)
 			if !errors.Is(err, http.ErrServerClosed) {
