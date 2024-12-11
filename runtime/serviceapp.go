@@ -201,15 +201,9 @@ func (app *ServiceApp) serviceInit(name string,
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	if serviceConfig.HttpPort > 0 {
+	if app.httpRoute == nil {
 		app.mux = http.NewServeMux()
 		app.httpRoute = app
-	}
-
-	app.httpServerDone = make(chan struct{})
-	app.httpServer = &http.Server{
-		Handler: app.RouteHandler(),
-		Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
 	}
 
 	if len(serviceConfig.StatusHandler) > 0 {
@@ -219,6 +213,14 @@ func (app *ServiceApp) serviceInit(name string,
 
 	if len(serviceConfig.MetricsHandler) > 0 {
 		app.httpRoute.AddHandler(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
+	}
+
+	if serviceConfig.HttpPort > 0 {
+		app.httpServerDone = make(chan struct{})
+		app.httpServer = &http.Server{
+			Handler: app.RouteHandler(),
+			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
+		}
 	}
 
 	for idx := range appConfig.Links {

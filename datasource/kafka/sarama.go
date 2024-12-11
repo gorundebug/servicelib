@@ -196,12 +196,12 @@ func (ec *TypedSaramaKafkaEndpointConsumer[T]) getDataSource() SaramaKafkaInputD
 func (ec *TypedSaramaKafkaEndpointConsumer[T]) Start(ctx context.Context) error {
 	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
 	if reader == nil {
-		return fmt.Errorf("writer does not defined for endpoint with id=%d", ec.Endpoint().GetId())
+		return fmt.Errorf("reader does not defined for endpoint with id=%d", ec.Endpoint().GetId())
 	}
 	var ok bool
 	ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
 	if !ok {
-		return fmt.Errorf("writer has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
+		return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
 	}
 	dataSourceCfg := ec.Endpoint().GetDataSource().GetDataConnector()
 	kafkaConfig, err := makeKafkaConfig(dataSourceCfg)
