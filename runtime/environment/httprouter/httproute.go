@@ -5,11 +5,11 @@
  *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
  */
 
-package httproute
+package httprouter
 
 import "net/http"
 
-type HttpRoute interface {
+type HttpRouter interface {
 	AddHandler(pattern string, handler http.Handler)
 	RouteHandler() http.Handler
 }

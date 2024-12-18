@@ -9,15 +9,15 @@ package environment
 
 import (
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/environment/httproute"
+	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
-type ServiceDependency interface {
+type ServiceDependencies interface {
 	MetricsEngine(env ServiceEnvironment) metrics.MetricsEngine
 	LogsEngine(env ServiceEnvironment) log.LogsEngine
-	HttpRouter(env ServiceEnvironment) httproute.HttpRoute
+	HttpRouter(env ServiceEnvironment) httprouter.HttpRouter
 }
 
 type ServiceEnvironment interface {
@@ -25,6 +25,6 @@ type ServiceEnvironment interface {
 	ServiceConfig() *config.ServiceConfig
 	Metrics() metrics.Metrics
 	Log() log.Logger
-	ServiceDependency() ServiceDependency
+	ServiceDependencies() ServiceDependencies
 	ServiceContext() interface{}
 }

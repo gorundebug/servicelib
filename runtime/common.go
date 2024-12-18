@@ -12,7 +12,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/httproute"
+	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
 	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"io"
@@ -40,7 +40,7 @@ type ServiceExecutionEnvironment interface {
 	Delay(duration time.Duration, f func())
 	GetRuntime() ServiceExecutionRuntime
 	Release()
-	GetHttpRoute() httproute.HttpRoute
+	GetHttpRouter() httprouter.HttpRouter
 }
 
 type DelayFunc[T any] func(T) error
