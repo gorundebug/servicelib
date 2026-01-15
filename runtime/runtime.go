@@ -47,7 +47,7 @@ type ServiceLoader interface {
 type ServiceExecutionRuntime interface {
 	reloadConfig(config.Config)
 	serviceInit(name string, env ServiceExecutionEnvironment,
-		dep environment.ServiceDependency,
+		dep environment.ServiceDependencies,
 		loader ServiceLoader,
 		config config.Config) error
 	getSerde(valueType reflect.Type) (serde.Serializer, error)
@@ -144,7 +144,7 @@ func (l *serviceLoader[Environment, Cfg]) Stop() {
 }
 
 func (l *serviceLoader[Environment, Cfg]) init(name string,
-	dep environment.ServiceDependency,
+	dep environment.ServiceDependencies,
 	configSettings *config.ConfigSettings) error {
 
 	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
@@ -282,7 +282,7 @@ func (l *serviceLoader[Environment, Cfg]) init(name string,
 }
 
 func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string,
-	dep environment.ServiceDependency,
+	dep environment.ServiceDependencies,
 	configSettings *config.ConfigSettings) (Environment, error) {
 	loader := &serviceLoader[Environment, Cfg]{}
 	if err := loader.init(name, dep, configSettings); err != nil {

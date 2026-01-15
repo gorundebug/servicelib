@@ -23,9 +23,11 @@ import (
 )
 
 type HandlerData struct {
-	Message *kafka.ConsumerMessage
-	Session kafka.ConsumerGroupSession
-	Claim   kafka.ConsumerGroupClaim
+	Stream   runtime.Stream
+	Endpoint runtime.Endpoint
+	Message  *kafka.ConsumerMessage
+	Session  kafka.ConsumerGroupSession
+	Claim    kafka.ConsumerGroupClaim
 }
 
 type SaramaKafkaEndpointHandler[T any] interface {
@@ -302,9 +304,11 @@ func (ec *TypedSaramaKafkaEndpointConsumer[T]) ConsumeClaim(session kafka.Consum
 			}
 		} else {
 			ec.handler.Handler(&HandlerData{
-				Message: message,
-				Session: session,
-				Claim:   claim,
+				Stream:   ec.Stream(),
+				Endpoint: ec.Endpoint(),
+				Message:  message,
+				Session:  session,
+				Claim:    claim,
 			}, ec)
 		}
 	}

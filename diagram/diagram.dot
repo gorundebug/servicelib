@@ -97,7 +97,7 @@ digraph {
 "serde.MapSerde[T any]" -> { "serde.mapSerde" };
 "runtime.MockServiceConfig" -> { "config.ServiceAppConfig" };
 "runtime.MockService" -> { "runtime.ServiceApp" "runtime.MockServiceConfig" };
-"runtime.ServiceApp" -> { "pool.PriorityTaskPool" "runtime.DataSource" "http.ServeMux" "metrics.MetricsEngine" "config.LinkId" "runtime.ConsumeStatistics" "store.Storage" "runtime.DataSink" "reflect.Type" "metrics.Metrics" "pool.TaskPool" "runtime.ServiceLoader" "atomic.Pointerconfig.ServiceAppConfig" "runtime.ServiceExecutionEnvironment" "runtime.Stream" "http.Server" "pool.DelayPool" "environment.ServiceDependency" "serde.StreamSerializer" "runtime.struct" "log.LogsEngine" "log.Logger" };
+"runtime.ServiceApp" -> { "pool.PriorityTaskPool" "runtime.DataSource" "http.ServeMux" "metrics.MetricsEngine" "config.LinkId" "runtime.ConsumeStatistics" "store.Storage" "runtime.DataSink" "reflect.Type" "metrics.Metrics" "pool.TaskPool" "runtime.ServiceLoader" "atomic.Pointerconfig.ServiceAppConfig" "runtime.ServiceExecutionEnvironment" "runtime.Stream" "http.Server" "pool.DelayPool" "environment.ServiceDependencies" "serde.StreamSerializer" "runtime.struct" "log.LogsEngine" "log.Logger" };
 "runtime.SinkStream[T any]" -> { "runtime.ServiceStreamT" "runtime.TypedStreamT" "runtime.ConsumerT" };
 "runtime.SplitLink[T any]" -> { "runtime.SplitStreamT" "runtime.CallerT" "runtime.TypedStreamConsumerT" };
 "runtime.SplitStream[T any]" -> { "runtime.ConsumedStreamT" "runtime.SplitLinkT" "runtime.TypedStreamT" };

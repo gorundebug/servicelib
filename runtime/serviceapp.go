@@ -16,7 +16,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/httproute"
+	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/logging"
@@ -58,8 +58,8 @@ type ServiceApp struct {
 	loader            ServiceLoader
 	logsEngine        log.LogsEngine
 	log               log.Logger
-	dep               environment.ServiceDependency
-	httpRoute         httproute.HttpRoute
+	dep               environment.ServiceDependencies
+	httpRouter        httprouter.HttpRouter
 }
 
 func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
@@ -88,7 +88,7 @@ func (app *ServiceApp) ServiceConfig() *config.ServiceConfig {
 	return app.getServiceConfig()
 }
 
-func (app *ServiceApp) ServiceDependency() environment.ServiceDependency {
+func (app *ServiceApp) ServiceDependencies() environment.ServiceDependencies {
 	return nil
 }
 
@@ -99,8 +99,8 @@ func (app *ServiceApp) Metrics() metrics.Metrics {
 	return app.metrics
 }
 
-func (app *ServiceApp) GetHttpRoute() httproute.HttpRoute {
-	return app.httpRoute
+func (app *ServiceApp) GetHttpRouter() httprouter.HttpRouter {
+	return app.httpRouter
 }
 
 func (app *ServiceApp) registerStream(stream Stream) {
@@ -149,7 +149,7 @@ func (app *ServiceApp) ServiceContext() interface{} {
 
 func (app *ServiceApp) serviceInit(name string,
 	env ServiceExecutionEnvironment,
-	dep environment.ServiceDependency,
+	dep environment.ServiceDependencies,
 	loader ServiceLoader,
 	cfg config.Config) error {
 
@@ -169,13 +169,13 @@ func (app *ServiceApp) serviceInit(name string,
 	app.id = serviceConfig.Id
 
 	if dep == nil {
-		dep = env.ServiceDependency()
+		dep = env.ServiceDependencies()
 	}
 
 	if dep != nil {
 		app.logsEngine = dep.LogsEngine(env)
 		app.metricsEngine = dep.MetricsEngine(env)
-		app.httpRoute = dep.HttpRouter(env)
+		app.httpRouter = dep.HttpRouter(env)
 	}
 
 	if app.logsEngine == nil {
@@ -205,24 +205,24 @@ func (app *ServiceApp) serviceInit(name string,
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	if app.httpRoute == nil {
+	if app.httpRouter == nil {
 		app.mux = http.NewServeMux()
-		app.httpRoute = app
+		app.httpRouter = app
 	}
 
 	if len(serviceConfig.StatusHandler) > 0 {
-		app.httpRoute.AddHandler(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
-		app.httpRoute.AddHandler(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
+		app.httpRouter.AddHandler(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
+		app.httpRouter.AddHandler(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
 	}
 
 	if len(serviceConfig.MetricsHandler) > 0 {
-		app.httpRoute.AddHandler(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
+		app.httpRouter.AddHandler(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
 	}
 
 	if serviceConfig.HttpPort > 0 {
 		app.httpServerDone = make(chan struct{})
 		app.httpServer = &http.Server{
-			Handler: app.httpRoute.RouteHandler(),
+			Handler: app.httpRouter.RouteHandler(),
 			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
 		}
 	}
