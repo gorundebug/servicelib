@@ -11,16 +11,17 @@ import (
     "github.com/gorundebug/servicelib/api"
 )
 
+func ValuePtr[T any](v T) *T {
+    return &v
+}
+
 type Config interface {
-    AppConfig() *ServiceAppConfig
-}
-
-// ConfigSettings /*
-// Settings how the service will get access to config and config update options
-type ConfigSettings struct {
-}
-
-type ConfigProperties interface {
+    GetServices() []*ServiceConfig
+    GetStreams() []*StreamConfig
+    GetDataConnectors() []*DataConnectorConfig
+    GetEndpoints() []*EndpointConfig
+    GetPools() []*PoolConfig
+    GetLinks() []*LinkConfig
     GetProperty(name string) interface{}
 }
 
@@ -102,122 +103,97 @@ func (s *EndpointConfig) GetProperty(name string) interface{} {
     return s.Properties[name]
 }
 
-type ProjectSettings struct {
-    api.ProjectSettings `mapstructure:",squash" yaml:",inline"`
-    Properties          map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *ProjectSettings) GetProperty(name string) interface{} {
-    return s.Properties[name]
-}
-
-func GetConfigProperty[T any](config ConfigProperties, name string) T {
-    value := config.GetProperty(name)
-    if value != nil {
-        return value.(T)
-    }
-    var t T
-    return t
-}
-
 type LinkId struct {
     From int
     To   int
 }
 
 type RuntimeConfig struct {
-    StreamsByName        map[string]*StreamConfig
-    ServicesByName       map[string]*ServiceConfig
-    LinksById            map[LinkId]*LinkConfig
-    DataConnectorsByName map[string]*DataConnectorConfig
-    EndpointsByName      map[string]*EndpointConfig
-    StreamsById          map[int]*StreamConfig
-    ServicesById         map[int]*ServiceConfig
-    DataConnectorsById   map[int]*DataConnectorConfig
-    EndpointsById        map[int]*EndpointConfig
-    PoolByName           map[string]*PoolConfig
+    streamsByName        map[string]*StreamConfig
+    servicesByName       map[string]*ServiceConfig
+    linksById            map[LinkId]*LinkConfig
+    dataConnectorsByName map[string]*DataConnectorConfig
+    endpointsByName      map[string]*EndpointConfig
+    streamsById          map[int]*StreamConfig
+    servicesById         map[int]*ServiceConfig
+    dataConnectorsById   map[int]*DataConnectorConfig
+    endpointsById        map[int]*EndpointConfig
+    poolByName           map[string]*PoolConfig
+    config               Config
 }
 
-type ServiceAppConfig struct {
-    Streams        []StreamConfig        `yaml:"streams"`
-    Services       []ServiceConfig       `yaml:"services"`
-    Links          []LinkConfig          `yaml:"links"`
-    DataConnectors []DataConnectorConfig `yaml:"dataConnectors"`
-    Endpoints      []EndpointConfig      `yaml:"endpoints"`
-    Pools          []PoolConfig          `yaml:"pools"`
-    Settings       ProjectSettings       `yaml:"settings"`
-    runtimeConfig  *RuntimeConfig        `yaml:"-"`
-}
-
-func (cfg *ServiceAppConfig) InitRuntimeConfig() {
-    cfg.runtimeConfig = &RuntimeConfig{
-        StreamsByName:        make(map[string]*StreamConfig),
-        StreamsById:          make(map[int]*StreamConfig),
-        ServicesByName:       make(map[string]*ServiceConfig),
-        ServicesById:         make(map[int]*ServiceConfig),
-        EndpointsById:        make(map[int]*EndpointConfig),
-        DataConnectorsById:   make(map[int]*DataConnectorConfig),
-        EndpointsByName:      make(map[string]*EndpointConfig),
-        DataConnectorsByName: make(map[string]*DataConnectorConfig),
-        LinksById:            make(map[LinkId]*LinkConfig),
-        PoolByName:           make(map[string]*PoolConfig),
+func NewRuntimeConfig(config Config) *RuntimeConfig {
+    runtimeCfg := &RuntimeConfig{
+        config:               config,
+        streamsByName:        make(map[string]*StreamConfig),
+        streamsById:          make(map[int]*StreamConfig),
+        servicesByName:       make(map[string]*ServiceConfig),
+        servicesById:         make(map[int]*ServiceConfig),
+        endpointsById:        make(map[int]*EndpointConfig),
+        dataConnectorsById:   make(map[int]*DataConnectorConfig),
+        endpointsByName:      make(map[string]*EndpointConfig),
+        dataConnectorsByName: make(map[string]*DataConnectorConfig),
+        linksById:            make(map[LinkId]*LinkConfig),
+        poolByName:           make(map[string]*PoolConfig),
     }
-    for idx := range cfg.Streams {
-        cfg.runtimeConfig.StreamsByName[cfg.Streams[idx].Name] = &cfg.Streams[idx]
-        cfg.runtimeConfig.StreamsById[cfg.Streams[idx].Id] = &cfg.Streams[idx]
+
+    for _, v := range config.GetStreams() {
+        runtimeCfg.streamsByName[v.Name] = v
+        runtimeCfg.streamsById[v.Id] = v
     }
-    for idx := range cfg.Services {
-        cfg.runtimeConfig.ServicesByName[cfg.Services[idx].Name] = &cfg.Services[idx]
-        cfg.runtimeConfig.ServicesById[cfg.Services[idx].Id] = &cfg.Services[idx]
+    for _, v := range config.GetServices() {
+        runtimeCfg.servicesByName[v.Name] = v
+        runtimeCfg.servicesById[v.Id] = v
     }
-    for idx := range cfg.Endpoints {
-        cfg.runtimeConfig.EndpointsByName[cfg.Endpoints[idx].Name] = &cfg.Endpoints[idx]
-        cfg.runtimeConfig.EndpointsById[cfg.Endpoints[idx].Id] = &cfg.Endpoints[idx]
+    for _, v := range config.GetEndpoints() {
+        runtimeCfg.endpointsByName[v.Name] = v
+        runtimeCfg.endpointsById[v.Id] = v
     }
-    for idx := range cfg.DataConnectors {
-        cfg.runtimeConfig.DataConnectorsById[cfg.DataConnectors[idx].Id] = &cfg.DataConnectors[idx]
-        cfg.runtimeConfig.DataConnectorsByName[cfg.DataConnectors[idx].Name] = &cfg.DataConnectors[idx]
+    for _, v := range config.GetDataConnectors() {
+        runtimeCfg.dataConnectorsById[v.Id] = v
+        runtimeCfg.dataConnectorsByName[v.Name] = v
     }
-    for idx := range cfg.Pools {
-        cfg.runtimeConfig.PoolByName[cfg.Pools[idx].Name] = &cfg.Pools[idx]
+    for _, v := range config.GetPools() {
+        runtimeCfg.poolByName[v.Name] = v
     }
-    for idx := range cfg.Links {
-        cfg.runtimeConfig.LinksById[LinkId{From: cfg.Links[idx].From, To: cfg.Links[idx].To}] = &cfg.Links[idx]
+    for _, v := range config.GetLinks() {
+        runtimeCfg.linksById[LinkId{From: v.From, To: v.To}] = v
     }
+    return runtimeCfg
 }
 
-func (cfg *ServiceAppConfig) AppConfig() *ServiceAppConfig {
-    return cfg
+func (cfg *RuntimeConfig) GetConfig() Config {
+    return cfg.config
 }
 
-func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
-    return cfg.runtimeConfig.StreamsByName[name]
+func (cfg *RuntimeConfig) GetStreamConfigByName(name string) *StreamConfig {
+    return cfg.streamsByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnectorConfig {
-    return cfg.runtimeConfig.DataConnectorsById[id]
+func (cfg *RuntimeConfig) GetDataConnectorById(id int) *DataConnectorConfig {
+    return cfg.dataConnectorsById[id]
 }
 
-func (cfg *ServiceAppConfig) GetEndpointConfigById(id int) *EndpointConfig {
-    return cfg.runtimeConfig.EndpointsById[id]
+func (cfg *RuntimeConfig) GetEndpointConfigById(id int) *EndpointConfig {
+    return cfg.endpointsById[id]
 }
 
-func (cfg *ServiceAppConfig) GetServiceConfigByName(name string) *ServiceConfig {
-    return cfg.runtimeConfig.ServicesByName[name]
+func (cfg *RuntimeConfig) GetServiceConfigByName(name string) *ServiceConfig {
+    return cfg.servicesByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetServiceConfigById(id int) *ServiceConfig {
-    return cfg.runtimeConfig.ServicesById[id]
+func (cfg *RuntimeConfig) GetServiceConfigById(id int) *ServiceConfig {
+    return cfg.servicesById[id]
 }
 
-func (cfg *ServiceAppConfig) GetStreamConfigById(id int) *StreamConfig {
-    return cfg.runtimeConfig.StreamsById[id]
+func (cfg *RuntimeConfig) GetStreamConfigById(id int) *StreamConfig {
+    return cfg.streamsById[id]
 }
 
-func (cfg *ServiceAppConfig) GetPoolByName(name string) *PoolConfig {
-    return cfg.runtimeConfig.PoolByName[name]
+func (cfg *RuntimeConfig) GetPoolByName(name string) *PoolConfig {
+    return cfg.poolByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetLink(from int, to int) *LinkConfig {
-    return cfg.runtimeConfig.LinksById[LinkId{From: from, To: to}]
+func (cfg *RuntimeConfig) GetLink(from int, to int) *LinkConfig {
+    return cfg.linksById[LinkId{From: from, To: to}]
 }
