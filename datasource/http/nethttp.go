@@ -8,215 +8,310 @@
 package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/schema"
-	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"io"
 	"net"
 	"net/http"
-	"net/url"
-	"reflect"
+	"sync"
+	"time"
+
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"github.com/gorundebug/servicelib/runtime/store"
 )
+
+const pendingRotationInterval = 30 * time.Second
 
 type HandlerData struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
 }
 
-type NetHTTPEndpointHandler[T any] interface {
-	Handler(*HandlerData, runtime.Collect[T])
+// HTTPHandler is the function type returned by MakeNetHTTPEndpointConsumer.
+// It handles a single HTTP request for the endpoint.
+type HTTPHandler func(w http.ResponseWriter, r *http.Request)
+
+// StreamContext bundles the typed stream, result stream, output collector, and error collector
+// that are passed to every EndpointHandler lifecycle method.
+type StreamContext[T, R, E any] = runtime.StreamContext[T, R, E]
+
+// ResultCallback is the callback type registered via ResultContext.SetResultCallback.
+// It is called when a pipeline result R with a matching messageID arrives.
+// Return true to deregister the callback after this invocation; false to keep it active.
+type ResultCallback[HandlerState, ReqT, ResR, T, R, E any] func(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+	handlerState HandlerState,
+	value R,
+	data HandlerData,
+) bool
+
+// ResultContext is given to EndpointHandler.ConsumeMessage.
+// The handler registers result callbacks keyed by messageID.
+// Done() signals that response processing is complete.
+type ResultContext[HandlerState, ReqT, ResR, T, R, E any] interface {
+	SetResultCallback(messageID string, cb ResultCallback[HandlerState, ReqT, ResR, T, R, E])
+	Done()
 }
 
-type NetHTTPEndpointRequestData interface {
-	ResponseWriter() http.ResponseWriter
-	Request() *http.Request
-	GetBody() (io.ReadCloser, error)
-	GetForm() (url.Values, error)
-	GetQuery() url.Values
-	GetMethod() string
+type httpResult[HandlerState, ReqT, ResR, T, R, E any] struct {
+	once               sync.Once
+	handlerState       HandlerState
+	data               HandlerData
+	span               tracing.Span
+	doneCh             chan struct{}
+	mu                 sync.RWMutex
+	cbMu               sync.Mutex
+	messageCallbackMap map[string]ResultCallback[HandlerState, ReqT, ResR, T, R, E]
 }
 
-type NetHTTPInputEndpoint interface {
+func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) SetResultCallback(messageID string, cb ResultCallback[HandlerState, ReqT, ResR, T, R, E]) {
+	r.cbMu.Lock()
+	defer r.cbMu.Unlock()
+	r.messageCallbackMap[messageID] = cb
+}
+
+func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) Done() {
+	r.once.Do(func() {
+		tracing.SpanEvent(r.span, "done")
+		close(r.doneCh)
+	})
+}
+
+// EndpointHandler handles HTTP requests for a single endpoint.
+//
+// Pipeline lifecycle (pipeline result expected):
+//
+//	BeginRequest → ConsumeMessage → [await result] → EndRequest
+//	                    │                  ↑
+//	                    └─ SetResultCallback → cb(R) → write response
+//
+// The framework blocks after ConsumeMessage until Done() is called on the
+// ResultContext (either directly in ConsumeMessage, or via a registered callback
+// when a matching pipeline result R arrives). EndRequest is called only after
+// Done() is signalled or the context is cancelled.
+//
+// Pipeline lifecycle (no pipeline result):
+//
+//	BeginRequest → ConsumeMessage → EndRequest
+//
+// BeginRequest initialises per-request handler state and receives HandlerData
+// (the http.ResponseWriter and *http.Request). If it returns a non-nil error
+// the pipeline will not be started: the framework will NOT call ConsumeMessage
+// or EndRequest. BeginRequest is therefore responsible for releasing any
+// resources it acquired and writing any error response before returning the error.
+//
+// ConsumeMessage is called once per HTTP request. It receives HandlerData and
+// may push decoded values into the pipeline via sc.Collect, write a response
+// directly via data.Writer, or register a callback via resultCtx.SetResultCallback
+// to be notified when a matching pipeline result arrives asynchronously. If it
+// returns a non-nil error the framework stops processing: EndRequest is called
+// with that error.
+//
+// EndRequest finalises the request. It receives the error that caused the
+// pipeline to stop (nil on the happy path). Unlike gRPC handlers, EndRequest
+// does not return an error; any error response must be written to data.Writer
+// directly.
+//
+// GetMessageID correlates an inbound pipeline result value R with the originating
+// request, enabling the framework to route the result back via the correct
+// ResultContext callback.
+//
+// Thread safety:
+// GetMessageID and the ResultContext callbacks registered via SetResultCallback
+// may be called concurrently from multiple goroutines (one per pipeline result
+// that arrives for the same request), and may also run concurrently with an
+// in-progress ConsumeMessage call. Implementations must synchronise all access
+// to HandlerState inside these methods.
+// BeginRequest, ConsumeMessage, and EndRequest are called sequentially from a
+// single goroutine per request, so no synchronisation is needed among them —
+// but access to HandlerState from these methods still requires synchronisation
+// if it is shared with GetMessageID or a registered callback.
+type EndpointHandler[HandlerState, ReqT, ResR, T, R, E any] interface {
+	BeginRequest(ctx context.Context, sc StreamContext[T, R, E], data HandlerData) (context.Context, HandlerState, error)
+	ConsumeMessage(ctx context.Context, sc StreamContext[T, R, E], handlerState HandlerState, data HandlerData, resultCtx ResultContext[HandlerState, ReqT, ResR, T, R, E]) error
+	GetMessageID(ctx context.Context, sc StreamContext[T, R, E], handlerState HandlerState, value R) string
+	EndRequest(ctx context.Context, sc StreamContext[T, R, E], err error, handlerState HandlerState, data HandlerData)
+}
+
+type netHTTPInputEndpoint interface {
 	runtime.InputEndpoint
 	Start(context.Context) error
 	Stop(context.Context)
 }
 
-type NetHTTPEndpointConsumer interface {
+type netHTTPEndpointConsumer interface {
 	runtime.InputEndpointConsumer
-	EndpointRequest(requestData NetHTTPEndpointRequestData) error
 	Start(context.Context) error
 	Stop(context.Context)
+	serveHTTP(w http.ResponseWriter, r *http.Request)
 }
 
-type NetHTTPInputDataSource interface {
+type netHTTPInputDataSource interface {
 	runtime.DataSource
-	AddHandler(pattern string, handler http.Handler)
+	registerHandler(endpoint runtime.Endpoint, handler http.Handler)
 }
 
-type NetHTTPDataSource struct {
+type netHTTPDataSource struct {
 	*runtime.InputDataSource
-	server http.Server
-	mux    *http.ServeMux
-	done   chan struct{}
+	useDedicatedListener bool
+	server               *http.Server
+	mux                  *http.ServeMux
+	addr                 string
+	done                 chan struct{}
+	metricsEngine        metrics.MetricsEngine
+	tracingEngine        tracing.TracingEngine
 }
 
-type NetHTTPEndpoint struct {
+type netHTTPEndpoint struct {
 	*runtime.DataSourceEndpoint
-	method string
+	consumer netHTTPEndpointConsumer
+	method   string
 }
 
-type netHTTPEndpointRequestData struct {
-	w         http.ResponseWriter
-	r         *http.Request
-	body      []byte
-	form      url.Values
-	query     url.Values
-	optimized bool
+type resultConsumer[T any] interface {
+	consumeResult(ctx context.Context, value T)
 }
 
-func (d *netHTTPEndpointRequestData) ResponseWriter() http.ResponseWriter {
-	return d.w
+type resultConsumerProxy[T any] struct {
+	consumer resultConsumer[T]
 }
 
-func (d *netHTTPEndpointRequestData) GetMethod() string {
-	return d.r.Method
+func (c *resultConsumerProxy[T]) Consume(ctx context.Context, value T) {
+	c.consumer.consumeResult(ctx, value)
 }
 
-func (d *netHTTPEndpointRequestData) GetBody() (io.ReadCloser, error) {
-	if d.optimized {
-		return d.r.Body, nil
-	}
-	if d.body == nil {
-		var err error
-		d.body, err = io.ReadAll(d.r.Body)
-		if err != nil {
-			return nil, err
+type netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
+	*runtime.DataSourceEndpointConsumer[T, R, E]
+	sc        StreamContext[T, R, E]
+	hasResult bool
+	handler   EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
+	pending   *store.RotatingMap[string, *httpResult[HandlerState, ReqT, ResR, T, R, E]]
+	tracer    tracing.Tracer
+}
+
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Out(ctx context.Context, value T) {
+	ec.Consume(ctx, value)
+}
+
+func getOrCreateNetHTTPDataSource(id int, env runtime.RuntimeEnvironment) (netHTTPInputDataSource, error) {
+	if existing := env.GetDataSource(id); existing != nil {
+		ds, ok := existing.(netHTTPInputDataSource)
+		if !ok {
+			return nil, fmt.Errorf("datasource with id=%d is not a netHTTPInputDataSource", id)
 		}
+		return ds, nil
 	}
-	return io.NopCloser(bytes.NewReader(d.body)), nil
-}
+	cfg := env.RuntimeConfig().GetDataConnectorByID(id)
+	if cfg == nil {
+		return nil, fmt.Errorf("config for datasource with id=%d not found", id)
+	}
+	dsCfg, ok := cfg.(*config.HttpDataConnectorConfig)
+	if !ok || dsCfg.Implementation != api.DataConnectorImplementationNetHTTP {
+		return nil, fmt.Errorf("invalid config type for datasource %q", cfg.GetName())
+	}
 
-func (d *netHTTPEndpointRequestData) GetForm() (url.Values, error) {
-	if d.form == nil {
-		if err := d.r.ParseForm(); err != nil {
-			return nil, err
+	inputDS, err := runtime.MakeInputDataSource(cfg, env)
+	if err != nil {
+		return nil, err
+	}
+	ds := &netHTTPDataSource{
+		InputDataSource:      inputDS,
+		useDedicatedListener: dsCfg.UseDedicatedListener,
+		metricsEngine:        env.MetricsEngine(),
+		tracingEngine:        env.TracingEngine(),
+	}
+	if dsCfg.UseDedicatedListener {
+		if dsCfg.Host == "" || dsCfg.Port == 0 {
+			return nil, fmt.Errorf("no host or port specified for data connector %q", dsCfg.GetName())
 		}
-		d.form = d.r.Form
+		ds.mux = http.NewServeMux()
+		ds.addr = fmt.Sprintf("%s:%d", dsCfg.Host, dsCfg.Port)
+		ds.done = make(chan struct{})
 	}
-	return d.form, nil
+	env.AddDataSource(ds)
+	return ds, nil
 }
 
-func (d *netHTTPEndpointRequestData) GetQuery() url.Values {
-	if d.query == nil {
-		d.query = d.r.URL.Query()
-	}
-	return d.query
-}
-
-func (d *netHTTPEndpointRequestData) Request() *http.Request {
-	return d.r
-}
-
-type NetHTTPEndpointTypedConsumer[T any] struct {
-	*runtime.DataSourceEndpointConsumer[T]
-	isTypePtr bool
-}
-
-type NetHTTPEndpointJsonConsumer[T any] struct {
-	NetHTTPEndpointTypedConsumer[T]
-	reader runtime.TypedEndpointReader[T]
-	tType  reflect.Type
-}
-
-type NetHTTPEndpointFormConsumer[T any] struct {
-	NetHTTPEndpointTypedConsumer[T]
-	reader  runtime.TypedEndpointReader[T]
-	tType   reflect.Type
-	decoder *schema.Decoder
-}
-
-type NetHTTPEndpointCustomConsumer[T any] struct {
-	NetHTTPEndpointTypedConsumer[T]
-	handler NetHTTPEndpointHandler[T]
-}
-
-func getNetHTTPDataSource(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSource {
-	dataSource := env.GetDataSource(id)
-	if dataSource != nil {
-		return dataSource
-	}
-	cfg := env.AppConfig().GetDataConnectorById(id)
+func createNetHTTPDataSourceEndpoint(id int, env runtime.RuntimeEnvironment) (*netHTTPEndpoint, error) {
+	cfg := env.RuntimeConfig().GetEndpointConfigByID(id)
 	if cfg == nil {
-		env.Log().Fatalf("config for datasource with id=%d not found", id)
-		return nil
+		return nil, fmt.Errorf("config for endpoint with id=%d not found", id)
 	}
-	mux := http.NewServeMux()
-	if cfg.Host == nil || cfg.Port == nil {
-		env.Log().Fatalf("no host or port specified for data connector with id %d", id)
-		return nil
+	epCfg, ok := cfg.(*config.HttpEndpointConfig)
+	if !ok {
+		return nil, fmt.Errorf("invalid config type for endpoint %q", cfg.GetName())
 	}
-	netHTTPDataSource := &NetHTTPDataSource{
-		InputDataSource: runtime.MakeInputDataSource(cfg, env),
-		mux:             mux,
-		server: http.Server{
-			Addr:    fmt.Sprintf("%s:%d", *cfg.Host, *cfg.Port),
-			Handler: mux,
-		},
-		done: make(chan struct{}),
-	}
-	var inputDataSource NetHTTPInputDataSource = netHTTPDataSource
-	env.AddDataSource(inputDataSource)
-	return netHTTPDataSource
-}
 
-func getNetHTTPDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.AppConfig().GetEndpointConfigById(id)
-	if cfg == nil {
-		env.Log().Fatalf("config for endpoint with id=%d not found", id)
-		return nil
+	dataSource, err := getOrCreateNetHTTPDataSource(epCfg.IdDataConnector, env)
+	if err != nil {
+		return nil, err
 	}
-	dataSource := getNetHTTPDataSource(cfg.IdDataConnector, env)
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint
+		return nil, fmt.Errorf("endpoint %q already exists", epCfg.GetName())
 	}
-	if cfg.Method == nil {
-		env.Log().Fatalf("no method specified for http endpoint with id %d", id)
-		return nil
+	if epCfg.HttpMethodType != api.HTTPMethodTypePOST && epCfg.HttpMethodType != api.HTTPMethodTypeGET {
+		return nil, fmt.Errorf("no method specified for http endpoint %q", epCfg.GetName())
 	}
-	netHTTPEndpoint := &NetHTTPEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, id, env),
-		method:             *cfg.Method,
+	if epCfg.Path == "" {
+		return nil, fmt.Errorf("no path specified for http endpoint %q", epCfg.GetName())
 	}
-	if cfg.Path == nil {
-		env.Log().Fatalf("no path specified for http endpoint with id %d", id)
+	method, err := getHttpMethod(epCfg.HttpMethodType)
+	if err != nil {
+		return nil, err
 	}
-	dataSource.(NetHTTPInputDataSource).AddHandler(*cfg.Path, http.HandlerFunc(netHTTPEndpoint.ServeHTTP))
-	var inputEndpoint runtime.InputEndpoint = netHTTPEndpoint
+	sourceEndpoint, err := runtime.MakeDataSourceEndpoint(dataSource, id, env)
+	if err != nil {
+		return nil, err
+	}
+	ep := &netHTTPEndpoint{
+		DataSourceEndpoint: sourceEndpoint,
+		method:             method,
+	}
+	var inputEndpoint runtime.InputEndpoint = ep
 	dataSource.AddEndpoint(inputEndpoint)
-	return netHTTPEndpoint
+	dataSource.registerHandler(ep, http.HandlerFunc(ep.ServeHTTP))
+
+	return ep, nil
 }
 
-func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
-	endpoints := ds.InputDataSource.GetEndpoints()
+func (ds *netHTTPDataSource) Start(ctx context.Context) error {
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		if err := endpoints.At(i).(NetHTTPInputEndpoint).Start(ctx); err != nil {
+		if err := endpoints.At(i).(netHTTPInputEndpoint).Start(ctx); err != nil {
 			return err
 		}
 	}
 
-	addr := ds.server.Addr
+	if !ds.useDedicatedListener {
+		return nil
+	}
+
+	var handler http.Handler = ds.mux
+	if ds.metricsEngine != nil {
+		handler = ds.metricsEngine.HTTPServerHandler(ds.mux, runtime.ToSnakeCase(ds.GetName()))
+	}
+	if ds.tracingEngine != nil {
+		handler = ds.tracingEngine.HTTPServerHandler(handler, runtime.ToSnakeCase(ds.GetName()))
+		inner := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Trace") != "" {
+				r = r.WithContext(tracing.EnableSampling(r.Context()))
+			}
+			inner.ServeHTTP(w, r)
+		})
+	}
+	addr := ds.addr
 	if addr == "" {
 		addr = ":http"
 	}
+	ds.server = &http.Server{Addr: addr, Handler: handler}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -224,261 +319,260 @@ func (ds *NetHTTPDataSource) Start(ctx context.Context) error {
 	go func() {
 		err := ds.server.Serve(ln)
 		if !errors.Is(err, http.ErrServerClosed) {
-			ds.GetEnvironment().Log().Fatalln(err)
+			panic(fmt.Sprintf("%v", err))
 		}
 		ds.done <- struct{}{}
 	}()
 	return nil
 }
 
-func (ds *NetHTTPDataSource) AddHandler(pattern string, handler http.Handler) {
-	ds.mux.Handle(pattern, handler)
+func (ds *netHTTPDataSource) registerHandler(ep runtime.Endpoint, handler http.Handler) {
+	if ds.useDedicatedListener {
+		path := ds.GetEnvironment().RuntimeConfig().GetEndpointConfigByID(ep.GetID()).(*config.HttpEndpointConfig).Path
+		ds.mux.Handle(path, handler)
+	}
 }
 
-func (ds *NetHTTPDataSource) Stop(ctx context.Context) {
-	endpoints := ds.InputDataSource.GetEndpoints()
+func (ds *netHTTPDataSource) Stop(ctx context.Context) {
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		endpoints.At(i).(NetHTTPInputEndpoint).Stop(ctx)
+		endpoints.At(i).(netHTTPInputEndpoint).Stop(ctx)
+	}
+
+	if !ds.useDedicatedListener {
+		return
 	}
 
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
-			ds.GetEnvironment().Log().Warnf("NetHTTPDataSource.Stop server shutdown: %s", err.Error())
+			ds.GetEnvironment().Log().Warnf("netHTTPDataSource.Stop server shutdown: %s", err.Error())
 		}
 	}()
 	select {
 	case <-ds.done:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf("Stop HTTP server for data source %q after timeout. %s", ds.GetName(), ctx.Err().Error())
+		ds.OnStopTimeout(ctx)
 	}
 }
 
-func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJson(data string) (T, error) {
-	if ec.reader != nil {
-		return ec.reader.Read(bytes.NewReader([]byte(data)))
-	}
-	if !ec.isTypePtr {
-		var t T
-		return t, json.Unmarshal([]byte(data), &t)
-	}
-
-	t := reflect.New(ec.tType).Interface().(T)
-	return t, json.Unmarshal([]byte(data), t)
+func (ep *netHTTPEndpoint) Start(ctx context.Context) error {
+	return ep.consumer.Start(ctx)
 }
 
-func (ec *NetHTTPEndpointJsonConsumer[T]) DeserializeJsonBody(reader io.Reader) (T, error) {
-	if ec.reader != nil {
-		return ec.reader.Read(reader)
-	}
-	decoder := json.NewDecoder(reader)
-
-	if !ec.isTypePtr {
-		var t T
-		err := decoder.Decode(&t)
-		return t, err
-	}
-
-	t := reflect.New(ec.tType).Interface().(T)
-	err := decoder.Decode(t)
-	return t, err
+func (ep *netHTTPEndpoint) Stop(ctx context.Context) {
+	ep.consumer.Stop(ctx)
 }
 
-func (ep *NetHTTPEndpoint) Start(ctx context.Context) error {
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).Start(ctx); err != nil {
+func getHttpMethod(method api.HTTPMethodType) (string, error) {
+	switch method {
+	case api.HTTPMethodTypeGET:
+		return "GET", nil
+	case api.HTTPMethodTypePOST:
+		return "POST", nil
+	}
+	return "", fmt.Errorf("invalid http method %v", method)
+}
+
+func (ep *netHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != ep.method {
+		ep.OnInvalidHTTPMethod(r.Context(), r.Method)
+		return
+	}
+	ep.consumer.serveHTTP(w, r)
+}
+
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Start(ctx context.Context) error {
+	if ec.hasResult {
+		ec.pending = store.MakeRotatingMap[string, *httpResult[HandlerState, ReqT, ResR, T, R, E]](pendingRotationInterval)
+		if err := ec.pending.Start(ctx); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (ep *NetHTTPEndpoint) Stop(ctx context.Context) {
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		endpointConsumers.At(i).(NetHTTPEndpointConsumer).Stop(ctx)
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Stop(ctx context.Context) {
+	if ec.pending != nil {
+		ec.pending.Stop(ctx)
 	}
 }
 
-func (ep *NetHTTPEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != ep.method {
-		errText := fmt.Sprintf("Invalid request method %q for endpoint %q with path %q",
-			r.Method, ep.GetName(),
-			*ep.GetConfig().Path)
-		http.Error(w, errText,
-			http.StatusBadRequest)
-		ep.GetEnvironment().Log().Warnln(errText)
-	} else {
-		endpointConsumers := ep.GetEndpointConsumers()
-		requestData := netHTTPEndpointRequestData{
-			w:         w,
-			r:         r,
-			optimized: endpointConsumers.Len() == 1,
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	data := HandlerData{Writer: w, Request: r}
+	reqCtx := r.Context()
+	if _, ok := runtime.StreamIdFromContext(reqCtx); !ok {
+		if sid := r.Header.Get("x-stream-id"); sid != "" {
+			reqCtx = runtime.WithStreamId(reqCtx, sid)
 		}
-		length := endpointConsumers.Len()
-		for i := 0; i < length; i++ {
-			if err := endpointConsumers.At(i).(NetHTTPEndpointConsumer).EndpointRequest(&requestData); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				ep.GetEnvironment().Log().Warnf("ServeHTTP error in endpoint with id=%d: %v", ep.GetId(), err)
-				return
+	}
+	var span tracing.Span
+	if ec.tracer != nil {
+		reqCtx, span = ec.tracer.Start(reqCtx, "http.input",
+			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
+			tracing.StringAttr("method", r.Method),
+			tracing.StringAttr("path", r.URL.Path),
+		)
+		defer span.End()
+	}
+	handlerCtx, handlerState, err := ec.handler.BeginRequest(reqCtx, ec.sc, data)
+	if err != nil {
+		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+		}
+		return
+	}
+	tracing.SpanEvent(span, "begin_request")
+	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
+
+	var streamID string
+	if sid, ok := runtime.StreamIdFromContext(handlerCtx); ok {
+		streamID = sid.GetID()
+	} else {
+		streamID = runtime.NewStreamID()
+		handlerCtx = runtime.WithStreamId(handlerCtx, streamID)
+	}
+	if span != nil {
+		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID), tracing.BoolAttr("has_result", ec.hasResult))
+	}
+
+	doneCh := make(chan struct{})
+	result := &httpResult[HandlerState, ReqT, ResR, T, R, E]{
+		handlerState:       handlerState,
+		data:               data,
+		span:               span,
+		doneCh:             doneCh,
+		messageCallbackMap: make(map[string]ResultCallback[HandlerState, ReqT, ResR, T, R, E]),
+	}
+	if ec.hasResult {
+		ec.pending.Set(streamID, result)
+	}
+
+	if err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, data, result); err != nil {
+		if ec.hasResult {
+			result.mu.Lock()
+			defer result.mu.Unlock()
+			ec.pending.Pop(streamID)
+		}
+		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+		}
+		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState, data)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+		return
+	}
+	tracing.SpanEvent(span, "consume_message")
+
+	if !ec.hasResult {
+		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState, data)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
+		return
+	}
+
+	select {
+	case <-doneCh:
+		tracing.SpanEvent(span, "done")
+		result.mu.Lock()
+		defer result.mu.Unlock()
+		ec.pending.Pop(streamID)
+		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState, data)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
+	case <-handlerCtx.Done():
+		tracing.SpanError(span, handlerCtx.Err())
+		if span != nil {
+			tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+		}
+		result.mu.Lock()
+		defer result.mu.Unlock()
+		ec.pending.Pop(streamID)
+		ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState, data)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
+	}
+}
+
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consumeResult(ctx context.Context, value R) {
+	sid, ok := runtime.StreamIdFromContext(ctx)
+	if !ok {
+		ec.Endpoint().OnMissingStreamID(ctx)
+		return
+	}
+	result, loaded := ec.pending.Get(sid.GetID())
+	if !loaded {
+		ec.Endpoint().OnLateResult(ctx, sid.GetID())
+		return
+	}
+
+	result.mu.RLock()
+	defer result.mu.RUnlock()
+
+	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
+		ec.Endpoint().OnLateResult(ctx, sid.GetID())
+		tracing.SpanEvent(result.span, "late_result")
+		return
+	}
+
+	messageID := ec.handler.GetMessageID(ctx, ec.sc, result.handlerState, value)
+
+	result.cbMu.Lock()
+	cb, ok := result.messageCallbackMap[messageID]
+	result.cbMu.Unlock()
+	if !ok || cb == nil {
+		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
+		if result.span != nil {
+			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+		}
+		return
+	}
+	if cb(ctx, ec.sc, result.handlerState, value, result.data) {
+		result.cbMu.Lock()
+		if _, exists := result.messageCallbackMap[messageID]; exists {
+			delete(result.messageCallbackMap, messageID)
+		} else {
+			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
+			if result.span != nil {
+				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
-		w.WriteHeader(http.StatusOK)
+		result.cbMu.Unlock()
+	}
+	if result.span != nil {
+		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
 	}
 }
 
-func (ec *NetHTTPEndpointJsonConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
-	var t T
-	if reader, err := requestData.GetBody(); err != nil {
-		return fmt.Errorf("unable to read request: %s", err.Error())
-	} else {
-		t, err = func(reader io.ReadCloser) (T, error) {
-			defer func() {
-				if err := reader.Close(); err != nil {
-					ec.Endpoint().GetEnvironment().Log().Warnln(err)
-				}
-			}()
-			return ec.DeserializeJsonBody(reader)
-		}(reader)
-		if err != nil {
-			return fmt.Errorf("invalid request body: %s", err.Error())
-		}
-	}
-	ec.Consume(t)
-	return nil
-}
-
-func (ec *NetHTTPEndpointCustomConsumer[T]) Start(ctx context.Context) error {
-	return nil
-}
-
-func (ec *NetHTTPEndpointCustomConsumer[T]) Stop(ctx context.Context) {
-}
-
-func (ec *NetHTTPEndpointCustomConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
-	ec.handler.Handler(&HandlerData{
-		Writer:  requestData.ResponseWriter(),
-		Request: requestData.Request(),
-	}, ec)
-	return nil
-}
-
-func (ec *NetHTTPEndpointCustomConsumer[T]) Out(value T) {
-	ec.Stream().Consume(value)
-}
-
-func (ec *NetHTTPEndpointFormConsumer[T]) Start(ctx context.Context) error {
-	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
-	if reader != nil {
-		var ok bool
-		ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
-		if !ok {
-			return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
-		}
-	}
-	return nil
-}
-
-func (ec *NetHTTPEndpointFormConsumer[T]) Stop(ctx context.Context) {
-}
-
-func (ec *NetHTTPEndpointFormConsumer[T]) EndpointRequest(requestData NetHTTPEndpointRequestData) error {
-	var form url.Values
-	var err error
-	if form, err = requestData.GetForm(); err != nil {
-		return fmt.Errorf("unable to parse request: %s", err.Error())
-	}
-
-	if !ec.isTypePtr {
-		var t T
-		err = ec.decoder.Decode(&t, form)
-		if err != nil {
-			return fmt.Errorf("unable to decode data: %s", err.Error())
-		}
-		ec.Consume(t)
-	}
-
-	t := reflect.New(ec.tType).Interface().(T)
-	err = ec.decoder.Decode(&t, form)
+func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	handler EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+) (runtime.Consumer[T], HTTPHandler, error) {
+	env := stream.GetRuntimeEnvironment()
+	endpoint, err := createNetHTTPDataSourceEndpoint(stream.GetEndpointId(), env)
 	if err != nil {
-		return fmt.Errorf("unable to decode data: %s", err.Error())
+		return nil, nil, err
 	}
-	ec.Consume(t)
-	return nil
-}
-
-func (ec *NetHTTPEndpointJsonConsumer[T]) Start(ctx context.Context) error {
-	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
-	if reader != nil {
-		var ok bool
-		ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
-		if !ok {
-			return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
-		}
+	if handler == nil {
+		return nil, nil, fmt.Errorf("handler is nil for the http endpoint %q", endpoint.GetName())
 	}
-	return nil
-}
-
-func (ec *NetHTTPEndpointJsonConsumer[T]) Stop(ctx context.Context) {
-}
-
-func MakeNetHTTPEndpointConsumer[T any](stream runtime.TypedInputStream[T], handler NetHTTPEndpointHandler[T]) runtime.Consumer[T] {
-	env := stream.GetEnvironment()
-	endpoint := getNetHTTPDataSourceEndpoint(stream.GetEndpointId(), env)
-	cfg := endpoint.GetConfig()
-
-	var consumer runtime.Consumer[T]
-	var netHTTPEndpointConsumer NetHTTPEndpointConsumer
-	if cfg.Format == nil {
-		env.Log().Fatalf("endpoint format not specified for endpoint with id %d", endpoint.GetId())
+	var tr tracing.Tracer
+	if t := env.Tracing(); t != nil {
+		tr = t.Tracer(env.ServiceConfig().Name)
 	}
-
-	switch *cfg.Format {
-	case api.DataFormatJson:
-		endpointConsumer := &NetHTTPEndpointJsonConsumer[T]{
-			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
-				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				isTypePtr:                  serde.IsTypePtr[T](),
-			},
-			tType: serde.GetSerdeTypeWithoutPtr[T](),
-		}
-		consumer = endpointConsumer
-		netHTTPEndpointConsumer = endpointConsumer
-
-	case api.DataFormatForm:
-		endpointConsumer := &NetHTTPEndpointFormConsumer[T]{
-			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
-				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				isTypePtr:                  serde.IsTypePtr[T](),
-			},
-			decoder: schema.NewDecoder(),
-			tType:   serde.GetSerdeTypeWithoutPtr[T](),
-		}
-		consumer = endpointConsumer
-		netHTTPEndpointConsumer = endpointConsumer
-
-	case api.DataFormatCustom:
-		if handler == nil {
-			env.Log().Fatalf("handler is nil for custom format in the shttp endpoint with id=%d", endpoint.GetId())
-		}
-		endpointConsumer := &NetHTTPEndpointCustomConsumer[T]{
-			NetHTTPEndpointTypedConsumer: NetHTTPEndpointTypedConsumer[T]{
-				DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-				isTypePtr:                  serde.IsTypePtr[T](),
-			},
-			handler: handler,
-		}
-		consumer = endpointConsumer
-		netHTTPEndpointConsumer = endpointConsumer
-
-	default:
-		env.Log().Fatalf("Unknown endpoint format %q for endpoint %q.",
-			*endpoint.GetConfig().Format, endpoint.GetName())
+	ec := &netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]{
+		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
+		hasResult:                  stream.GetResultStream() != nil,
+		handler:                    handler,
+		tracer:                     tr,
 	}
-
-	endpoint.AddEndpointConsumer(netHTTPEndpointConsumer)
-	return consumer
+	ec.sc = runtime.MakeStreamContext[T, R, E](
+		ec.Stream(),
+		ec.Stream().GetResultStream(),
+		runtime.CollectFunc[T](ec.Out),
+		runtime.CollectFunc[E](ec.Stream().GetErrorStream().Consume),
+	)
+	if ec.hasResult {
+		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: ec})
+	}
+	endpoint.consumer = ec
+	return ec, ec.serveHTTP, nil
 }

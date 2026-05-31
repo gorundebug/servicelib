@@ -8,98 +8,188 @@
 package kafka
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	kafka "github.com/Shopify/sarama"
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	kafka "github.com/IBM/sarama"
+
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
+// Partitioner allows the handler to control which Kafka partition a message lands on.
 type Partitioner[T any] interface {
 	Partition(value T, numPartitions int32) (int32, error)
 }
 
-type SaramaKafkaOutputDataSink interface {
+// EndpointHandler handles Kafka sink calls for a single endpoint.
+//
+// Pipeline lifecycle (one Kafka message per Consume):
+//
+//	GetStreamID → BeginRequest → ConsumeMessage → EndRequest
+//
+// GetStreamID returns the logical stream identifier for the incoming value.
+// It is used to correlate related messages.
+//
+// BeginRequest initialises per-message handler state. Unlike gRPC sink handlers,
+// BeginRequest does not return an error; the framework always proceeds to
+// ConsumeMessage. Use the returned context to carry per-request values.
+//
+// ConsumeMessage fills msg.Key and msg.Value, then calls msg.Send(onDelivery) to
+// publish asynchronously. The onDelivery callback converts the Kafka delivery
+// result (partition, offset, error) into R, which is then pushed back into the
+// pipeline. Alternatively, call msg.Skip(r) to push a result without sending.
+// Returning a non-nil error passes it to EndRequest.
+//
+// EndRequest finalises the request. Its error argument is the non-nil error
+// returned by ConsumeMessage, or nil on success. EndRequest does not return an error.
+type EndpointHandler[HandlerState, T, R any] interface {
+	GetStreamID(ctx context.Context, value T) string
+	BeginRequest(ctx context.Context, stream runtime.Stream) (context.Context, HandlerState)
+	ConsumeMessage(ctx context.Context, stream runtime.Stream, handlerState HandlerState, value T, msg *SinkMessage[R]) error
+	EndRequest(ctx context.Context, stream runtime.Stream, err error, handlerState HandlerState)
+}
+
+// SinkMessage is passed to EndpointHandler.ConsumeMessage.
+// The handler sets Key and Value, then calls Send or Skip.
+// Topic is read-only.
+type SinkMessage[R any] struct {
+	Key   []byte
+	Value []byte
+	// internal
+	topic        string
+	sendFn       func(key, value []byte, onDelivery func(partition int32, offset int64, err error))
+	resultStream runtime.Collect[R]
+}
+
+func (m *SinkMessage[R]) Topic() string { return m.topic }
+
+// Send publishes Key/Value to Kafka. onDelivery converts the delivery result to R,
+// which is then forwarded to the pipeline result stream asynchronously.
+func (m *SinkMessage[R]) Send(ctx context.Context, onDelivery func(partition int32, offset int64, err error) R) {
+	m.sendFn(m.Key, m.Value, func(p int32, o int64, err error) {
+		m.resultStream.Out(ctx, onDelivery(p, o, err))
+	})
+}
+
+// SendSync publishes Key/Value to Kafka and blocks until delivery is confirmed.
+// Returns partition, offset and delivery error. Use for guaranteed delivery semantics.
+// After a successful send, push the result manually via Out.
+func (m *SinkMessage[R]) SendSync(ctx context.Context) (int32, int64, error) {
+	type result struct {
+		partition int32
+		offset    int64
+		err       error
+	}
+	done := make(chan result, 1)
+	m.sendFn(m.Key, m.Value, func(p int32, o int64, err error) {
+		done <- result{p, o, err}
+	})
+	select {
+	case res := <-done:
+		return res.partition, res.offset, res.err
+	case <-ctx.Done():
+		return 0, 0, ctx.Err()
+	}
+}
+
+// Out pushes result directly into the pipeline result stream.
+// Use together with SendSync for guaranteed delivery.
+func (m *SinkMessage[R]) Out(ctx context.Context, result R) {
+	m.resultStream.Out(ctx, result)
+}
+
+// Skip pushes result r directly into the pipeline result stream without sending to Kafka.
+func (m *SinkMessage[R]) Skip(ctx context.Context, result R) {
+	m.resultStream.Out(ctx, result)
+}
+
+type saramaKafkaOutputDataSink interface {
 	runtime.DataSink
-	SendMessage(*kafka.ProducerMessage)
+	SendMessage(ctx context.Context, msg *kafka.ProducerMessage)
 }
 
-type MessageMetadata struct {
-	value            interface{}
-	endpointConsumer SaramaKafkaEndpointConsumer
+// messageMetadata is attached to every ProducerMessage sent to Kafka.
+type messageMetadata struct {
+	onDelivery  func(partition int32, offset int64, err error)
+	partitionFn func(msg *kafka.ProducerMessage, numPartitions int32) (int32, error)
 }
 
-type SaramaKafkaSinkEndpoint interface {
+type kafkaSinkEndpoint interface {
 	runtime.SinkEndpoint
 	Start(context.Context, kafka.ClusterAdmin) error
 	Stop(context.Context)
-	SendMessage(key []byte, value []byte, metadata *MessageMetadata)
+	SendMessage(ctx context.Context, key []byte, value []byte, metadata *messageMetadata)
 }
 
-type SaramaKafkaEndpointConsumer interface {
+type kafkaEndpointConsumer interface {
 	runtime.OutputEndpointConsumer
 	Start(context.Context) error
 	Stop(context.Context)
-	SendSuccess(msg *kafka.ProducerMessage)
-	SendError(errMsg *kafka.ProducerError)
-	Partition(message *kafka.ProducerMessage, numPartitions int32) (int32, error)
 }
 
-type SaramaKafkaDataSink struct {
+type saramaKafkaDataSink struct {
 	*runtime.OutputDataSink
 	producer kafka.AsyncProducer
 	wg       sync.WaitGroup
 	sendWG   sync.WaitGroup
+	mu       sync.Mutex
+	stopped  bool
 }
 
-type SaramaKafkaEndpoint struct {
+type saramaKafkaEndpoint struct {
 	*runtime.DataSinkEndpoint
+	topic    string
+	consumer kafkaEndpointConsumer
 }
 
-func makeKafkaConfig(cfg *config.DataConnectorConfig) (*kafka.Config, error) {
+func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
 	kafkaConfig := kafka.NewConfig()
 
-	if cfg.Version == nil {
+	if cfg.Version == "" {
 		kafkaConfig.Version = kafka.V2_6_0_0
 	} else {
 		var err error
-		kafkaConfig.Version, err = kafka.ParseKafkaVersion(*cfg.Version)
+		kafkaConfig.Version, err = kafka.ParseKafkaVersion(cfg.Version)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse kafka version for data connector with id %d", cfg.Id)
+			return nil, fmt.Errorf("failed to parse kafka version for data connector %q", cfg.Name)
 		}
 	}
-	if cfg.DialTimeout != nil {
-		kafkaConfig.Net.DialTimeout = time.Duration(*cfg.DialTimeout) * time.Millisecond
+	if cfg.DialTimeout != 0 {
+		kafkaConfig.Net.DialTimeout = time.Duration(cfg.DialTimeout) * time.Millisecond
 	}
 	return kafkaConfig, nil
 }
 
-func (ds *SaramaKafkaDataSink) Partition(msg *kafka.ProducerMessage, numPartitions int32) (int32, error) {
+func (ds *saramaKafkaDataSink) Partition(msg *kafka.ProducerMessage, numPartitions int32) (int32, error) {
 	if msg.Metadata == nil {
-		err := fmt.Errorf("metadata is nil inside ProducerMessage for partition method in data sink with id=%d",
-			ds.GetId())
+		err := fmt.Errorf("metadata is nil inside ProducerMessage for partition method in data sink %q",
+			ds.GetName())
 		ds.GetEnvironment().Log().Error(err)
 		return 0, err
-	} else {
-		return msg.Metadata.(MessageMetadata).endpointConsumer.Partition(msg, numPartitions)
 	}
+	return msg.Metadata.(*messageMetadata).partitionFn(msg, numPartitions)
 }
 
-func (ds *SaramaKafkaDataSink) RequiresConsistency() bool {
+func (ds *saramaKafkaDataSink) RequiresConsistency() bool {
 	return false
 }
 
-func (ds *SaramaKafkaDataSink) Start(ctx context.Context) error {
-	cfg := ds.GetDataConnector()
-	if cfg.Brokers == nil {
-		return fmt.Errorf("no brokers specified for data connector with id %d", ds.GetId())
+func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
+	cfg, ok := ds.GetConfig().(*config.KafkaDataConnectorConfig)
+	if !ok || cfg.Implementation != api.DataConnectorImplementationIBMsarama {
+		return fmt.Errorf("invalid saramaKafkaDataSink configuration")
+	}
+
+	if cfg.Brokers == "" {
+		return fmt.Errorf("no brokers specified for data connector %q", ds.GetName())
 	}
 	kafkaConfig, err := makeKafkaConfig(cfg)
 	if err != nil {
@@ -112,86 +202,84 @@ func (ds *SaramaKafkaDataSink) Start(ctx context.Context) error {
 		return ds
 	}
 
-	brokers := strings.Split(*cfg.Brokers, ",")
+	brokers := strings.Split(cfg.Brokers, ",")
 
 	admin, err := kafka.NewClusterAdmin(brokers, kafkaConfig)
 	if err != nil {
-		return fmt.Errorf("create kafka admin failed for sink endpoint with id=%d: %v",
-			ds.GetId(), err)
+		return fmt.Errorf("create kafka admin failed for data connector %q: %v",
+			ds.GetName(), err)
 	}
+	defer func() {
+		if err := admin.Close(); err != nil {
+			ds.GetEnvironment().Log().Warnf("close kafka admin failed for data connector %q: %v",
+				ds.GetName(), err)
+		}
+	}()
 
-	endpoints := ds.OutputDataSink.GetEndpoints()
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		if err := endpoints.At(i).(SaramaKafkaSinkEndpoint).Start(ctx, admin); err != nil {
+		if err := endpoints.At(i).(kafkaSinkEndpoint).Start(ctx, admin); err != nil {
 			return err
 		}
 	}
 
 	ds.producer, err = kafka.NewAsyncProducer(brokers, kafkaConfig)
 	if err != nil {
-		return fmt.Errorf("create kafka producer failed for data connector with id=%d: %v",
-			ds.GetId(), err)
+		return fmt.Errorf("create kafka producer failed for data connector %q: %v",
+			ds.GetName(), err)
 	}
 
 	ds.wg.Add(1)
 	go func() {
 		defer ds.wg.Done()
 		for msg := range ds.producer.Successes() {
-			if msg.Metadata == nil {
-				ds.GetEnvironment().Log().Errorf(
-					"metadata is nil inside ProducerMessage for suceess channel in data sink with id=%d",
-					ds.GetId())
-			} else {
-				func() {
-					defer ds.sendWG.Done()
-					msg.Metadata.(*MessageMetadata).endpointConsumer.SendSuccess(msg)
-				}()
-			}
+			func() {
+				defer ds.sendWG.Done()
+				if msg.Metadata == nil {
+					ds.GetEnvironment().Log().Errorf(
+						"metadata is nil inside ProducerMessage for success channel in data sink %q",
+						ds.GetName())
+					return
+				}
+				meta := msg.Metadata.(*messageMetadata)
+				if meta.onDelivery != nil {
+					meta.onDelivery(msg.Partition, msg.Offset, nil)
+				}
+			}()
 		}
 	}()
 
 	ds.wg.Add(1)
 	go func() {
 		defer ds.wg.Done()
-		for msg := range ds.producer.Errors() {
-			if msg.Msg.Metadata == nil {
-				ds.GetEnvironment().Log().Errorf(
-					"metadata is nil inside ProducerMessage for errors channel in data sink with id=%d",
-					ds.GetId())
-			} else {
-				func() {
-					defer ds.sendWG.Done()
-					msg.Msg.Metadata.(*MessageMetadata).endpointConsumer.SendError(msg)
-				}()
-			}
+		for errMsg := range ds.producer.Errors() {
+			func() {
+				defer ds.sendWG.Done()
+				if errMsg.Msg.Metadata == nil {
+					ds.GetEnvironment().Log().Errorf(
+						"metadata is nil inside ProducerMessage for errors channel in data sink %q",
+						ds.GetName())
+					return
+				}
+				meta := errMsg.Msg.Metadata.(*messageMetadata)
+				if meta.onDelivery != nil {
+					meta.onDelivery(0, 0, errMsg.Err)
+				}
+			}()
 		}
 	}()
 	return nil
 }
 
-func (ds *SaramaKafkaDataSink) Stop(ctx context.Context) {
+func (ds *saramaKafkaDataSink) Stop(ctx context.Context) {
+	ds.mu.Lock()
+	ds.stopped = true
+	ds.mu.Unlock()
+
+	ds.producer.AsyncClose()
+
 	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		ds.sendWG.Wait()
-	}()
-
-	select {
-	case <-c:
-	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf(
-			"Kafka data sink %d stopped by timeout and lost messages.",
-			ds.GetId())
-	}
-
-	if err := ds.producer.Close(); err != nil {
-		ds.GetEnvironment().Log().Warnf("close kafka producer failed for data connector with id=%d: %v",
-			ds.GetId(), err)
-	}
-
-	c = make(chan struct{})
-
 	go func() {
 		defer close(c)
 		ds.wg.Wait()
@@ -200,37 +288,56 @@ func (ds *SaramaKafkaDataSink) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf(
-			"Kafka data sink %d stopped by timeout. Producer close timeout.",
-			ds.GetId())
+		ds.OnStopTimeout(ctx)
 	}
 
-	endpoints := ds.OutputDataSink.GetEndpoints()
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		endpoints.At(i).(SaramaKafkaSinkEndpoint).Stop(ctx)
+		endpoints.At(i).(kafkaSinkEndpoint).Stop(ctx)
 	}
 }
 
-func (ds *SaramaKafkaDataSink) SendMessage(msg *kafka.ProducerMessage) {
+func (ds *saramaKafkaDataSink) SendMessage(ctx context.Context, msg *kafka.ProducerMessage) {
+	ds.mu.Lock()
+	if ds.stopped {
+		ds.mu.Unlock()
+		meta := msg.Metadata.(*messageMetadata)
+		if meta.onDelivery != nil {
+			meta.onDelivery(0, 0, fmt.Errorf("kafka producer is stopped"))
+		}
+		return
+	}
 	ds.sendWG.Add(1)
-	ds.producer.Input() <- msg
+	ds.mu.Unlock()
+	select {
+	case ds.producer.Input() <- msg:
+	case <-ctx.Done():
+		ds.sendWG.Done()
+		meta := msg.Metadata.(*messageMetadata)
+		if meta.onDelivery != nil {
+			meta.onDelivery(0, 0, ctx.Err())
+		}
+	}
 }
 
-func (ep *SaramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
-	cfg := ep.GetConfig()
-	if cfg.Topic == nil {
-		return fmt.Errorf("no topic specified for sink endpoint with id %d", ep.GetId())
+func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
+	cfg, ok := ep.GetConfig().(*config.KafkaEndpointConfig)
+	if !ok {
+		return fmt.Errorf("invalid saramaKafkaDataSink configuration")
 	}
-	if cfg.CreateTopic != nil && *cfg.CreateTopic {
+	if cfg.Topic == "" {
+		return fmt.Errorf("no topic specified for sink endpoint %q", ep.GetName())
+	}
+	if cfg.CreateTopic {
 		numPartitions := 1
-		if cfg.Partitions != nil {
-			numPartitions = *cfg.Partitions
+		if cfg.Partitions != 0 {
+			numPartitions = cfg.Partitions
 		}
 
 		replicationFactor := 1
-		if cfg.ReplicationFactor != nil {
-			replicationFactor = *cfg.ReplicationFactor
+		if cfg.ReplicationFactor != 0 {
+			replicationFactor = cfg.ReplicationFactor
 		}
 
 		topicDetail := &kafka.TopicDetail{
@@ -238,164 +345,203 @@ func (ep *SaramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 			ReplicationFactor: int16(replicationFactor),
 		}
 
-		if err := admin.CreateTopic(*cfg.Topic, topicDetail, false); err != nil {
+		if err := admin.CreateTopic(cfg.Topic, topicDetail, false); err != nil {
 			var kafkaErr *kafka.TopicError
 			if !errors.As(err, &kafkaErr) || !errors.Is(kafkaErr.Err, kafka.ErrTopicAlreadyExists) {
-				return fmt.Errorf("create topic failed for sink endpoint with id=%d: %v",
-					ep.GetId(), err)
+				return fmt.Errorf("create topic failed for sink endpoint %q: %v",
+					ep.GetName(), err)
 			}
 		}
 	}
 
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		if err := endpointConsumers.At(i).(SaramaKafkaEndpointConsumer).Start(ctx); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return ep.consumer.Start(ctx)
 }
 
-func (ep *SaramaKafkaEndpoint) getDataSink() SaramaKafkaOutputDataSink {
-	return ep.GetDataSink().(SaramaKafkaOutputDataSink)
+func (ep *saramaKafkaEndpoint) getDataSink() saramaKafkaOutputDataSink {
+	return ep.GetDataSink().(saramaKafkaOutputDataSink)
 }
 
-func (ep *SaramaKafkaEndpoint) SendMessage(key []byte, value []byte, metadata *MessageMetadata) {
+func (ep *saramaKafkaEndpoint) SendMessage(ctx context.Context, key []byte, value []byte, metadata *messageMetadata) {
 	var keyEncoder kafka.Encoder
-	valueEncoder := kafka.ByteEncoder(value)
-
 	if len(key) > 0 {
 		keyEncoder = kafka.ByteEncoder(key)
 	}
-	msg := &kafka.ProducerMessage{
-		Topic:    *ep.GetConfig().Topic,
-		Value:    valueEncoder,
+	ep.getDataSink().SendMessage(ctx, &kafka.ProducerMessage{
+		Topic:    ep.topic,
+		Value:    kafka.ByteEncoder(value),
 		Key:      keyEncoder,
 		Metadata: metadata,
-	}
-	ep.getDataSink().SendMessage(msg)
+	})
 }
 
-func (ep *SaramaKafkaEndpoint) Stop(ctx context.Context) {
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		endpointConsumers.At(i).(SaramaKafkaEndpointConsumer).Stop(ctx)
-	}
+func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
+	ep.consumer.Stop(ctx)
 }
 
-type TypedSaramaKafkaEndpointConsumer[T, R any] struct {
+type collector[R any] struct {
+	consumer runtime.Consumer[R]
+}
+
+func (rs *collector[R]) Out(ctx context.Context, value R) {
+	rs.consumer.Consume(ctx, value)
+}
+
+type saramaKafkaEndpointConsumer[HandlerState, T, R any] struct {
 	*runtime.DataSinkEndpointConsumer[T, R]
-	sinkCallback runtime.SinkCallback[T]
-	partitioner  Partitioner[T]
-	writer       runtime.TypedEndpointWriter[T]
-	generator    *rand.Rand
+	handler     EndpointHandler[HandlerState, T, R]
+	partitioner Partitioner[T]
+	generator   *rand.Rand
+	tracer      tracing.Tracer
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) SetSinkCallback(callback runtime.SinkCallback[T]) {
-	ec.sinkCallback = callback
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) getEndpoint() *saramaKafkaEndpoint {
+	return ec.Endpoint().(*saramaKafkaEndpoint)
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) getEndpoint() SaramaKafkaSinkEndpoint {
-	return ec.Endpoint().(SaramaKafkaSinkEndpoint)
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) Partition(message *kafka.ProducerMessage,
-	numPartitions int32) (int32, error) {
-	if ec.partitioner == nil {
-		return int32(ec.generator.Intn(int(numPartitions))), nil
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.Context, item T) {
+	var span tracing.Span
+	if ec.tracer != nil {
+		ctx, span = ec.tracer.Start(ctx, "kafka.output",
+			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
+		)
+		defer span.End()
 	}
-	return ec.partitioner.Partition(message.Metadata.(MessageMetadata).value.(T), numPartitions)
-}
+	stream := ec.Stream()
+	streamID := ec.handler.GetStreamID(ctx, item)
+	handlerCtx := runtime.WithStreamId(ctx, streamID)
+	if span != nil {
+		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID))
+	}
+	handlerCtx, handlerState := ec.handler.BeginRequest(handlerCtx, stream)
+	tracing.SpanEvent(span, "begin_request")
+	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) SendSuccess(msg *kafka.ProducerMessage) {
-	ec.sinkCallback.Done(msg.Metadata.(MessageMetadata).value.(T), nil)
-}
+	ep := ec.getEndpoint()
+	rs := &collector[R]{consumer: stream.GetErrorStream()}
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) SendError(errMsg *kafka.ProducerError) {
-	ec.sinkCallback.Done(errMsg.Msg.Metadata.(MessageMetadata).value.(T), errMsg.Err)
-}
+	msg := &SinkMessage[R]{
+		topic:        ep.topic,
+		resultStream: rs,
+		sendFn: func(keyBytes, valueBytes []byte, onDelivery func(int32, int64, error)) {
+			meta := &messageMetadata{
+				onDelivery: onDelivery,
+				partitionFn: func(pm *kafka.ProducerMessage, numPartitions int32) (int32, error) {
+					if ec.partitioner == nil {
+						return int32(ec.generator.Intn(int(numPartitions))), nil
+					}
+					return ec.partitioner.Partition(item, numPartitions)
+				},
+			}
+			ep.SendMessage(handlerCtx, keyBytes, valueBytes, meta)
+		},
+	}
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) Consume(value T) {
-	var buf bytes.Buffer
-	if err := ec.writer.Write(value, &buf); err != nil && ec.sinkCallback != nil {
-		ec.sinkCallback.Done(value, err)
-	} else {
-		metadata := &MessageMetadata{
-			value:            value,
-			endpointConsumer: ec,
+	err := ec.handler.ConsumeMessage(handlerCtx, stream, handlerState, item, msg)
+	if err != nil {
+		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
-		ec.getEndpoint().SendMessage(nil, buf.Bytes(), metadata)
+	} else {
+		tracing.SpanEvent(span, "consume_message")
 	}
+	ec.handler.EndRequest(handlerCtx, stream, err, handlerState)
+	ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) Start(ctx context.Context) error {
-	writer := ec.Endpoint().GetEnvironment().GetEndpointWriter(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
-	if writer == nil {
-		return fmt.Errorf("writer does not defined for endpoint with id=%d", ec.Endpoint().GetId())
-	}
-	var ok bool
-	ec.writer, ok = writer.(runtime.TypedEndpointWriter[T])
-	if !ok {
-		return fmt.Errorf("writer has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
-	}
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Start(_ context.Context) error {
 	if ec.partitioner == nil {
 		ec.generator = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
 	return nil
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T, R]) Stop(ctx context.Context) {
-}
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Stop(_ context.Context) {}
 
-func getSaramaKafkaDataSink(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSink {
+func getSaramaKafkaDataSink(id int, env runtime.RuntimeEnvironment) (runtime.DataSink, error) {
 	dataSink := env.GetDataSink(id)
 	if dataSink != nil {
-		return dataSink
+		return dataSink, nil
 	}
-	cfg := env.AppConfig().GetDataConnectorById(id)
+	cfg := env.RuntimeConfig().GetDataConnectorByID(id)
 	if cfg == nil {
-		env.Log().Fatalf("config for datasource with id=%d not found", id)
+		return nil, fmt.Errorf("config for datasink with id=%d not found", id)
 	}
-	kafkaDataSink := &SaramaKafkaDataSink{
-		OutputDataSink: runtime.MakeOutputDataSink(cfg, env),
+	outputDS, err := runtime.MakeOutputDataSink(cfg, env)
+	if err != nil {
+		return nil, err
 	}
-	var outputDataSource SaramaKafkaOutputDataSink = kafkaDataSink
-	env.AddDataSink(outputDataSource)
-	return outputDataSource
+	kafkaDataSink := &saramaKafkaDataSink{
+		OutputDataSink: outputDS,
+	}
+	var outputDataSink saramaKafkaOutputDataSink = kafkaDataSink
+	env.AddDataSink(outputDataSink)
+	return outputDataSink, nil
 }
 
-func getSaramaKafkaDataSinkEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.SinkEndpoint {
-	cfg := env.AppConfig().GetEndpointConfigById(id)
+func getSaramaKafkaDataSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*saramaKafkaEndpoint, error) {
+	cfg := env.RuntimeConfig().GetEndpointConfigByID(id)
 	if cfg == nil {
-		env.Log().Fatalf("config for endpoint with id=%d not found", id)
-		return nil
+		return nil, fmt.Errorf("config for endpoint with id=%d not found", id)
 	}
-	dataSink := getSaramaKafkaDataSink(cfg.IdDataConnector, env)
+	endpointCfg, ok := cfg.(*config.KafkaEndpointConfig)
+	if !ok {
+		return nil, fmt.Errorf("config for endpoint %q has invalid type", cfg.GetName())
+	}
+	dataSink, err := getSaramaKafkaDataSink(endpointCfg.IdDataConnector, env)
+	if err != nil {
+		return nil, err
+	}
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint
+		return nil, fmt.Errorf("endpoint %q already exists", endpointCfg.GetName())
 	}
-	kafkaEndpoint := &SaramaKafkaEndpoint{
-		DataSinkEndpoint: runtime.MakeDataSinkEndpoint(dataSink, id, env),
+	sinkEndpoint, err := runtime.MakeDataSinkEndpoint(dataSink, id, env)
+	if err != nil {
+		return nil, err
 	}
-	var outputEndpoint SaramaKafkaSinkEndpoint = kafkaEndpoint
-	dataSink.AddEndpoint(outputEndpoint)
-	return outputEndpoint
+	kafkaEndpoint := &saramaKafkaEndpoint{
+		DataSinkEndpoint: sinkEndpoint,
+		topic:            endpointCfg.Topic,
+	}
+	dataSink.AddEndpoint(kafkaEndpoint)
+	return kafkaEndpoint, nil
 }
 
-func MakeSaramaKafkaEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], partitioner Partitioner[T]) runtime.SinkConsumer[T] {
-	env := stream.GetEnvironment()
-	endpoint := getSaramaKafkaDataSinkEndpoint(stream.GetEndpointId(), env)
-	typedEndpointConsumer := &TypedSaramaKafkaEndpointConsumer[T, R]{
-		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
-		partitioner:              partitioner,
+type SaramaKafkaSinkOption[HandlerState, T, R any] func(*saramaKafkaEndpointConsumer[HandlerState, T, R])
+
+func WithPartitioner[HandlerState, T, R any](partitioner Partitioner[T]) SaramaKafkaSinkOption[HandlerState, T, R] {
+	return func(ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) {
+		ec.partitioner = partitioner
 	}
-	var endpointConsumer SaramaKafkaEndpointConsumer = typedEndpointConsumer
-	var consumer runtime.SinkConsumer[T] = typedEndpointConsumer
-	stream.SetSinkConsumer(typedEndpointConsumer)
-	endpoint.AddEndpointConsumer(endpointConsumer)
-	return consumer
+}
+
+func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
+	stream runtime.TypedSinkStream[T, R],
+	handler EndpointHandler[HandlerState, T, R],
+	opts ...SaramaKafkaSinkOption[HandlerState, T, R],
+) (runtime.Consumer[T], error) {
+	if handler == nil {
+		return nil, fmt.Errorf("handler is nil for kafka endpoint sink for the stream %q", stream.GetName())
+	}
+	env := stream.GetRuntimeEnvironment()
+	endpoint, err := getSaramaKafkaDataSinkEndpoint(stream.GetEndpointId(), env)
+	if err != nil {
+		return nil, err
+	}
+	var tr tracing.Tracer
+	if t := env.Tracing(); t != nil {
+		tr = t.Tracer(env.ServiceConfig().Name)
+	}
+	ec := &saramaKafkaEndpointConsumer[HandlerState, T, R]{
+		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
+		handler:                  handler,
+		tracer:                   tr,
+	}
+	for _, opt := range opts {
+		opt(ec)
+	}
+	stream.SetSinkConsumer(ec)
+	endpoint.consumer = ec
+	return ec, nil
 }

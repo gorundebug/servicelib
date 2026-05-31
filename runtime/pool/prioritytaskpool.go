@@ -10,10 +10,13 @@ package pool
 import (
 	"container/heap"
 	"context"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"runtime"
 	"sync"
+	"time"
+
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 type PriorityTask struct {
@@ -24,45 +27,52 @@ type PriorityTask struct {
 
 type PriorityTaskPool interface {
 	Pool
-	AddTask(priority int, fn func()) *PriorityTask
+	AddTask(ctx context.Context, priority int, fn func()) *PriorityTask
 }
 
 type PriorityTaskPoolImpl struct {
-	lock             sync.Mutex
-	name             string
-	pq               *TaskPriorityQueue
-	gaugeQueueLength metrics.Gauge
-	wg               sync.WaitGroup
-	done             bool
-	cond             *sync.Cond
-	environment      environment.ServiceEnvironment
+	lock               sync.Mutex
+	name               string
+	pq                 *TaskPriorityQueue
+	gaugeQueueLength   metrics.Int64Gauge
+	tasksTotal         metrics.Int64Counter
+	executionDuration  metrics.Float64Histogram
+	stopTimeoutCounter metrics.Int64Counter
+	wg                 sync.WaitGroup
+	done               bool
+	cond               *sync.Cond
+	environment        environment.ServiceEnvironment
 }
 
-func makePriorityTaskPool(env environment.ServiceEnvironment, name string) PriorityTaskPool {
-	poolConfig := env.AppConfig().GetPoolByName(name)
-	if poolConfig == nil {
-		env.Log().Fatalf("priority task pool %q does not exist.", name)
-		return nil
-	}
+func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
 	pool := &PriorityTaskPoolImpl{
-		name:        name,
+		name:        poolConfig.Name,
 		pq:          &TaskPriorityQueue{},
 		environment: env,
 	}
-	gaugeOpts := metrics.GaugeOpts{
-		Opts: metrics.Opts{
-			Name: "priority_task_pool_queue_length",
-			Help: "Priority task pool wait queue length",
-			ConstLabels: metrics.Labels{
-				"service": env.ServiceConfig().Name,
-				"name":    name,
-			},
-		},
+	scope := env.Metrics().Scope("priority_task_pool", metrics.Labels{
+		"service": env.ServiceConfig().Name,
+		"name":    poolConfig.Name,
+	})
+	var err error
+	pool.gaugeQueueLength, err = scope.Gauge("queue_length", "Priority task pool wait queue length", nil)
+	if err != nil {
+		return nil, err
 	}
-	m := env.Metrics()
-	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
+	pool.tasksTotal, err = scope.Counter("tasks_total", "Total number of tasks executed by priority task pool", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.executionDuration, err = scope.Histogram("task_execution_duration_seconds", "Task execution duration in seconds", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.stopTimeoutCounter, err = scope.Counter("events_total", "Total number of events in priority task pool", metrics.Labels{"event": "stop_timeout"})
+	if err != nil {
+		return nil, err
+	}
 	pool.cond = sync.NewCond(&pool.lock)
-	return pool
+	return pool, nil
 }
 
 type TaskPriorityQueue []*PriorityTask
@@ -96,7 +106,7 @@ func (pq *TaskPriorityQueue) Pop() interface{} {
 	return item
 }
 
-func (p *PriorityTaskPoolImpl) AddTask(priority int, fn func()) *PriorityTask {
+func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) *PriorityTask {
 	task := &PriorityTask{
 		fn:       fn,
 		index:    -1,
@@ -111,7 +121,7 @@ func (p *PriorityTaskPoolImpl) AddTask(priority int, fn func()) *PriorityTask {
 }
 
 func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
-	poolConfig := p.environment.AppConfig().GetPoolByName(p.name)
+	poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
 	executorsCount := poolConfig.ExecutorsCount
 	if executorsCount == 0 {
 		executorsCount = runtime.NumCPU()
@@ -132,8 +142,11 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 				task := heap.Pop(p.pq).(*PriorityTask)
 				p.gaugeQueueLength.Dec()
 				p.lock.Unlock()
+				startTime := time.Now()
 				task.fn()
 				task.fn = nil
+				p.tasksTotal.Inc(ctx)
+				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
 			}
 		}()
 	}
@@ -142,24 +155,22 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 
 func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
-	if p.pq.Len() > 0 {
-		p.done = true
-		p.cond.Broadcast()
+	p.done = true
+	p.cond.Broadcast()
+	p.lock.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		p.lock.Lock()
+		tasksCount := p.pq.Len()
 		p.lock.Unlock()
-		done := make(chan struct{})
-		go func() {
-			p.wg.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-ctx.Done():
-			p.lock.Lock()
-			tasksCount := p.pq.Len()
-			p.lock.Unlock()
-			p.environment.Log().Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
-		}
-	} else {
-		p.lock.Unlock()
+		p.environment.Log().Warnf("priority task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+		p.stopTimeoutCounter.Inc(ctx)
 	}
 }

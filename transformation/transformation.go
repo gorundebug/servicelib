@@ -8,114 +8,92 @@
 package transformation
 
 import (
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/datastruct"
+    "github.com/gorundebug/servicelib/operators"
+    "github.com/gorundebug/servicelib/runtime"
+    "github.com/gorundebug/servicelib/runtime/config"
+    "github.com/gorundebug/servicelib/runtime/datastruct"
 )
 
-func Map[T, R any](name string, stream runtime.TypedStream[T], f runtime.MapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
-	return runtime.MakeMapStream[T, R](name, stream, f)
+func Map[T, R any](cfg *config.MapStreamConfig, stream runtime.TypedStream[T], f operators.MapFunction[T, R]) (runtime.TypedTransformConsumedStream[T, R], error) {
+    return operators.MakeMapStream[T, R](cfg, stream, f)
 }
 
-func AppSink[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
-	return runtime.MakeAppSinkStream[T](name, stream, consumer)
+func Filter[T any](cfg *config.FilterStreamConfig, stream runtime.TypedStream[T], f operators.FilterFunction[T]) (runtime.TypedConsumedStream[T], error) {
+    return operators.MakeFilterStream[T](cfg, stream, f)
 }
 
-func Filter[T any](name string, stream runtime.TypedStream[T], f runtime.FilterFunction[T]) runtime.TypedConsumedStream[T] {
-	return runtime.MakeFilterStream[T](name, stream, f)
+func FlatMap[T, R any](cfg *config.FlatMapStreamConfig, stream runtime.TypedStream[T], f operators.FlatMapFunction[T, R]) (runtime.TypedTransformConsumedStream[T, R], error) {
+    return operators.MakeFlatMapStream[T, R](cfg, stream, f)
 }
 
-func FlatMap[T, R any](name string, stream runtime.TypedStream[T], f runtime.FlatMapFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
-	return runtime.MakeFlatMapStream[T, R](name, stream, f)
+func FlatMapIterable[T, R any](cfg *config.FlatMapIterableStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedTransformConsumedStream[T, R], error) {
+    return operators.MakeFlatMapIterableStream[T, R](cfg, stream)
 }
 
-func FlatMapIterable[T, R any](name string, stream runtime.TypedStream[T]) runtime.TypedTransformConsumedStream[T, R] {
-	return runtime.MakeFlatMapIterableStream[T, R](name, stream)
+func Process[T, O, R any](cfg *config.ProcessStreamConfig, stream runtime.TypedStream[T], f operators.ProcessFunction[T, O, R]) (runtime.TypedProcessConsumedStream[T, O, R], error) {
+    return operators.MakeProcessStream[T, O, R](cfg, stream, f)
 }
 
-func ForEach[T any](name string, stream runtime.TypedStream[T], f runtime.ForEachFunction[T]) runtime.TypedConsumedStream[T] {
-	return runtime.MakeForEachStream[T](name, stream, f)
+func Input[T, R, E any](cfg *config.InputStreamConfig, env runtime.RuntimeEnvironment) (runtime.TypedInputStream[T, R, E], error) {
+    return operators.MakeInputStream[T, R, E](cfg, env)
 }
 
-func Input[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedInputStream[T] {
-	return runtime.MakeInputStream[T](name, env)
+func InputKV[K comparable, V any, R, E any](cfg *config.InputStreamConfig, env runtime.RuntimeEnvironment) (runtime.TypedInputStream[datastruct.KeyValue[K, V], R, E], error) {
+    return operators.MakeInputKVStream[K, V, R, E](cfg, env)
 }
 
-func AppInput[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedConsumedStream[T] {
-	return runtime.MakeAppInputStream[T](name, env)
+func Join[K comparable, T1, T2, R any](cfg *config.JoinStreamConfig, stream runtime.TypedStream[datastruct.KeyValue[K, T1]],
+    streamRight runtime.TypedStream[datastruct.KeyValue[K, T2]],
+    f operators.JoinFunction[K, T1, T2, R]) (runtime.TypedJoinConsumedStream[K, T1, T2, R], error) {
+    return operators.MakeJoinStream(cfg, stream, streamRight, f)
 }
 
-func Join[K comparable, T1, T2, R any](name string, stream runtime.TypedStream[datastruct.KeyValue[K, T1]],
-	streamRight runtime.TypedStream[datastruct.KeyValue[K, T2]],
-	f runtime.JoinFunction[K, T1, T2, R]) runtime.TypedJoinConsumedStream[K, T1, T2, R] {
-	return runtime.MakeJoinStream(name, stream, streamRight, f)
+func KeyBy[T any, K comparable, V any](cfg *config.KeyByStreamConfig, stream runtime.TypedStream[T],
+    f operators.KeyByFunction[T, K, V]) (runtime.TypedTransformConsumedStream[T, datastruct.KeyValue[K, V]], error) {
+    return operators.MakeKeyByStream[T, K, V](cfg, stream, f)
 }
 
-func KeyBy[T any, K comparable, V any](name string, stream runtime.TypedStream[T],
-	f runtime.KeyByFunction[T, K, V]) runtime.TypedTransformConsumedStream[T, datastruct.KeyValue[K, V]] {
-	return runtime.MakeKeyByStream[T, K, V](name, stream, f)
+func Link[T any](cfg config.StreamConfig, env runtime.RuntimeEnvironment) (runtime.TypedLinkStream[T], error) {
+    return operators.MakeLinkStream[T](cfg, env)
 }
 
-func Link[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedLinkStream[T] {
-	return runtime.MakeLinkStream[T](name, env)
-}
-
-func Merge[T any](name string, stream runtime.TypedStream[T],
-	streams ...runtime.TypedStream[T]) runtime.TypedConsumedStream[T] {
-	return runtime.MakeMergeStream[T](name, stream, streams...)
+func Merge[T any](cfg *config.MergeStreamConfig, stream runtime.TypedStream[T],
+    streams ...runtime.TypedStream[T]) (runtime.TypedConsumedStream[T], error) {
+    return operators.MakeMergeStream[T](cfg, stream, streams...)
 }
 
 func MultiJoin[K comparable, T, R any](
-	name string, leftStream runtime.TypedStream[datastruct.KeyValue[K, T]],
-	f runtime.MultiJoinFunction[K, T, R]) runtime.TypedMultiJoinConsumedStream[K, T, R] {
-	return runtime.MakeMultiJoinStream[K, T, R](name, leftStream, f)
+    cfg *config.MultiJoinStreamConfig, leftStream runtime.TypedStream[datastruct.KeyValue[K, T]],
+    f operators.MultiJoinFunction[K, T, R]) (runtime.TypedMultiJoinConsumedStream[K, T, R], error) {
+    return operators.MakeMultiJoinStream[K, T, R](cfg, leftStream, f)
 }
 
 func MultiJoinLink[K comparable, T1, T2, R any](
-	multiJoinStream runtime.TypedMultiJoinConsumedStream[K, T1, R],
-	rightStream runtime.TypedStream[datastruct.KeyValue[K, T2]]) {
-	runtime.MakeMultiJoinLink[K, T1, T2, R](multiJoinStream, rightStream)
+    multiJoinStream runtime.TypedMultiJoinConsumedStream[K, T1, R],
+    rightStream runtime.TypedStream[datastruct.KeyValue[K, T2]]) error {
+    return operators.MakeMultiJoinLink[K, T1, T2, R](multiJoinStream, rightStream)
 }
 
-func Parallels[T, R any](name string, stream runtime.TypedStream[T], f runtime.ParallelsFunction[T, R]) runtime.TypedTransformConsumedStream[T, R] {
-	return runtime.MakeParallelsStream[T, R](name, stream, f)
+func WhenStream[T, R any](caseStream runtime.TypedCaseStream[T]) (runtime.TypedConsumedStream[R], error) {
+    return operators.MakeWhenStream[T, R](caseStream)
 }
 
-func Sink[T, R any](name string, stream runtime.TypedStream[T], f runtime.SinkFunction[T, R]) runtime.TypedSinkStream[T, R] {
-	return runtime.MakeSinkStream[T, R](name, stream, f)
+func CaseStream[T any](streamConfig *config.CaseStreamConfig, stream runtime.TypedStream[T], f operators.BuildSwitchFunction[T]) (runtime.TypedCaseStream[T], error) {
+    return operators.MakeCaseStream[T](streamConfig, stream, f)
 }
 
-func Split[T any](name string, stream runtime.TypedStream[T]) runtime.TypedSplitStream[T] {
-	return runtime.MakeSplitStream[T](name, stream)
+func Sink[T, E any](cfg *config.SinkStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedSinkStream[T, E], error) {
+    return operators.MakeSinkStream[T, E](cfg, stream)
 }
 
-func SplitInStub[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinarySplitStream[T] {
-	return runtime.MakeInputSplitStream[T](name, env)
+func SinkWithResult[T, R, E any](cfg *config.SinkStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedSinkStreamWithResult[T, R, E], error) {
+    return operators.MakeSinkStreamWithResult[T, R, E](cfg, stream)
 }
 
-func InStub[T any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryConsumedStream[T] {
-	return runtime.MakeInStubStream[T](name, env)
+func Split[T any](cfg *config.SplitStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedSplitStream[T], error) {
+    return operators.MakeSplitStream[T](cfg, stream)
 }
 
-func SplitInStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVSplitStream[datastruct.KeyValue[K, V]] {
-	return runtime.MakeInputKVSplitStream[K, V](name, env)
-}
-
-func InStubKV[K comparable, V any](name string, env runtime.ServiceExecutionEnvironment) runtime.TypedBinaryKVConsumedStream[datastruct.KeyValue[K, V]] {
-	return runtime.MakeInStubKVStream[K, V](name, env)
-}
-
-func OutStub[T any](name string, stream runtime.TypedStream[T], consumer runtime.ConsumerFunc[T]) runtime.TypedStreamConsumer[T] {
-	return runtime.MakeOutStubStream[T](name, stream, consumer)
-}
-
-func OutStubBinary[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryConsumerFunc) runtime.TypedStreamConsumer[T] {
-	return runtime.MakeOutStubBinaryStream[T](name, stream, consumer)
-}
-
-func OutStubBinaryKV[T any](name string, stream runtime.TypedStream[T], consumer runtime.BinaryKVConsumerFunc) runtime.TypedStreamConsumer[T] {
-	return runtime.MakeOutStubBinaryKVStream[T](name, stream, consumer)
-}
-
-func Delay[T any](name string, stream runtime.TypedStream[T], f runtime.DelayFunction[T]) runtime.TypedConsumedStream[T] {
-	return runtime.MakeDelayStream[T](name, stream, f)
+func Delay[T any](cfg *config.DelayStreamConfig, stream runtime.TypedStream[T], f operators.DelayFunction[T]) (runtime.TypedConsumedStream[T], error) {
+    return operators.MakeDelayStream[T](cfg, stream, f)
 }

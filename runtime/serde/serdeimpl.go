@@ -11,10 +11,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"math"
 	"math/bits"
 	"reflect"
+
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 )
 
 const uintSize = bits.UintSize / 8

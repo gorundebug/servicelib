@@ -8,22 +8,30 @@
 package environment
 
 import (
+	"context"
+
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 type ServiceDependencies interface {
-	MetricsEngine(env ServiceEnvironment) metrics.MetricsEngine
-	LogsEngine(env ServiceEnvironment) log.LogsEngine
-	HttpRouter(env ServiceEnvironment) httprouter.HttpRouter
+	MetricsEngine(env ServiceEnvironment) (metrics.MetricsEngine, error)
+	TracingEngine(env ServiceEnvironment) (tracing.TracingEngine, error)
+	LogsEngine(env ServiceEnvironment) (log.LogsEngine, error)
+}
+
+type Lifecycle interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context)
 }
 
 type ServiceEnvironment interface {
-	AppConfig() *config.ServiceAppConfig
+	RuntimeConfig() *config.RuntimeConfig
 	ServiceConfig() *config.ServiceConfig
 	Metrics() metrics.Metrics
+	Tracing() tracing.Tracing
 	Log() log.Logger
 	ServiceDependencies() ServiceDependencies
 	ServiceContext() interface{}

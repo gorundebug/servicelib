@@ -1,16 +1,35 @@
 openapi: 3.0.0
 info:
-  title: Service Architect API
-  description: Service Architect API.
+  title: Service Topology Runtime — Code Generation API
+  description: |
+    API for the **GoRunDebug** code generator (`servicegen`).
+
+    A client submits a complete `StreamApp` topology definition — services, streams,
+    data connectors, endpoints, types, and links — and receives a ZIP archive containing
+    ready-to-compile Go stubs for every node in the graph.
+
+    The topology definition is the source of truth. It drives both the visual representation
+    in the GoRunDebug designer and the runtime behavior of the generated service.
+    Developers implement only the generated stubs; all infrastructure plumbing is handled
+    by the `servicelib` runtime.
   version: 0.0.1
 servers:
   - url: https://api.gorundebug.com/v1
-    description: Service Architect API Server
+    description: GoRunDebug Code Generation API Server
+
 paths:
   /generateCode:
     post:
-      summary: Generate project code.
-      description: Generate project code.
+      summary: Generate typed Go stubs from a topology definition.
+      description: |
+        Accepts a complete `StreamApp` topology and returns a ZIP archive containing
+        generated Go source files for every stream node and data connector endpoint
+        in the graph. Generated files include typed function stubs with inline
+        documentation and compile-time interface checks.
+
+        The caller should unpack the archive into the project root and implement
+        the generated stubs. Re-submitting after topology changes regenerates only
+        the affected files; existing implementations are not overwritten.
       requestBody:
         required: true
         content:
@@ -18,40 +37,84 @@ paths:
             schema:
               $ref: '#/components/schemas/StreamApp'
             examples:
-              default:
-                summary: A base example
+              http_input_flatmap:
+                summary: HTTP input stream feeding a FlatMap transformation
                 value:
+                  settings:
+                    name: MyProject
                   streams:
-                    - type: 1
-                      id: 1
-                      name: Stream1
+                    - id: 1
+                      type: 1
+                      name: HttpInputStream
                       idSource: 0
-                      idSources: [ ]
-                      valueType: Input1ValueType
+                      idSources: []
+                      valueType: RequestPayload
                       idService: 1
                       idEndpoint: 1
-                    - type: 7
-                      id: 2
-                      name: Stream2
+                      xPos: 100
+                      yPos: 200
+                      functionName: HttpInputHandler
+                      functionPackage: handlers
+                      publicFunction: false
+                    - id: 2
+                      type: 7
+                      name: FlatMapStream
                       idSource: 1
-                      idSources: [ ]
-                      valueType: FlatMap2ValueType
+                      idSources: []
+                      valueType: OutputRecord
                       idService: 1
+                      xPos: 300
+                      yPos: 200
+                      functionName: FlatMapHandler
+                      functionPackage: handlers
+                      publicFunction: false
                   services:
                     - id: 1
-                      name: Service1
+                      name: ProcessingService
                       programmingLanguage: 1
-                  dataConnector:
+                      modulePath: github.com/example/myservice
+                      defaultCallSemantics: 2
+                      httpHost: "0.0.0.0"
+                      httpPort: 8080
+                      grpcHost: "0.0.0.0"
+                      grpcPort: 9090
+                      defaultGrpcTimeout: 30000
+                      shutdownTimeout: 10000
+                      delayExecutors: 4
+                      environment: production
+                      color: "#4A90D9"
+                      statusHandler: /status
+                      metricsHandler: /metrics
+                  dataConnectors:
                     - id: 1
-                      name: DataConnector1
+                      name: HttpServer
                       type: 1
+                      implementation: net/http
                   endpoints:
                     - id: 1
-                      name: Endpoint1
+                      name: IngestEndpoint
+                      idDataConnector: 1
+                      httpMethodType: POST
+                      path: /ingest
+                      functionName: HttpInputHandler
+                      functionPackage: handlers
+                      publicFunction: false
+                  links:
+                    - from: 1
+                      to: 2
+                      callSemantics: 2
+                  types:
+                    - name: RequestPayload
+                      type: custom
+                    - name: OutputRecord
+                      type: custom
+                  pools: []
 
       responses:
         '200':
-          description: Successful response
+          description: |
+            ZIP archive containing generated Go source files. Unpack into the project root.
+            Each generated file corresponds to one stream node or endpoint handler.
           content:
             application/zip:
               schema:
@@ -60,41 +123,66 @@ paths:
 
 components:
   schemas:
+
     StreamApp:
       type: object
+      description: |
+        The complete topology definition for a distributed service system.
+        This is the root document submitted to the code generator.
+        It describes the full dataflow graph: which services exist, how streams connect,
+        what external systems are involved, and what data types flow through the graph.
       additionalProperties: false
       properties:
         settings:
           $ref: '#/components/schemas/ProjectSettings'
         streams:
           type: array
+          description: All stream nodes (operators) in the topology graph.
           items:
             $ref: '#/components/schemas/Stream'
         services:
           type: array
+          description: Microservices that participate in the topology.
           items:
             $ref: '#/components/schemas/Service'
         links:
           type: array
+          description: Directed edges connecting stream nodes. Each link carries data from one node to the next.
           items:
             $ref: '#/components/schemas/Link'
         types:
           type: array
+          description: Named data types used as message types across the graph.
           items:
             $ref: '#/components/schemas/Type'
         dataConnectors:
           type: array
+          description: External system connections (HTTP servers, Kafka clusters, gRPC servers).
           items:
             $ref: '#/components/schemas/DataConnector'
         endpoints:
           type: array
+          description: Specific entry or exit points on a data connector (routes, topics, methods).
           items:
             $ref: '#/components/schemas/Endpoint'
         pools:
           type: array
+          description: Named worker pools used for async or priority-based stream delivery.
           items:
             $ref: '#/components/schemas/Pool'
+        modules:
+          type: array
+          description: |
+            Additional Go modules for shared public functions. When a stream or endpoint
+            has `publicFunction: true` and references a module here via `functionModule`,
+            generated stubs are placed in that module's package tree rather than the
+            service's own module.
+          items:
+            $ref: '#/components/schemas/Module'
+        undefinedEnum:
+          $ref: '#/components/schemas/UndefinedEnum'
       required:
+        - settings
         - services
         - streams
         - links
@@ -102,75 +190,117 @@ components:
         - dataConnectors
         - endpoints
         - pools
-        - settings
+
+    UndefinedEnum:
+      type: integer
+      description: Sentinel value used to represent an undefined/unset enum. Always 0.
+      enum: [ 0 ]
+      x-enum-varnames:
+        - Undefined
 
     ProgrammingLanguage:
       type: integer
-      enum: [ 1, 2, 3 ]
+      description: Target programming language for code generation.
+      enum: [ 0, 1, 2, 3 ]
       x-enum-varnames:
+        - Undefined
         - GoLang
         - Cpp
         - Python
 
     ProjectSettings:
       type: object
+      description: Global metadata for the topology project.
       additionalProperties: false
       properties:
         name:
           type: string
-        modulePath:
+          description: Human-readable project name. Used in generated file headers.
+        moduleVersion:
           type: string
-        golangVersion:
+          description: Semantic version tag used when publishing modules to Git (e.g. `v0.1.0`). Defaults to `v0.0.1`.
+        repoPath:
           type: string
+          description: Git repository path for the project itself (e.g. `github.com/example/myproject`). When set, `make init` and `make git-push` will also push the project root to this remote.
       required:
         - name
-        - modulePath
-        - golangVersion
 
     Service:
       type: object
+      description: |
+        A single microservice in the topology. Each stream node belongs to exactly one service.
+        The service defines the runtime configuration (ports, timeouts, logging) and the
+        Go module path used for code generation.
       additionalProperties: false
       properties:
         id:
           type: integer
+          description: Unique identifier for the service within the topology.
           example: 1
         name:
           type: string
-          example: Service1
+          description: Human-readable service name. Used as the root directory name for generated code.
+          example: ProcessingService
         programmingLanguage:
           $ref: '#/components/schemas/ProgrammingLanguage'
+        modulePath:
+          type: string
+          description: |
+            Go module path (e.g. `github.com/example/myservice`). Used as the base import path
+            for all generated packages within this service.
+        golangVersion:
+          type: string
+          description: Minimum Go version required for the generated module (e.g. `1.22`).
         defaultCallSemantics:
           $ref: '#/components/schemas/CallSemantics'
-        httpPort:
-          type: integer
-          minimum: 0
-          maximum: 65535
+          description: Default delivery semantics for stream links that do not specify their own.
         httpHost:
           type: string
+          description: Host address for the service's HTTP server.
+        httpPort:
+          type: integer
+          description: Port for the service's HTTP server.
+          minimum: 0
+          maximum: 65535
         statusHandler:
           type: string
+          description: |
+            URL path for the built-in topology visualization endpoint (e.g. `/status`).
+            When set, the service serves a live dataflow graph with real-time call counts.
+            Leave empty to disable.
         metricsHandler:
           type: string
+          description: |
+            URL path for the Prometheus metrics endpoint (e.g. `/metrics`).
+            Leave empty to disable.
+        grpcHost:
+          type: string
+          description: Host address for the service's gRPC server.
         grpcPort:
           type: integer
+          description: Port for the service's gRPC server.
           minimum: 80
           maximum: 65535
         defaultGrpcTimeout:
           type: integer
+          description: Default gRPC call timeout in milliseconds.
           minimum: 0
-        grpcHost:
-          type: string
         color:
           type: string
+          description: Hex color code used to represent this service in the visual topology designer.
+          example: "#4A90D9"
         shutdownTimeout:
           type: integer
+          description: Maximum time in milliseconds to wait for graceful shutdown before forcing termination.
           minimum: 0
         logLevel:
           $ref: '#/components/schemas/LogLevel'
         environment:
           type: string
+          description: Deployment environment identifier (e.g. `production`, `staging`). Available in generated code as a config value.
         delayExecutors:
           type: integer
+          description: Number of goroutines dedicated to processing Delay operator timers.
           minimum: 1
       required:
         - id
@@ -188,58 +318,94 @@ components:
         - color
         - statusHandler
         - metricsHandler
+        - modulePath
 
     JoinStorageType:
       type: integer
-      enum: [ 1, 2, 3 ]
+      description: Storage backend used to hold join state while waiting for matching keys from both streams.
+      enum: [0, 1, 2, 3]
       x-enum-varnames:
+        - Undefined
         - HashMap
         - RocksDB
         - Aerospike
 
     TransformationType:
       type: integer
-      enum: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 ]
+      description: |
+        The operator type for a stream node. Determines the node's role in the dataflow graph
+        and the signature of the generated stub.
+
+        - `Input` (1): ingests data from an external source via a data connector endpoint
+        - `Map` (2): transforms each element T → R
+        - `Filter` (3): discards elements that do not satisfy a predicate
+        - `Join` (4): combines two keyed streams (KeyValue[K,T1] + KeyValue[K,T2] → R)
+        - `MultiJoin` (5): combines N keyed streams into a single output
+        - `Process` (6): transforms T → R with a side-output error stream E
+        - `FlatMap` (7): expands one element T into zero or more R
+        - `FlatMapIterable` (8): expands T into an iterable of R without a user function
+        - `KeyBy` (9): partitions a stream into keyed sub-streams (T → KeyValue[K,V])
+        - `Merge` (10): merges multiple streams of the same type T
+        - `Split` (11): broadcasts one stream to multiple downstream consumers
+        - `Case` (12): routes each element to one of N typed branches (switch/case)
+        - `Sink` (13): sends data to an external destination via a data connector endpoint
+        - `CycleLink` (14): feeds output back into an earlier node in the graph
+        - `Error` (15): receives error elements from a Process node's error output
+        - `Delay` (16): defers downstream delivery by a computed duration
+        - `When` (17): a typed branch of a Case node
+      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 ]
       x-enum-varnames:
+        - Undefined
         - Input
         - Map
         - Filter
         - Join
         - MultiJoin
-        - ForEach
+        - Process
         - FlatMap
         - FlatMapIterable
         - KeyBy
         - Merge
         - Split
-        - Parallels
+        - Case
         - Sink
-        - AppSink
         - CycleLink
+        - Error
         - Delay
-        - AppInput
+        - When
 
     JoinType:
       type: integer
-      enum: [ 1, 2, 3, 4 ]
+      description: Join semantics for Join and MultiJoin operators — controls which combinations of matching keys produce output.
+      enum: [ 0, 1, 2, 3, 4 ]
       x-enum-varnames:
+        - Undefined
         - Inner
         - Left
         - Right
         - Outer
 
-    AppInputType:
-      type: integer
-      enum: [ 0, 1, 2]
+    HTTPMethodType:
+      type: string
+      description: HTTP verb for an HTTP endpoint.
+      enum: [ '', 'GET', 'POST' ]
       x-enum-varnames:
-        - Function
-        - HttpHandler
-        - GrpcHandler
+        - Undefined
+        - GET
+        - POST
 
     GrpcMethodType:
       type: integer
-      enum: [ 0, 1, 2, 4 ]
+      description: |
+        gRPC streaming mode for a gRPC endpoint. Determines the generated handler signature
+        and the streaming behavior of the connector.
+        - `NoStreaming` (1): unary RPC
+        - `ClientStreaming` (2): client sends a stream, server replies once
+        - `ServerStreaming` (4): client sends once, server replies with a stream
+        - `BidirectionalStreaming` (5): both sides stream concurrently
+      enum: [ 0, 1, 2, 4, 5 ]
       x-enum-varnames:
+        - Undefined
         - NoStreaming
         - ClientStreaming
         - ServerStreaming
@@ -247,61 +413,133 @@ components:
 
     CallSemantics:
       type: integer
-      enum: [ 0, 1, 2, 3 ]
+      description: |
+        Delivery semantics for a stream link — controls how messages are passed between nodes.
+        - `Inherited` (1): use the service's `defaultCallSemantics`
+        - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
+        - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
+        - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
+      enum: [ 0, 1, 2, 3, 4 ]
       x-enum-varnames:
+        - Undefined
         - Inherited
         - FunctionCall
         - TaskPool
         - PriorityTaskPool
 
-    CommunicationProtocol:
-      type: integer
-      enum: [ 1, 2 ]
-      x-enum-varnames:
-        - HTTP
-        - gRPC
-
     DataConnectorType:
       type: integer
-      enum: [ 1, 2, 3, 4]
+      description: |
+        Type of external system the data connector connects to.
+        - `HTTP` (1): net/http server or client
+        - `gRPC` (2): gRPC server or client
+        - `Kafka` (3): Kafka cluster (Sarama)
+        - `Custom` (4): in-process local connector for testing or internal pipelines
+      enum: [ 0, 1, 2, 3, 4 ]
       x-enum-varnames:
+        - Undefined
         - HTTP
         - gRPC
         - Kafka
         - Custom
 
+    ProcessPattern:
+      type: integer
+      description: |
+        Execution pattern for the Process operator — controls how the handler interacts
+        with its output stream.
+        - `Execute` (1): handler performs a side effect and may emit zero or more results synchronously
+        - `Collect` (2): handler accumulates results and emits them in batch
+      enum: [ 0, 1, 2 ]
+      x-enum-varnames:
+        - Undefined
+        - Execute
+        - Collect
+
     LogLevel:
       type: string
-      enum: [ 'CRITICAL', 'FATAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
+      description: Logging verbosity for the service runtime.
+      enum: [ '', 'CRITICAL', 'FATAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG' ]
+      x-enum-varnames:
+        - Undefined
+        - CRITICAL
+        - FATAL
+        - ERROR
+        - WARNING
+        - INFO
+        - DEBUG
 
     Pool:
       type: object
+      description: |
+        A named worker pool used for async or priority-based stream delivery.
+        Referenced by links with `callSemantics: TaskPool` or `callSemantics: PriorityTaskPool`.
       additionalProperties: false
       properties:
         name:
           type: string
+          description: Pool name. Referenced in Link.poolName.
         executorsCount:
           type: integer
+          description: Number of worker goroutines in the pool.
           minimum: 1
       required:
         - name
         - executorsCount
 
+    Module:
+      type: object
+      description: |
+        A separate Go module used to host public (shared) functions.
+        When a stream node or endpoint has `publicFunction: true` and references this module
+        via `functionModule`, its generated stub is placed in this module's package tree
+        rather than the owning service's module. This enables shared business logic to be
+        imported by multiple services without circular dependencies.
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Module identifier. Referenced by `Stream.functionModule` and `Endpoint.functionModule`.
+        modulePath:
+          type: string
+          description: Go module path (e.g. `github.com/example/shared`). Used as the base import path for generated packages.
+        golangVersion:
+          type: string
+          description: Minimum Go version required for this module (e.g. `1.22`).
+      required:
+        - name
+        - modulePath
+        - golangVersion
+
     Stream:
       type: object
+      description: |
+        A node in the topology dataflow graph. Each stream node represents one operator
+        (transformation, source, sink, or routing construct). The `type` field determines
+        the operator and therefore the signature of the generated Go stub.
       additionalProperties: false
       properties:
         id:
           type: integer
+          description: Unique identifier for this stream node within the topology.
           example: 1
         name:
           type: string
-          example: httpInputStream
+          description: Human-readable node name shown in the visual designer.
+          example: HttpInputStream
         idSource:
           type: integer
+          description: |
+            ID of the single upstream stream node. Used by operators with one input
+            (Map, Filter, FlatMap, Process, KeyBy, Split, Case, Delay, Sink).
+            Set to 0 when the node has no single source (Input nodes, Merge, MultiJoin).
           minimum: 0
         idSources:
           type: array
+          description: |
+            IDs of multiple upstream stream nodes. Used by Merge (same type, N sources)
+            and MultiJoin (keyed streams, N sources). Mutually exclusive with `idSource`
+            for these operator types.
           items:
             type: integer
             minimum: 1
@@ -309,198 +547,295 @@ components:
           $ref: '#/components/schemas/TransformationType'
         valueType:
           type: string
+          description: |
+            Name of the output message type for this node (e.g. `OrderEvent`).
+            Must match a type defined in `StreamApp.types` or an imported Go type.
           minLength: 1
         keyType:
           type: string
+          description: |
+            Name of the key type for keyed stream nodes (KeyBy, Join, MultiJoin).
+            Must be a comparable Go type.
           minLength: 1
         idService:
           type: integer
+          description: ID of the service this node belongs to.
           minimum: 1
         idEndpoint:
           type: integer
+          description: |
+            ID of the associated endpoint. Required for Input and Sink nodes;
+            determines which data connector entry/exit point this node uses.
         joinType:
           $ref: '#/components/schemas/JoinType'
         joinStorage:
           $ref: '#/components/schemas/JoinStorageType'
-        appInputType:
-          $ref: '#/components/schemas/AppInputType'
-        grpcMethodType:
-          $ref: '#/components/schemas/GrpcMethodType'
-        path:
-          type: string
+        pattern:
+          $ref: '#/components/schemas/ProcessPattern'
         xPos:
-          type: integer
+          type: number
+          description: Horizontal position of the node in the visual designer canvas.
         yPos:
-          type: integer
+          type: number
+          description: Vertical position of the node in the visual designer canvas.
         functionName:
           type: string
+          description: |
+            Name of the generated Go struct for this node's business logic implementation.
+            The code generator produces a stub with this name that the developer implements.
         functionPackage:
           type: string
+          description: |
+            Subdirectory under the functions package where the generated stub is placed
+            (e.g. `handlers`, `transforms`). Omit for the default functions package root.
         publicFunction:
           type: boolean
+          description: |
+            When true, this node's stub is placed in the shared `pkg/functions` tree
+            (or in a separate module if `functionModule` is set) and can be imported
+            by other services. When false, it goes into the service's `internal/functions` tree.
         functionDescription:
           type: string
+          description: Doc comment added to the generated struct. Describe the node's business purpose here.
+        functionInitializerGroup:
+          type: string
+          description: |
+            Initializer group name for dependency injection. Stubs in the same group
+            are initialized together. Used by the generated service bootstrap code.
+        functionModule:
+          type: string
+          description: |
+            Name of a module defined in `StreamApp.modules`. When set (and `publicFunction: true`),
+            the generated stub is placed in that module's package tree instead of the service module.
+            Used to share business logic across multiple services.
         ttl:
           type: integer
+          description: |
+            Join state time-to-live in milliseconds. After this duration without a matching key
+            from the other stream, the accumulated state is discarded. Applies to Join and MultiJoin.
           minimum: 0
         renewTTL:
           type: boolean
+          description: |
+            When true, the TTL is reset each time a new element arrives for a key,
+            keeping the state alive as long as data keeps flowing. Applies to Join and MultiJoin.
         duration:
           type: integer
+          description: |
+            Fixed delay duration in milliseconds for the Delay operator.
+            Used when the delay is not computed per-element.
           minimum: 0
+        pipeline:
+          type: string
+          description: |
+            Stream pipeline name
       required:
         - id
         - type
         - idService
         - name
         - idSource
-        - idSources
         - xPos
         - yPos
 
-
     Link:
       type: object
+      description: |
+        A directed edge in the topology graph connecting two stream nodes.
+        Links carry data from the upstream node (`from`) to the downstream node (`to`)
+        according to the specified delivery semantics.
       additionalProperties: false
       properties:
         from:
           type: integer
+          description: ID of the upstream (producer) stream node.
           example: 1
         to:
           type: integer
+          description: ID of the downstream (consumer) stream node.
           example: 2
         callSemantics:
           $ref: '#/components/schemas/CallSemantics'
-        incomeCallSemantics:
-          $ref: '#/components/schemas/CallSemantics'
-        inheritedCallSemantics:
-          type: boolean
-        incomeInheritedCallSemantics:
-          type: boolean
         poolName:
           type: string
-          example: default
-        incomePoolName:
-          type: string
+          description: |
+            Name of the worker pool to use when `callSemantics` is `TaskPool` or `PriorityTaskPool`.
+            Must match a pool defined in `StreamApp.pools`.
           example: default
         priority:
           type: integer
-        incomePriority:
-          type: integer
-        methodName:
-          type: string
-        timeout:
-          type: integer
-          minimum: 0
-        communicationProtocol:
-          $ref: '#/components/schemas/CommunicationProtocol'
+          description: |
+            Message priority for `PriorityTaskPool` delivery. Higher values are processed first.
+            Ignored for other call semantics.
       required:
         - from
         - to
-        - inheritedCallSemantics
         - callSemantics
 
     DataConnectorImplementation:
       type: string
-      enum: [ 'net/http',
-              'FastHTTP',
-              'aiohttp',
+      description: |
+        The specific library used to implement a data connector.
+        - `net/http`: Go standard library HTTP
+        - `function`: in-process custom connector (no network)
+        - `IBM/Sarama`: Sarama Kafka client
+        - `google/grpc`: official gRPC-Go library
+      enum: [ '',
+              'net/http',
               'function',
-              'sarama'
+              'IBM/Sarama',
+              'google/grpc'
       ]
+      x-enum-varnames:
+        - Undefined
+        - NetHTTP
+        - Function
+        - IBMsarama
+        - GoogleGRPC
 
     DataConnector:
       type: object
+      description: |
+        Configuration for a connection to an external system. A data connector represents
+        the external system itself (an HTTP server, a Kafka cluster, a gRPC server).
+        Specific routes, topics, or methods are defined as `Endpoint` objects that
+        reference this connector.
       additionalProperties: false
       properties:
         id:
           type: integer
+          description: Unique identifier for this data connector within the topology.
           example: 1
         name:
           type: string
-          example: DataConnector1
-        programmingLanguage:
-          $ref: '#/components/schemas/ProgrammingLanguage'
+          description: Human-readable connector name used in the visual designer and in generated server/client struct names.
+          example: KafkaCluster
         type:
           $ref: '#/components/schemas/DataConnectorType'
         implementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
         host:
           type: string
+          description: Hostname or IP address. Applies to HTTP and gRPC connectors.
         port:
           type: integer
+          description: Port number. Applies to HTTP and gRPC connectors.
           minimum: 80
           maximum: 65535
+        address:
+          type: string
+          description: gRPC connection address.
         brokers:
           type: string
+          description: Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
         version:
           type: string
+          description: Kafka protocol version expected by the broker (e.g. `2.8.0`). Applies to Kafka connectors.
         dialTimeout:
           type: number
+          description: Connection dial timeout in milliseconds. Applies to Kafka connectors.
           minimum: 0
           maximum: 3600000
         usePartitioner:
           type: boolean
+          description: |
+            When true, a custom Kafka partitioner is used for produced messages.
+            The partitioner function is included in the generated stub.
+            Applies to Kafka sink connectors.
         async:
           type: boolean
+          description: |
+            When true, the Kafka producer operates in async mode — messages are batched
+            and acknowledged asynchronously. Applies to Kafka sink connectors.
+        useDedicatedListener:
+          type: boolean
+          description: |
+            When true, this HTTP connector starts its own dedicated `net/http` listener.
+            When false, it shares the service's default HTTP mux.
+            Applies to HTTP source connectors.
+        module:
+          type: string
+          description: |
+            Go module name containing the generated gRPC protobuf types for this connector.
+            Used to resolve the correct import path for generated gRPC method stubs.
+            Applies to gRPC connectors.
       required:
         - id
         - name
         - type
         - implementation
 
-    DataFormat:
-      type: string
-      enum: [ 'json',
-              'form',
-              'custom'
-      ]
-
     Endpoint:
       type: object
+      description: |
+        A specific entry or exit point on a data connector — an HTTP route, a Kafka topic,
+        or a gRPC method. Each Input or Sink stream node references exactly one endpoint.
+        The endpoint determines the handler interface that the code generator produces.
       additionalProperties: false
       properties:
         id:
           type: integer
+          description: Unique identifier for this endpoint within the topology.
           example: 1
         name:
           type: string
-          example: Endpoint1
+          description: Human-readable endpoint name shown in the visual designer.
+          example: IngestEndpoint
         idDataConnector:
           type: integer
+          description: ID of the data connector this endpoint belongs to.
           example: 1
-        method:
-          type: string
+        httpMethodType:
+          $ref: '#/components/schemas/HTTPMethodType'
         path:
           type: string
-        format:
-          $ref: '#/components/schemas/DataFormat'
+          description: URL path for HTTP endpoints (e.g. `/api/v1/orders`). Applies to HTTP connectors.
         functionName:
           type: string
+          description: Name of the generated Go handler struct for this endpoint.
         functionPackage:
           type: string
+          description: Subdirectory under the functions package where the generated handler is placed.
         publicFunction:
           type: boolean
+          description: |
+            When true, the generated handler is placed in the shared `pkg/functions` tree
+            and can be imported by other services. When false, it goes into `internal/functions`.
         functionDescription:
           type: string
-        delay:
-          type: integer
+          description: Doc comment added to the generated handler struct.
+        functionInitializerGroup:
+          type: string
+          description: Initializer group for dependency injection of the generated handler.
+        functionModule:
+          type: string
+          description: |
+            Name of a module defined in `StreamApp.modules`. When set (and `publicFunction: true`),
+            the generated handler is placed in that module instead of the service module.
         topic:
           type: string
+          description: Kafka topic name. Applies to Kafka endpoints.
         partitions:
           type: integer
+          description: "Number of partitions for the Kafka topic (used when createTopic is true)."
           minimum: 1
           maximum: 1000
         createTopic:
           type: boolean
+          description: When true, the generated service attempts to create the Kafka topic on startup if it does not exist.
         replicationFactor:
           type: integer
+          description: "Kafka topic replication factor (used when createTopic is true)."
           minimum: 1
           maximum: 1000
-        useHandler:
-          type: boolean
         consumerGroup:
           type: string
+          description: Kafka consumer group ID. Applies to Kafka source endpoints.
+        grpcMethodType:
+          $ref: '#/components/schemas/GrpcMethodType'
+        methodName:
+          type: string
+          description: gRPC method name as defined in the proto file. Applies to gRPC endpoints.
       required:
         - id
         - name
@@ -508,73 +843,125 @@ components:
 
     TypeDefinitionFormat:
       type: integer
-      enum: [ 1, 2, 3, 4 ]
+      description: |
+        Serialization format used for the type definition. Determines how the type
+        is serialized/deserialized when crossing process or network boundaries.
+        - `Native` (1): language-native encoding (Go encoding/json, etc.)
+        - `Protobuf` (2): Protocol Buffers
+        - `FlatBuffers` (3): FlatBuffers
+        - `CapNProto` (4): Cap'n Proto
+        - `OpenAPI` (5): JSON encoding for types generated from an OpenAPI spec (oapi-codegen)
+      enum: [0, 1, 2, 3, 4, 5]
       x-enum-varnames:
+        - Undefined
         - Native
         - Protobuf
         - FlatBuffers
         - CapNProto
+        - OpenAPI
 
     DataType:
       type: string
-      enum: [ 'int',
-              'uint',
-              'byte',
-              'char',
-              'boolean',
-              'unicode char',
-              'string',
-              'unicode string',
-              'float',
-              'double',
-              'int8',
-              'int16',
-              'int32',
-              'int64',
-              'uint8',
-              'uint16',
-              'uint32',
-              'uint64',
-              'array',
-              'map',
-              'struct',
-              'custom'
+      description: |
+        Primitive or composite data type for a named type. Controls generated serde code
+        and type compatibility checks within the graph.
+        Use `custom` for user-defined structs, `struct` for inline struct definitions,
+        `array` for slices, `map` for maps, and `any` for untyped/interface values.
+      enum: [ '',
+              'int', 'uint', 'byte', 'char', 'boolean',
+              'unicode char', 'string', 'unicode string',
+              'float', 'double',
+              'int8', 'int16', 'int32', 'int64',
+              'uint8', 'uint16', 'uint32', 'uint64',
+              'any', 'error', 'array', 'map', 'struct', 'custom'
       ]
+      x-enum-varnames:
+        - Undefined
+        - int
+        - uint
+        - byte
+        - char
+        - boolean
+        - unicodeChar
+        - string
+        - unicodeString
+        - float
+        - double
+        - int8
+        - int16
+        - int32
+        - int64
+        - uint8
+        - uint16
+        - uint32
+        - uint64
+        - any
+        - error
+        - array
+        - map
+        - struct
+        - custom
 
     Type:
       type: object
+      description: |
+        A named data type used as a message type in the topology graph.
+        Types are referenced by stream nodes via `valueType` and `keyType`.
+        The code generator uses the type definition to produce correct Go type references
+        and import statements in generated stubs.
       additionalProperties: false
       properties:
         name:
           type: string
-          example: 'DataType'
+          description: Unique type name referenced by streams (e.g. `OrderEvent`, `UserProfile`).
+          example: OrderEvent
+        description:
+          type: string
+          description: Human-readable description of this type. Used as a doc comment in generated code.
         type:
           $ref: '#/components/schemas/DataType'
         valueType:
           type: string
+          description: Element type for `array` and value type for `map` composite types.
         keyType:
           type: string
+          description: Key type for `map` composite types.
         definitionFormat:
           $ref: '#/components/schemas/TypeDefinitionFormat'
         transferByValue:
           type: boolean
+          description: |
+            When true, the type is passed by value in generated function signatures.
+            When false (default), it is passed as a pointer.
           example: false
         useAlias:
           type: boolean
+          description: When true, the generated Go code uses a type alias instead of a full struct definition.
         typeDefinitionLang1:
           type: string
-          example: 'interface{}'
+          description: Inline type definition for GoLang (e.g. `interface{}`, `map[string]int`). Used when the type has no external package.
+          example: "interface{}"
         typeDefinitionLang2:
           type: string
-          example: 'std::any'
+          description: Inline type definition for C++ (e.g. `std::any`).
+          example: "std::any"
         typeImportLang1:
           type: string
+          description: Go import path for the package that defines this type (e.g. `github.com/example/types`).
         typeImportLang2:
           type: string
+          description: C++ include path for the header that defines this type.
         package:
           type: string
+          description: Go package name alias used in generated import statements when it differs from the last path component.
         publicType:
           type: boolean
+          description: When true, this type is shared across services and placed in the shared types package.
+        module:
+          type: string
+          description: |
+            Name of a module defined in `StreamApp.modules` that owns this type.
+            Used to resolve the correct import path when `publicType: true`.
       required:
         - name
         - type

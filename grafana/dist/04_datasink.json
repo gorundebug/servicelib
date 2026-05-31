@@ -1,0 +1,446 @@
+{
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 0
+         },
+         "id": 1,
+         "panels": [ ],
+         "title": "Connector Health",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 1
+         },
+         "id": 2,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(datasink_connector_events_total{connector=~\"$connector\", event=\"stop_timeout\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}}"
+            }
+         ],
+         "title": "Connector Stop Timeouts",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 1
+         },
+         "id": 3,
+         "options": {
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "sum(datasink_connector_events_total{connector=~\"$connector\", event=\"stop_timeout\"}) by (connector)",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}}"
+            }
+         ],
+         "title": "Connector Stop Timeouts (total)",
+         "type": "stat"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 7
+         },
+         "id": 4,
+         "panels": [ ],
+         "title": "Endpoint Throughput",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8
+         },
+         "id": 5,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(datasink_endpoint_messages_total{connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Message Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8
+         },
+         "id": 6,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "datasink_endpoint_active_requests{connector=~\"$connector\", endpoint=~\"$endpoint\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Active Requests",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 16
+         },
+         "id": 7,
+         "panels": [ ],
+         "title": "Request Latency",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 17
+         },
+         "id": 8,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.5, sum(rate(datasink_endpoint_request_duration_seconds_bucket{connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "intervalFactor": 2,
+               "legendFormat": "p50 {{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Request Duration p50",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 17
+         },
+         "id": 9,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.95, sum(rate(datasink_endpoint_request_duration_seconds_bucket{connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "intervalFactor": 2,
+               "legendFormat": "p95 {{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Request Duration p95",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 17
+         },
+         "id": 10,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.99, sum(rate(datasink_endpoint_request_duration_seconds_bucket{connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "intervalFactor": 2,
+               "legendFormat": "p99 {{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Request Duration p99",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 25
+         },
+         "id": 11,
+         "panels": [ ],
+         "title": "Error Events",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 26
+         },
+         "id": 12,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(datasink_endpoint_events_total{connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Request Errors Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 26
+         },
+         "id": 13,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(datasink_endpoint_events_total{connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"begin_request_failed\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "begin_request_failed {{connector}}/{{endpoint}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(datasink_endpoint_events_total{connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"late_result\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "late_result {{connector}}/{{endpoint}}"
+            }
+         ],
+         "title": "Other Error Event Rates",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 0,
+            "y": 30
+         },
+         "id": 14,
+         "options": {
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ]
+            }
+         },
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "sum(datasink_endpoint_events_total{connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}) by (connector, endpoint)",
+               "intervalFactor": 2,
+               "legendFormat": "{{connector}} / {{endpoint}}"
+            }
+         ],
+         "title": "Total Request Errors",
+         "type": "stat"
+      }
+   ],
+   "refresh": "30s",
+   "schemaVersion": 39,
+   "tags": [
+      "servicelib",
+      "datasink"
+   ],
+   "templating": {
+      "list": [
+         {
+            "label": "Datasource",
+            "name": "datasource",
+            "query": "prometheus",
+            "type": "datasource"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "$datasource"
+            },
+            "includeAll": true,
+            "label": "Connector",
+            "multi": true,
+            "name": "connector",
+            "query": "label_values(datasink_endpoint_messages_total, connector)",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "$datasource"
+            },
+            "includeAll": true,
+            "label": "Endpoint",
+            "multi": true,
+            "name": "endpoint",
+            "query": "label_values(datasink_endpoint_messages_total{connector=~\"$connector\"}, endpoint)",
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-1h",
+      "to": "now"
+   },
+   "timezone": "browser",
+   "title": "servicelib / Data Sinks",
+   "uid": "servicelib-datasink"
+}

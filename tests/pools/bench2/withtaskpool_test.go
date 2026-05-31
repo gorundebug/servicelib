@@ -8,23 +8,29 @@
 package bench2
 
 import (
-	"github.com/gorundebug/servicelib/tests/mockservice"
+	"context"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/gorundebug/servicelib/tests/mockservice"
+	"github.com/gorundebug/servicelib/tests/mockservice/config"
 )
 
+var testEnv *mockservice.TestEnv
+
 func TestMain(m *testing.M) {
-	mockservice.Main("../..", func() int {
+	mockservice.Main("../..", func(env *mockservice.TestEnv) int {
+		testEnv = env
 		runtime.GOMAXPROCS(16)
 		return m.Run()
 	})
 }
 
 func BenchmarkWithTaskPool(b *testing.B) {
-	service := mockservice.GetMockService()
-	taskPool := service.GetTaskPool("Default")
+	service := testEnv.Service
+	taskPool := service.GetTaskPool(config.DefaultTaskPoolName)
 
 	var counter atomic.Int32
 
@@ -44,7 +50,7 @@ func BenchmarkWithTaskPool(b *testing.B) {
 				defer wg.Done()
 				for j := 0; j < 1000000; j++ {
 					wg.Add(1)
-					taskPool.AddTask(task)
+					taskPool.AddTask(context.Background(), task)
 				}
 			}()
 		}

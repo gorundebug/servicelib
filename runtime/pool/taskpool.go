@@ -9,10 +9,13 @@ package pool
 
 import (
 	"context"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"runtime"
 	"sync"
+	"time"
+
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 type Task struct {
@@ -23,50 +26,56 @@ type Task struct {
 
 type TaskPool interface {
 	Pool
-	AddTask(fn func()) *Task
+	AddTask(ctx context.Context, fn func()) *Task
 }
 
 type TaskPoolImpl struct {
-	head             *Task
-	tail             *Task
-	lock             sync.Mutex
-	name             string
-	gaugeQueueLength metrics.Gauge
-	wg               sync.WaitGroup
-	done             bool
-	cond             *sync.Cond
-	count            int
-	environment      environment.ServiceEnvironment
+	head               *Task
+	tail               *Task
+	lock               sync.Mutex
+	name               string
+	gaugeQueueLength   metrics.Int64Gauge
+	tasksTotal         metrics.Int64Counter
+	executionDuration  metrics.Float64Histogram
+	stopTimeoutCounter metrics.Int64Counter
+	wg                 sync.WaitGroup
+	done               bool
+	cond               *sync.Cond
+	count              int
+	environment        environment.ServiceEnvironment
 }
 
-func makeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
-	poolConfig := env.AppConfig().GetPoolByName(name)
-	if poolConfig == nil {
-		env.Log().Fatalf("task pool %q does not exist.", name)
-		return nil
-	}
-
+func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
 	pool := &TaskPoolImpl{
-		name:        name,
+		name:        poolConfig.Name,
 		environment: env,
 	}
-	gaugeOpts := metrics.GaugeOpts{
-		Opts: metrics.Opts{
-			Name: "task_pool_queue_length",
-			Help: "Task pool wait queue length",
-			ConstLabels: metrics.Labels{
-				"service": env.ServiceConfig().Name,
-				"name":    name,
-			},
-		},
+	scope := env.Metrics().Scope("task_pool", metrics.Labels{
+		"service": env.ServiceConfig().Name,
+		"name":    poolConfig.Name,
+	})
+	var err error
+	pool.gaugeQueueLength, err = scope.Gauge("queue_length", "Task pool wait queue length", nil)
+	if err != nil {
+		return nil, err
 	}
-	m := env.Metrics()
-	pool.gaugeQueueLength = m.Gauge(gaugeOpts)
+	pool.tasksTotal, err = scope.Counter("tasks_total", "Total number of tasks executed by task pool", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.executionDuration, err = scope.Histogram("task_execution_duration_seconds", "Task execution duration in seconds", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.stopTimeoutCounter, err = scope.Counter("events_total", "Total number of events in task pool", metrics.Labels{"event": "stop_timeout"})
+	if err != nil {
+		return nil, err
+	}
 	pool.cond = sync.NewCond(&pool.lock)
-	return pool
+	return pool, nil
 }
 
-func (p *TaskPoolImpl) AddTask(fn func()) *Task {
+func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) *Task {
 	task := &Task{fn: fn}
 	p.lock.Lock()
 	if p.tail != nil {
@@ -84,7 +93,7 @@ func (p *TaskPoolImpl) AddTask(fn func()) *Task {
 }
 
 func (p *TaskPoolImpl) Start(ctx context.Context) error {
-	poolConfig := p.environment.AppConfig().GetPoolByName(p.name)
+	poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
 	executorsCount := poolConfig.ExecutorsCount
 	if executorsCount == 0 {
 		executorsCount = runtime.NumCPU()
@@ -113,8 +122,11 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				p.count--
 				p.lock.Unlock()
 				p.gaugeQueueLength.Dec()
+				startTime := time.Now()
 				task.fn()
 				task.fn = nil
+				p.tasksTotal.Inc(ctx)
+				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
 			}
 		}()
 	}
@@ -123,24 +135,22 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 
 func (p *TaskPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
-	if p.count > 0 {
-		p.done = true
-		p.cond.Broadcast()
+	p.done = true
+	p.cond.Broadcast()
+	p.lock.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		p.lock.Lock()
+		tasksCount := p.count
 		p.lock.Unlock()
-		done := make(chan struct{})
-		go func() {
-			p.wg.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-ctx.Done():
-			p.lock.Lock()
-			tasksCount := p.count
-			p.lock.Unlock()
-			p.environment.Log().Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
-		}
-	} else {
-		p.lock.Unlock()
+		p.environment.Log().Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+		p.stopTimeoutCounter.Inc(ctx)
 	}
 }

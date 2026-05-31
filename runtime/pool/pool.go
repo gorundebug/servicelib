@@ -9,6 +9,8 @@ package pool
 
 import (
 	"context"
+
+	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
 )
 
@@ -17,14 +19,14 @@ type Pool interface {
 	Stop(ctx context.Context)
 }
 
-func MakeDelayTaskPool(env environment.ServiceEnvironment) DelayPool {
+func MakeDelayTaskPool(env environment.ServiceEnvironment) (DelayPool, error) {
 	return makeDelayPool(env)
 }
 
-func MakePriorityTaskPool(env environment.ServiceEnvironment, name string) PriorityTaskPool {
-	return makePriorityTaskPool(env, name)
+func MakePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
+	return makePriorityTaskPool(env, poolConfig)
 }
 
-func MakeTaskPool(env environment.ServiceEnvironment, name string) TaskPool {
-	return makeTaskPool(env, name)
+func MakeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
+	return makeTaskPool(env, poolConfig)
 }

@@ -8,216 +8,181 @@
 package config
 
 import (
+    "fmt"
+
     "github.com/gorundebug/servicelib/api"
 )
 
 type Config interface {
-    AppConfig() *ServiceAppConfig
-}
-
-// ConfigSettings /*
-// Settings how the service will get access to config and config update options
-type ConfigSettings struct {
-}
-
-type ConfigProperties interface {
+    GetServices() []*ServiceConfig
+    GetStreams() []StreamConfig
+    GetDataConnectors() []DataConnectorConfig
+    GetEndpoints() []EndpointConfig
+    GetPools() []*PoolConfig
+    GetLinks() []*LinkConfig
+    GetModules() []*ModuleConfig
     GetProperty(name string) interface{}
-}
-
-type StreamConfig struct {
-    api.Stream `mapstructure:",squash" yaml:",inline"`
-    Properties map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *StreamConfig) GetProperty(name string) interface{} {
-    return s.Properties[name]
+    ApplyEnvironment() error
 }
 
 type PoolConfig struct {
-    api.Pool   `mapstructure:",squash" yaml:",inline"`
-    Properties map[string]interface{} `mapstructure:",remain"`
+    ExecutorsCount int                    `yaml:"executorsCount" mapstructure:"executorsCount"`
+    Name           string                 `yaml:"name" mapstructure:"name"`
+    Properties     map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *PoolConfig) GetProperty(name string) interface{} {
     return s.Properties[name]
 }
 
-var transformationNameMap = map[api.TransformationType]string{
-    api.AppSink:         "appSink",
-    api.CycleLink:       "cycleLink",
-    api.Sink:            "sink",
-    api.Filter:          "filter",
-    api.FlatMap:         "flatMap",
-    api.FlatMapIterable: "flatMapIterable",
-    api.ForEach:         "forEach",
-    api.Input:           "input",
-    api.Join:            "join",
-    api.KeyBy:           "keyBy",
-    api.Map:             "map",
-    api.Merge:           "merge",
-    api.MultiJoin:       "multiJoin",
-    api.Parallels:       "parallels",
-    api.Split:           "split",
-    api.Delay:           "delay",
-    api.AppInput:        "appInput",
+type ModuleConfig struct {
+    Name       string                 `yaml:"name" mapstructure:"name"`
+    Path       string                 `yaml:"path" mapstructure:"path"`
+    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *StreamConfig) GetTransformationName() string {
-    return transformationNameMap[s.Type]
+func (s *ModuleConfig) GetProperty(name string) interface{} {
+    return s.Properties[name]
+}
+
+var transformationNameMap = map[api.TransformationType]string{
+    api.TransformationTypeCycleLink:       "cycleLink",
+    api.TransformationTypeSink:            "sink",
+    api.TransformationTypeFilter:          "filter",
+    api.TransformationTypeFlatMap:         "flatMap",
+    api.TransformationTypeFlatMapIterable: "flatMapIterable",
+    api.TransformationTypeProcess:         "process",
+    api.TransformationTypeInput:           "input",
+    api.TransformationTypeJoin:            "join",
+    api.TransformationTypeKeyBy:           "keyBy",
+    api.TransformationTypeMap:             "map",
+    api.TransformationTypeMerge:           "merge",
+    api.TransformationTypeMultiJoin:       "multiJoin",
+    api.TransformationTypeSplit:           "split",
+    api.TransformationTypeDelay:           "delay",
+    api.TransformationTypeError:           "error",
+}
+
+func GetTransformationName(t api.TransformationType) string {
+    return transformationNameMap[t]
 }
 
 type ServiceConfig struct {
-    api.Service `mapstructure:",squash" yaml:",inline"`
-    Properties  map[string]interface{} `mapstructure:",remain" yaml:",inline"`
+    Color                string                 `yaml:"color" mapstructure:"color"`
+    DefaultCallSemantics *CallSemanticsGroup    `yaml:"defaultCallSemantics,omitempty" mapstructure:"defaultCallSemantics"`
+    DelayExecutors       int                    `yaml:"delayExecutors" mapstructure:"delayExecutors"`
+    Environment          string                 `yaml:"environment" mapstructure:"environment"`
+    GrpcHost             string                 `yaml:"grpcHost" mapstructure:"grpcHost"`
+    GrpcPort             int                    `yaml:"grpcPort" mapstructure:"grpcPort"`
+    HttpHost             string                 `yaml:"httpHost" mapstructure:"httpHost"`
+    HttpPort             int                    `yaml:"httpPort" mapstructure:"httpPort"`
+    ID                   int                    `yaml:"id" mapstructure:"id"`
+    LogLevel             api.LogLevel           `yaml:"logLevel,omitempty" mapstructure:"logLevel"`
+    MetricsHandler       string                 `yaml:"metricsHandler" mapstructure:"metricsHandler"`
+    Name                 string                 `yaml:"name" mapstructure:"name"`
+    ShutdownTimeout      int                    `yaml:"shutdownTimeout" mapstructure:"shutdownTimeout"`
+    StatusHandler        string                 `yaml:"statusHandler" mapstructure:"statusHandler"`
+    Properties           map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *ServiceConfig) GetProperty(name string) interface{} {
     return s.Properties[name]
 }
 
-type LinkConfig struct {
-    api.Link   `mapstructure:",squash" yaml:",inline"`
-    Properties map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *LinkConfig) GetProperty(name string) interface{} {
-    return s.Properties[name]
-}
-
-type DataConnectorConfig struct {
-    api.DataConnector `mapstructure:",squash" yaml:",inline"`
-    Properties        map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *DataConnectorConfig) GetProperty(name string) interface{} {
-    return s.Properties[name]
-}
-
-type EndpointConfig struct {
-    api.Endpoint `mapstructure:",squash" yaml:",inline"`
-    Properties   map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *EndpointConfig) GetProperty(name string) interface{} {
-    return s.Properties[name]
-}
-
-type ProjectSettings struct {
-    api.ProjectSettings `mapstructure:",squash" yaml:",inline"`
-    Properties          map[string]interface{} `mapstructure:",remain" yaml:",inline"`
-}
-
-func (s *ProjectSettings) GetProperty(name string) interface{} {
-    return s.Properties[name]
-}
-
-func GetConfigProperty[T any](config ConfigProperties, name string) T {
-    value := config.GetProperty(name)
-    if value != nil {
-        return value.(T)
-    }
-    var t T
-    return t
-}
-
-type LinkId struct {
+type LinkID struct {
     From int
     To   int
 }
 
 type RuntimeConfig struct {
-    StreamsByName        map[string]*StreamConfig
-    ServicesByName       map[string]*ServiceConfig
-    LinksById            map[LinkId]*LinkConfig
-    DataConnectorsByName map[string]*DataConnectorConfig
-    EndpointsByName      map[string]*EndpointConfig
-    StreamsById          map[int]*StreamConfig
-    ServicesById         map[int]*ServiceConfig
-    DataConnectorsById   map[int]*DataConnectorConfig
-    EndpointsById        map[int]*EndpointConfig
-    PoolByName           map[string]*PoolConfig
+    streamsByName        map[string]StreamConfig
+    servicesByName       map[string]*ServiceConfig
+    linksByID            map[LinkID]*LinkConfig
+    dataConnectorsByName map[string]DataConnectorConfig
+    endpointsByName      map[string]EndpointConfig
+    streamsByID          map[int]StreamConfig
+    servicesByID         map[int]*ServiceConfig
+    dataConnectorsByID   map[int]DataConnectorConfig
+    endpointsByID        map[int]EndpointConfig
+    poolByName           map[string]*PoolConfig
+    config               Config
 }
 
-type ServiceAppConfig struct {
-    Streams        []StreamConfig        `yaml:"streams"`
-    Services       []ServiceConfig       `yaml:"services"`
-    Links          []LinkConfig          `yaml:"links"`
-    DataConnectors []DataConnectorConfig `yaml:"dataConnectors"`
-    Endpoints      []EndpointConfig      `yaml:"endpoints"`
-    Pools          []PoolConfig          `yaml:"pools"`
-    Settings       ProjectSettings       `yaml:"settings"`
-    runtimeConfig  *RuntimeConfig        `yaml:"-"`
-}
-
-func (cfg *ServiceAppConfig) InitRuntimeConfig() {
-    cfg.runtimeConfig = &RuntimeConfig{
-        StreamsByName:        make(map[string]*StreamConfig),
-        StreamsById:          make(map[int]*StreamConfig),
-        ServicesByName:       make(map[string]*ServiceConfig),
-        ServicesById:         make(map[int]*ServiceConfig),
-        EndpointsById:        make(map[int]*EndpointConfig),
-        DataConnectorsById:   make(map[int]*DataConnectorConfig),
-        EndpointsByName:      make(map[string]*EndpointConfig),
-        DataConnectorsByName: make(map[string]*DataConnectorConfig),
-        LinksById:            make(map[LinkId]*LinkConfig),
-        PoolByName:           make(map[string]*PoolConfig),
+func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
+    runtimeCfg := &RuntimeConfig{
+        config:               config,
+        streamsByName:        make(map[string]StreamConfig),
+        streamsByID:          make(map[int]StreamConfig),
+        servicesByName:       make(map[string]*ServiceConfig),
+        servicesByID:         make(map[int]*ServiceConfig),
+        endpointsByID:        make(map[int]EndpointConfig),
+        dataConnectorsByID:   make(map[int]DataConnectorConfig),
+        endpointsByName:      make(map[string]EndpointConfig),
+        dataConnectorsByName: make(map[string]DataConnectorConfig),
+        linksByID:            make(map[LinkID]*LinkConfig),
+        poolByName:           make(map[string]*PoolConfig),
     }
-    for idx := range cfg.Streams {
-        cfg.runtimeConfig.StreamsByName[cfg.Streams[idx].Name] = &cfg.Streams[idx]
-        cfg.runtimeConfig.StreamsById[cfg.Streams[idx].Id] = &cfg.Streams[idx]
+
+    for _, v := range config.GetStreams() {
+        runtimeCfg.streamsByName[v.GetName()] = v
+        runtimeCfg.streamsByID[v.GetID()] = v
     }
-    for idx := range cfg.Services {
-        cfg.runtimeConfig.ServicesByName[cfg.Services[idx].Name] = &cfg.Services[idx]
-        cfg.runtimeConfig.ServicesById[cfg.Services[idx].Id] = &cfg.Services[idx]
+    for _, v := range config.GetServices() {
+        runtimeCfg.servicesByName[v.Name] = v
+        runtimeCfg.servicesByID[v.ID] = v
     }
-    for idx := range cfg.Endpoints {
-        cfg.runtimeConfig.EndpointsByName[cfg.Endpoints[idx].Name] = &cfg.Endpoints[idx]
-        cfg.runtimeConfig.EndpointsById[cfg.Endpoints[idx].Id] = &cfg.Endpoints[idx]
+    for _, v := range config.GetEndpoints() {
+        runtimeCfg.endpointsByName[v.GetName()] = v
+        runtimeCfg.endpointsByID[v.GetID()] = v
     }
-    for idx := range cfg.DataConnectors {
-        cfg.runtimeConfig.DataConnectorsById[cfg.DataConnectors[idx].Id] = &cfg.DataConnectors[idx]
-        cfg.runtimeConfig.DataConnectorsByName[cfg.DataConnectors[idx].Name] = &cfg.DataConnectors[idx]
+    for _, v := range config.GetDataConnectors() {
+        runtimeCfg.dataConnectorsByID[v.GetID()] = v
+        runtimeCfg.dataConnectorsByName[v.GetName()] = v
     }
-    for idx := range cfg.Pools {
-        cfg.runtimeConfig.PoolByName[cfg.Pools[idx].Name] = &cfg.Pools[idx]
+    for _, v := range config.GetPools() {
+        runtimeCfg.poolByName[v.Name] = v
     }
-    for idx := range cfg.Links {
-        cfg.runtimeConfig.LinksById[LinkId{From: cfg.Links[idx].From, To: cfg.Links[idx].To}] = &cfg.Links[idx]
+    for _, v := range config.GetLinks() {
+        if err := v.Validate(); err != nil {
+            return nil, fmt.Errorf("validate link error: %w", err)
+        }
+        runtimeCfg.linksByID[LinkID{From: v.From, To: v.To}] = v
     }
+    return runtimeCfg, nil
 }
 
-func (cfg *ServiceAppConfig) AppConfig() *ServiceAppConfig {
-    return cfg
+func (cfg *RuntimeConfig) GetConfig() Config {
+    return cfg.config
 }
 
-func (cfg *ServiceAppConfig) GetStreamConfigByName(name string) *StreamConfig {
-    return cfg.runtimeConfig.StreamsByName[name]
+func (cfg *RuntimeConfig) GetStreamConfigByName(name string) StreamConfig {
+    return cfg.streamsByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetDataConnectorById(id int) *DataConnectorConfig {
-    return cfg.runtimeConfig.DataConnectorsById[id]
+func (cfg *RuntimeConfig) GetDataConnectorByID(id int) DataConnectorConfig {
+    return cfg.dataConnectorsByID[id]
 }
 
-func (cfg *ServiceAppConfig) GetEndpointConfigById(id int) *EndpointConfig {
-    return cfg.runtimeConfig.EndpointsById[id]
+func (cfg *RuntimeConfig) GetEndpointConfigByID(id int) EndpointConfig {
+    return cfg.endpointsByID[id]
 }
 
-func (cfg *ServiceAppConfig) GetServiceConfigByName(name string) *ServiceConfig {
-    return cfg.runtimeConfig.ServicesByName[name]
+func (cfg *RuntimeConfig) GetServiceConfigByName(name string) *ServiceConfig {
+    return cfg.servicesByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetServiceConfigById(id int) *ServiceConfig {
-    return cfg.runtimeConfig.ServicesById[id]
+func (cfg *RuntimeConfig) GetServiceConfigByID(id int) *ServiceConfig {
+    return cfg.servicesByID[id]
 }
 
-func (cfg *ServiceAppConfig) GetStreamConfigById(id int) *StreamConfig {
-    return cfg.runtimeConfig.StreamsById[id]
+func (cfg *RuntimeConfig) GetStreamConfigByID(id int) StreamConfig {
+    return cfg.streamsByID[id]
 }
 
-func (cfg *ServiceAppConfig) GetPoolByName(name string) *PoolConfig {
-    return cfg.runtimeConfig.PoolByName[name]
+func (cfg *RuntimeConfig) GetPoolByName(name string) *PoolConfig {
+    return cfg.poolByName[name]
 }
 
-func (cfg *ServiceAppConfig) GetLink(from int, to int) *LinkConfig {
-    return cfg.runtimeConfig.LinksById[LinkId{From: from, To: to}]
+func (cfg *RuntimeConfig) GetLink(from int, to int) *LinkConfig {
+    return cfg.linksByID[LinkID{From: from, To: to}]
 }

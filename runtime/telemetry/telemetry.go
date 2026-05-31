@@ -8,22 +8,34 @@
 package telemetry
 
 import (
-	"fmt"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
-	"github.com/gorundebug/servicelib/runtime/telemetry/prometheus"
+    "context"
+
+    "github.com/gorundebug/servicelib/runtime/environment"
+    "github.com/gorundebug/servicelib/runtime/environment/metrics"
+    "github.com/gorundebug/servicelib/runtime/environment/tracing"
+    "github.com/gorundebug/servicelib/runtime/telemetry/opentelemetry"
 )
 
-type MetricsEngineType int
+func CreatePrometheusMetricsEngine(env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+    return opentelemetry.CreatePrometheusMetricsEngine(env)
+}
 
-const (
-	Prometheus MetricsEngineType = 1
-)
+func CreateOTLPMetricsEngine(ctx context.Context, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+    return opentelemetry.CreateOTLPMetricsEngine(ctx, env)
+}
 
-func CreateMetricsEngine(metricsEngineType MetricsEngineType, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
-	switch metricsEngineType {
-	case Prometheus:
-		return prometheus.CreateMetricsEngine(env), nil
-	}
-	return nil, fmt.Errorf("unsupported metrics engine type: %d", metricsEngineType)
+func WithContextSampler() opentelemetry.TracingOption {
+    return opentelemetry.WithContextSampler()
+}
+
+func CreateStdoutTracingEngine(env environment.ServiceEnvironment, opts ...opentelemetry.TracingOption) (tracing.TracingEngine, error) {
+    return opentelemetry.CreateStdoutTracingEngine(env, opts...)
+}
+
+func CreateOTLPTracingEngine(ctx context.Context, env environment.ServiceEnvironment, opts ...opentelemetry.TracingOption) (tracing.TracingEngine, error) {
+    return opentelemetry.CreateOTLPTracingEngine(ctx, env, opts...)
+}
+
+func CreatePrettyTracingEngine(env environment.ServiceEnvironment, opts ...opentelemetry.TracingOption) (tracing.TracingEngine, error) {
+    return opentelemetry.CreatePrettyTracingEngine(env, opts...)
 }

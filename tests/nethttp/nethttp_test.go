@@ -11,22 +11,26 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/gorundebug/servicelib/tests/mockservice"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/gorundebug/servicelib/tests/mockservice"
+	"github.com/stretchr/testify/assert"
 )
 
+var testEnv *mockservice.TestEnv
+
 func TestMain(m *testing.M) {
-	mockservice.Main("..", func() int {
+	mockservice.Main("..", func(env *mockservice.TestEnv) int {
+		testEnv = env
 		return m.Run()
 	})
 }
 
 func sendRequest() error {
-	url := "http://localhost:8080/data"
+	url := "http://127.0.0.1:9091/data"
 	data := []byte(`{"text":"OK"}`)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -60,10 +64,11 @@ func sendRequest() error {
 }
 
 func TestNetHTTPEndpointConsumer(t *testing.T) {
-	service := mockservice.GetMockService()
+	service := testEnv.Service
 	assert.Equal(t, nil, sendRequest())
-	assert.NotNilf(t, service.RequestData, "request data is nil")
-	if service.RequestData != nil {
-		assert.Equal(t, "OK", service.RequestData.Text)
+	rd := service.RequestData.Load()
+	assert.NotNilf(t, rd, "request data is nil")
+	if rd != nil {
+		assert.Equal(t, "OK", rd.Text)
 	}
 }

@@ -9,8 +9,9 @@ package serde
 
 import (
 	"fmt"
-	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"reflect"
+
+	"github.com/gorundebug/servicelib/runtime/datastruct"
 )
 
 type Serializer interface {

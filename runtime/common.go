@@ -9,98 +9,105 @@ package runtime
 
 import (
 	"context"
+	"net/http"
+	"reflect"
+	"time"
+
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/pool"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	"io"
-	"reflect"
-	"time"
+	"github.com/gorundebug/servicelib/runtime/store"
 )
 
-type ServiceExecutionEnvironment interface {
+type RuntimeEnvironment interface {
 	environment.ServiceEnvironment
-	GetSerde(valueType reflect.Type) (serde.Serializer, error)
+
 	ServiceInit() error
-	StreamsInit(ctx context.Context)
-	SetConfig(config config.Config)
 	Start(context.Context) error
+	ReloadConfig()
 	Stop(context.Context)
-	AddDataSource(dataSource DataSource)
-	GetDataSource(id int) DataSource
+	Release()
+
+	GetRuntime() ServiceExecutionRuntime
+
+	MetricsEngine() metrics.MetricsEngine
+	TracingEngine() tracing.TracingEngine
+	HasCustomHTTPServer() bool
+
 	GetTaskPool(name string) pool.TaskPool
 	GetPriorityTaskPool(name string) pool.PriorityTaskPool
+
+	AddDataSource(dataSource DataSource)
+	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
-	GetConsumeTimeout(from int, to int) time.Duration
-	GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader
-	GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter
+
 	Delay(duration time.Duration, f func())
-	GetRuntime() ServiceExecutionRuntime
-	Release()
-	GetHttpRouter() httprouter.HttpRouter
+
+	GetSerde(valueType reflect.Type) (serde.Serializer, error)
+	RegisterHTTPHandler(path string, handler http.Handler)
+	RegisterStream(stream RuntimeStream)
+	RegisterStorage(storage store.Storage)
+	CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage
 }
 
 type DelayFunc[T any] func(T) error
 
 type DataConnector interface {
 	GetName() string
-	GetId() int
+	GetID() int
 }
 
 type Endpoint interface {
 	GetName() string
-	GetId() int
+	GetID() int
 	GetDataConnector() DataConnector
-}
-
-type EndpointReader interface {
-}
-
-type EndpointWriter interface {
-}
-
-type TypedEndpointReader[T any] interface {
-	EndpointReader
-	Read(io.Reader) (T, error)
-}
-
-type TypedEndpointWriter[T any] interface {
-	EndpointWriter
-	Write(T, io.Writer) error
 }
 
 type Stream interface {
 	GetName() string
 	GetTransformationName() string
 	GetTypeName() string
-	GetId() int
-	GetConfig() *config.StreamConfig
-	GetEnvironment() ServiceExecutionEnvironment
+	GetID() int
+	GetConfig() config.StreamConfig
+	GetEnvironment() environment.ServiceEnvironment
+}
+
+type TypedSerializedStream[T any] interface {
+	Stream
+	GetSerde() serde.StreamSerde[T]
+}
+
+type RuntimeStream interface {
+	Build() error
+	GetRuntimeEnvironment() RuntimeEnvironment
+	Stream() Stream
 	GetConsumers() []Stream
-	Validate() error
+}
+
+type TypedSerializedRuntimeStream[T any] interface {
+	RuntimeStream
+	TypedSerializedStream[T]
 }
 
 type TypedStream[T any] interface {
-	Stream
+	TypedSerializedRuntimeStream[T]
 	GetConsumer() TypedStreamConsumer[T]
-	GetSerde() serde.StreamSerde[T]
 	SetConsumer(TypedStreamConsumer[T])
 }
 
 type Consumer[T any] interface {
-	Consume(T)
+	Consume(context.Context, T)
 }
 
 type SinkCallback[T any] interface {
-	Done(T, error)
-}
-
-type SinkConsumer[T any] interface {
-	Consumer[T]
-	SetSinkCallback(SinkCallback[T])
+	Done(context.Context, T, error)
 }
 
 type TypedConsumedStream[T any] interface {
@@ -113,14 +120,19 @@ type TypedTransformConsumedStream[T, R any] interface {
 	Consumer[T]
 }
 
+type TypedProcessConsumedStream[T, R, E any] interface {
+	TypedTransformConsumedStream[T, R]
+	GetErrorStream() TypedConsumedStream[E]
+}
+
 type TypedJoinConsumedStream[K comparable, T1, T2, R any] interface {
 	TypedTransformConsumedStream[datastruct.KeyValue[K, T1], R]
-	ConsumeRight(datastruct.KeyValue[K, T2])
+	ConsumeRight(context.Context, datastruct.KeyValue[K, T2])
 }
 
 type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
 	TypedTransformConsumedStream[datastruct.KeyValue[K, T], R]
-	ConsumeRight(int, datastruct.KeyValue[K, interface{}])
+	ConsumeRight(context.Context, int, datastruct.KeyValue[K, interface{}])
 }
 
 type TypedLinkStream[T any] interface {
@@ -133,43 +145,51 @@ type TypedSplitStream[T any] interface {
 	AddStream() TypedConsumedStream[T]
 }
 
-type TypedBinarySplitStream[T any] interface {
-	TypedBinaryConsumedStream[T]
-	AddStream() TypedConsumedStream[T]
+type WhenStream interface {
+	Stream
+	ConsumeCase(ctx context.Context, value any)
+	SetIndex(index int)
+	GetWhenConsumer() Stream
+	GetType() reflect.Type
 }
 
-type TypedBinaryKVSplitStream[T any] interface {
-	TypedBinaryKVConsumedStream[T]
-	AddStream() TypedConsumedStream[T]
-}
-
-type TypedInputStream[T any] interface {
+type TypedWhenStream[T any] interface {
 	TypedConsumedStream[T]
-	GetEndpointId() int
+	WhenStream
 }
 
-type TypedSinkStream[T, R any] interface {
-	TypedTransformConsumedStream[T, R]
-	GetEndpointId() int
-	SetSinkConsumer(SinkConsumer[T])
+type TypedCaseStream[T any] interface {
+	TypedConsumedStream[T]
+	AddStream(WhenStream) error
 }
 
 type BinaryConsumer interface {
-	ConsumeBinary([]byte)
+	ConsumeBinary(context.Context, []byte, []byte) error
 }
 
-type BinaryKVConsumer interface {
-	ConsumeBinary([]byte, []byte)
-}
-
-type TypedBinaryConsumedStream[T any] interface {
+type TypedInputStream[T, R, E any] interface {
 	TypedConsumedStream[T]
-	BinaryConsumer
+	GetErrorStream() TypedConsumedStream[E]
+	GetEndpointId() int
+	SetResultConsumer(resultConsumer Consumer[R])
+	GetResultStream() TypedSerializedStream[R]
+	SetSource(TypedStream[R])
 }
 
-type TypedBinaryKVConsumedStream[T any] interface {
-	TypedConsumedStream[T]
-	BinaryKVConsumer
+type TypedSinkStream[T, E any] interface {
+	RuntimeStream
+	TypedStreamConsumer[T]
+	GetErrorStream() TypedConsumedStream[E]
+	SetSinkConsumer(Consumer[T])
+	GetEndpointId() int
+}
+
+type TypedSinkStreamWithResult[T, R, E any] interface {
+	TypedTransformConsumedStream[T, R]
+	GetErrorStream() TypedConsumedStream[E]
+	ConsumeResult(ctx context.Context, value R)
+	SetSinkConsumer(Consumer[T])
+	GetEndpointId() int
 }
 
 type TypedStreamConsumer[T any] interface {
@@ -177,20 +197,84 @@ type TypedStreamConsumer[T any] interface {
 	Consumer[T]
 }
 
-type ConsumerFunc[T any] func(T) error
+type ConsumerFunc[T any] func(context.Context, T)
 
-func (f ConsumerFunc[T]) Consume(value T) error {
-	return f(value)
+func (f ConsumerFunc[T]) Consume(ctx context.Context, value T) {
+	f(ctx, value)
 }
 
-type BinaryConsumerFunc func([]byte) error
-
-func (f BinaryConsumerFunc) Consume(data []byte) error {
-	return f(data)
+type ErrorType[T any] struct {
+	Value T
+	Error error
 }
 
-type BinaryKVConsumerFunc func([]byte, []byte) error
+// StreamContext bundles the typed stream, result stream, output collector, and
+// error collector for datasource endpoint handlers.
+type StreamContext[T, R, E any] struct {
+	Stream       TypedSerializedStream[T]
+	ResultStream TypedSerializedStream[R]
+	Logger       log.Logger
 
-func (f BinaryKVConsumerFunc) Consume(key []byte, value []byte) error {
-	return f(key, value)
+	collect      Collect[T]
+	errorCollect Collect[E]
+}
+
+func (s *StreamContext[T, R, E]) Collect(ctx context.Context, value T) {
+	s.collect.Out(ctx, value)
+}
+
+func (s *StreamContext[T, R, E]) ErrorCollect(ctx context.Context, value E) {
+	s.errorCollect.Out(ctx, value)
+}
+
+// MakeStreamContext creates a StreamContext for datasource endpoint handlers.
+func MakeStreamContext[T, R, E any](
+	stream TypedSerializedStream[T],
+	resultStream TypedSerializedStream[R],
+	collect Collect[T],
+	errorCollect Collect[E],
+) StreamContext[T, R, E] {
+	return StreamContext[T, R, E]{
+		Stream:       stream,
+		ResultStream: resultStream,
+		Logger:       stream.GetEnvironment().Log(),
+		collect:      collect,
+		errorCollect: errorCollect,
+	}
+}
+
+// SinkStreamContext bundles the result stream, output collector, and error collector
+// for datasink endpoint handlers. The stream provides serde access for the result type R.
+type SinkStreamContext[T, R, E any] struct {
+	Stream TypedSerializedStream[R]
+	Logger log.Logger
+
+	collect      Collect[R]
+	errorCollect Collect[E]
+}
+
+func (s *SinkStreamContext[T, R, E]) Collect(ctx context.Context, value R) {
+	s.collect.Out(ctx, value)
+}
+
+func (s *SinkStreamContext[T, R, E]) ErrorCollect(ctx context.Context, value E) {
+	s.errorCollect.Out(ctx, value)
+}
+
+func (s *SinkStreamContext[T, R, E]) Log() log.Logger {
+	return s.Stream.GetEnvironment().Log()
+}
+
+// MakeSinkStreamContext creates a SinkStreamContext for datasink endpoint handlers.
+func MakeSinkStreamContext[T, R, E any](
+	stream TypedSerializedStream[R],
+	collect Collect[R],
+	errorCollect Collect[E],
+) SinkStreamContext[T, R, E] {
+	return SinkStreamContext[T, R, E]{
+		Stream:       stream,
+		Logger:       stream.GetEnvironment().Log(),
+		collect:      collect,
+		errorCollect: errorCollect,
+	}
 }

@@ -8,16 +8,19 @@
 package store
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/environment"
-	"time"
 )
 
 type JoinValueFunc func(values [][]interface{}) bool
 
 type JoinStorage[K comparable] interface {
 	Storage
-	JoinValue(key K, index int, value interface{}, f JoinValueFunc)
+	JoinValue(ctx context.Context, key K, index int, value interface{}, f JoinValueFunc)
 }
 
 type JoinStorageConfig interface {
@@ -28,12 +31,11 @@ type JoinStorageConfig interface {
 
 func MakeJoinStorage[K comparable](storageType api.JoinStorageType,
 	env environment.ServiceEnvironment,
-	cfg JoinStorageConfig) JoinStorage[K] {
+	cfg JoinStorageConfig) (JoinStorage[K], error) {
 	switch storageType {
-	case api.HashMap:
+	case api.JoinStorageTypeHashMap:
 		return MakeHashMapJoinStorage[K](env, cfg)
 	default:
-		env.Log().Fatalf("Join storage type %d is not supported", storageType)
-		return nil
+		return nil, fmt.Errorf("join storage type %d is not supported", storageType)
 	}
 }

@@ -9,23 +9,8 @@ package runtime
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/httprouter"
-	"github.com/gorundebug/servicelib/runtime/environment/log"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
-	"github.com/gorundebug/servicelib/runtime/logging"
-	"github.com/gorundebug/servicelib/runtime/pool"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/gorundebug/servicelib/runtime/store"
-	"github.com/gorundebug/servicelib/runtime/telemetry"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"net"
 	"net/http"
 	"reflect"
@@ -33,15 +18,27 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"github.com/gorundebug/servicelib/runtime/logging"
+	"github.com/gorundebug/servicelib/runtime/pool"
+	"github.com/gorundebug/servicelib/runtime/serde"
+	"github.com/gorundebug/servicelib/runtime/store"
+	"github.com/gorundebug/servicelib/runtime/telemetry"
 )
 
-var englishUpperCaser = cases.Upper(language.English)
+var _ RuntimeEnvironment = (*ServiceApp)(nil)
 
 type ServiceApp struct {
 	id                int
-	config            atomic.Pointer[config.ServiceAppConfig]
-	environment       ServiceExecutionEnvironment
-	streams           map[int]Stream
+	config            atomic.Pointer[config.RuntimeConfig]
+	environment       RuntimeEnvironment
+	streams           map[int]RuntimeStream
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
@@ -50,7 +47,8 @@ type ServiceApp struct {
 	httpServerDone    chan struct{}
 	metrics           metrics.Metrics
 	metricsEngine     metrics.MetricsEngine
-	consumeStatistics map[config.LinkId]ConsumeStatistics
+	tracingEngine     tracing.TracingEngine
+	consumeStatistics map[config.LinkID]ConsumeStatistics
 	storages          []store.Storage
 	delayPool         pool.DelayPool
 	taskPools         map[string]pool.TaskPool
@@ -59,75 +57,82 @@ type ServiceApp struct {
 	logsEngine        log.LogsEngine
 	log               log.Logger
 	dep               environment.ServiceDependencies
-	httpRouter        httprouter.HttpRouter
+	components        []environment.Lifecycle
 }
 
-func (app *ServiceApp) getConfig() *config.ServiceAppConfig {
+func (app *ServiceApp) GetSerde(_ reflect.Type) (serde.Serializer, error) {
+	return nil, nil
+}
+
+func (app *ServiceApp) AddComponent(component environment.Lifecycle) {
+	app.components = append(app.components, component)
+}
+
+func (app *ServiceApp) RuntimeConfig() *config.RuntimeConfig {
 	return app.config.Load()
+}
+
+func (app *ServiceApp) GetConfig() config.Config {
+	return app.RuntimeConfig().GetConfig()
 }
 
 func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
 	return app
 }
 
-func (app *ServiceApp) reloadConfig(cfg config.Config) {
-	appConfig := cfg.AppConfig()
-	app.config.Store(appConfig)
-	app.environment.SetConfig(cfg)
-}
-
-func (app *ServiceApp) AppConfig() *config.ServiceAppConfig {
-	return app.getConfig()
-}
-
-func (app *ServiceApp) getServiceConfig() *config.ServiceConfig {
-	return app.getConfig().GetServiceConfigById(app.id)
+func (app *ServiceApp) updateConfig(cfg *config.RuntimeConfig) {
+	app.config.Store(cfg)
+	app.environment.ReloadConfig()
 }
 
 func (app *ServiceApp) ServiceConfig() *config.ServiceConfig {
-	return app.getServiceConfig()
+	return app.RuntimeConfig().GetServiceConfigByID(app.id)
 }
 
 func (app *ServiceApp) ServiceDependencies() environment.ServiceDependencies {
 	return nil
 }
 
-func (app *ServiceApp) ReloadConfig(config config.Config) {
+func (app *ServiceApp) ReloadConfig() {
 }
 
 func (app *ServiceApp) Metrics() metrics.Metrics {
 	return app.metrics
 }
 
-func (app *ServiceApp) GetHttpRouter() httprouter.HttpRouter {
-	return app.httpRouter
+func (app *ServiceApp) MetricsEngine() metrics.MetricsEngine {
+	return app.metricsEngine
 }
 
-func (app *ServiceApp) registerStream(stream Stream) {
-	app.streams[stream.GetId()] = stream
+func (app *ServiceApp) Tracing() tracing.Tracing {
+	return app.tracingEngine.Tracing()
 }
 
-func (app *ServiceApp) registerStorage(storage store.Storage) {
+func (app *ServiceApp) TracingEngine() tracing.TracingEngine {
+	return app.tracingEngine
+}
+
+func (app *ServiceApp) RegisterStream(stream RuntimeStream) {
+	app.streams[stream.Stream().GetID()] = stream
+}
+
+func (app *ServiceApp) RegisterStorage(storage store.Storage) {
 	app.storages = append(app.storages, storage)
 }
 
-func (app *ServiceApp) registerSerde(tp reflect.Type, serializer serde.StreamSerializer) {
+func (app *ServiceApp) registerSerializer(tp reflect.Type, serializer serde.StreamSerializer) {
 	app.serdes[tp] = serializer
 }
 
-func (app *ServiceApp) getRegisteredSerde(tp reflect.Type) serde.StreamSerializer {
+func (app *ServiceApp) getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer {
 	return app.serdes[tp]
 }
 
-func (app *ServiceApp) registerConsumeStatistics(linkId config.LinkId, statistics ConsumeStatistics) {
-	app.consumeStatistics[linkId] = statistics
+func (app *ServiceApp) registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics) {
+	app.consumeStatistics[linkID] = statistics
 }
 
 func (app *ServiceApp) Log() log.Logger {
-	return app.getLog()
-}
-
-func (app *ServiceApp) getLog() log.Logger {
 	return app.log
 }
 
@@ -135,47 +140,54 @@ func (app *ServiceApp) ServiceInit() error {
 	return nil
 }
 
-func (app *ServiceApp) AddHandler(pattern string, handler http.Handler) {
-	app.mux.Handle(pattern, handler)
-}
-
-func (app *ServiceApp) RouteHandler() http.Handler {
-	return app.mux
+func (app *ServiceApp) RegisterHTTPHandler(path string, handler http.Handler) {
+	if app.mux == nil {
+		panic("http server was not initialized for application")
+	}
+	app.mux.Handle(path, handler)
 }
 
 func (app *ServiceApp) ServiceContext() interface{} {
 	return app.environment
 }
 
-func (app *ServiceApp) serviceInit(name string,
-	env ServiceExecutionEnvironment,
+func (app *ServiceApp) initRuntime(name string,
+	env RuntimeEnvironment,
 	dep environment.ServiceDependencies,
 	loader ServiceLoader,
-	cfg config.Config) error {
+	runtimeConfig *config.RuntimeConfig,
+) error {
 
 	var err error
 
 	app.dep = dep
 	app.loader = loader
 	app.environment = env
+	app.config.Store(runtimeConfig)
 
-	appConfig := cfg.AppConfig()
-	app.config.Store(appConfig)
-
-	serviceConfig := appConfig.GetServiceConfigByName(name)
+	serviceConfig := runtimeConfig.GetServiceConfigByName(name)
 	if serviceConfig == nil {
 		return fmt.Errorf("cannot find service config for %s", name)
 	}
-	app.id = serviceConfig.Id
+	app.id = serviceConfig.ID
 
 	if dep == nil {
 		dep = env.ServiceDependencies()
 	}
 
 	if dep != nil {
-		app.logsEngine = dep.LogsEngine(env)
-		app.metricsEngine = dep.MetricsEngine(env)
-		app.httpRouter = dep.HttpRouter(env)
+		app.logsEngine, err = dep.LogsEngine(env)
+		if err != nil {
+			return err
+		}
+		app.metricsEngine, err = dep.MetricsEngine(env)
+		if err != nil {
+			return err
+		}
+		app.tracingEngine, err = dep.TracingEngine(env)
+		if err != nil {
+			return err
+		}
 	}
 
 	if app.logsEngine == nil {
@@ -187,247 +199,109 @@ func (app *ServiceApp) serviceInit(name string,
 	app.log = app.logsEngine.DefaultLogger(nil)
 
 	if app.metricsEngine == nil {
-		app.metricsEngine, err = telemetry.CreateMetricsEngine(telemetry.Prometheus, env)
+		app.metricsEngine, err = telemetry.CreatePrometheusMetricsEngine(env)
 		if err != nil {
 			return err
 		}
 	}
 	app.metrics = app.metricsEngine.Metrics()
 
-	app.streams = make(map[int]Stream)
-	app.consumeStatistics = make(map[config.LinkId]ConsumeStatistics)
+	if app.tracingEngine == nil {
+		app.tracingEngine, err = telemetry.CreateStdoutTracingEngine(env)
+		if err != nil {
+			return err
+		}
+	}
+
+	infoGauge, err := app.metrics.Scope("service", metrics.Labels{
+		"service":     serviceConfig.Name,
+		"environment": serviceConfig.Environment,
+	}).Gauge("info", "Service information (value is always 1)", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create service_info gauge: %w", err)
+	}
+	infoGauge.Set(1)
+
+	app.streams = make(map[int]RuntimeStream)
+	app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
 
-	app.delayPool = pool.MakeDelayTaskPool(env)
+	app.delayPool, err = pool.MakeDelayTaskPool(env)
+	if err != nil {
+		return err
+	}
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	if app.httpRouter == nil {
+	makeTaskPool := func(callSemantics config.CallSemanticsConfig) error {
+		switch cs := callSemantics.(type) {
+		case *config.FunctionCallSemanticsConfig: // skip
+		case *config.TaskPoolCallSemanticsConfig:
+			poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
+			if poolConfig == nil {
+				poolConfig = &config.PoolConfig{
+					Name:           cs.PoolName,
+					ExecutorsCount: 1,
+					Properties:     nil,
+				}
+			}
+			if _, ok := app.taskPools[poolConfig.Name]; !ok {
+				p, err := pool.MakeTaskPool(env, poolConfig)
+				if err != nil {
+					return err
+				}
+				app.taskPools[poolConfig.Name] = p
+			}
+		case *config.PriorityTaskPoolCallSemanticsConfig:
+			poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
+			if poolConfig == nil {
+				poolConfig = &config.PoolConfig{
+					Name:           cs.PoolName,
+					ExecutorsCount: 1,
+					Properties:     nil,
+				}
+			}
+			if _, ok := app.priorityTaskPools[poolConfig.Name]; !ok {
+				p, err := pool.MakePriorityTaskPool(env, poolConfig)
+				if err != nil {
+					return err
+				}
+				app.priorityTaskPools[poolConfig.Name] = p
+			}
+		}
+		return nil
+	}
+
+	if serviceConfig.DefaultCallSemantics != nil {
+		callSemantics := serviceConfig.DefaultCallSemantics.Get()
+		if callSemantics != nil {
+			if err = makeTaskPool(callSemantics); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, link := range runtimeConfig.GetConfig().GetLinks() {
+		callSemantics := link.GetCallSemantics()
+		if callSemantics != nil {
+			if err = makeTaskPool(callSemantics); err != nil {
+				return err
+			}
+		}
+	}
+
+	if !app.environment.HasCustomHTTPServer() {
 		app.mux = http.NewServeMux()
-		app.httpRouter = app
 	}
 
-	if len(serviceConfig.StatusHandler) > 0 {
-		app.httpRouter.AddHandler(fmt.Sprintf("/%s", serviceConfig.StatusHandler), http.HandlerFunc(app.statusHandler))
-		app.httpRouter.AddHandler(fmt.Sprintf("/%s/data", serviceConfig.StatusHandler), http.HandlerFunc(app.dataHandler))
-	}
-
-	if len(serviceConfig.MetricsHandler) > 0 {
-		app.httpRouter.AddHandler(fmt.Sprintf("/%s", serviceConfig.MetricsHandler), app.metricsEngine.MetricsHandler())
-	}
-
-	if serviceConfig.HttpPort > 0 {
-		app.httpServerDone = make(chan struct{})
-		app.httpServer = &http.Server{
-			Handler: app.httpRouter.RouteHandler(),
-			Addr:    fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort),
-		}
-	}
-
-	for idx := range appConfig.Links {
-		link := &appConfig.Links[idx]
-		streamFrom := appConfig.GetStreamConfigById(link.From)
-		streamTo := appConfig.GetStreamConfigById(link.To)
-		if streamFrom.IdService == serviceConfig.Id || streamTo.IdService == serviceConfig.Id {
-			var callSemantics api.CallSemantics
-			if streamFrom.IdService == serviceConfig.Id {
-				callSemantics = link.CallSemantics
-			} else {
-				if link.IncomeCallSemantics == nil {
-					return fmt.Errorf("income call semantics does not defined for link{from=%d, to=%d}", link.From, link.To)
-				}
-				callSemantics = *link.IncomeCallSemantics
-			}
-			if callSemantics != api.FunctionCall &&
-				callSemantics != api.PriorityTaskPool &&
-				callSemantics != api.TaskPool {
-				return fmt.Errorf("invalid call semantics %d defined for link{from=%d, to=%d}", callSemantics, link.From, link.To)
-			}
-			if callSemantics != api.FunctionCall {
-				var poolName string
-				if streamFrom.IdService == serviceConfig.Id {
-					if link.PoolName == nil {
-						return fmt.Errorf("pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
-					}
-					if callSemantics == api.PriorityTaskPool && link.Priority == nil {
-						return fmt.Errorf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
-					}
-					poolName = *link.PoolName
-				} else {
-					if link.IncomePoolName == nil {
-						return fmt.Errorf("income pool name does not defined for link{from=%d, to=%d}", link.From, link.To)
-					}
-					if callSemantics == api.PriorityTaskPool && link.IncomePriority == nil {
-						return fmt.Errorf("priority for link{from=%d, to=%d} does not defines", link.From, link.To)
-					}
-					poolName = *link.IncomePoolName
-				}
-				poolConfig := appConfig.GetPoolByName(poolName)
-				if poolConfig == nil {
-					return fmt.Errorf("task pool %q not found for link{from=%d, to=%d}", poolName, link.From, link.To)
-				}
-				if callSemantics == api.TaskPool {
-					if _, ok := app.taskPools[poolName]; !ok {
-						app.taskPools[poolName] = pool.MakeTaskPool(env, poolName)
-					}
-				} else {
-					if _, ok := app.priorityTaskPools[poolName]; !ok {
-						app.priorityTaskPools[poolName] = pool.MakePriorityTaskPool(env, poolName)
-					}
-				}
-			}
-		}
-	}
-	env.SetConfig(cfg)
 	return env.ServiceInit()
 }
 
-//go:embed status.html
-var statusHtml []byte
-
-func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(statusHtml); err != nil {
-		app.Log().Warnf("statusHandler write error: %s", err.Error())
-	}
-}
-
-type Node struct {
-	Id    int `json:"id"`
-	Color struct {
-		Background string `json:"background"`
-	} `json:"color"`
-	Opacity float32 `json:"opacity"`
-	Label   string  `json:"label"`
-	X       int     `json:"x"`
-	Y       int     `json:"y"`
-}
-
-type Edge struct {
-	From   int    `json:"from"`
-	To     int    `json:"to"`
-	Arrows string `json:"arrows"`
-	Length int    `json:"length"`
-	Label  string `json:"label"`
-	Color  struct {
-		Opacity float32 `json:"opacity"`
-		Color   string  `json:"color"`
-	} `json:"color"`
-}
-
-const (
-	opacity    = float32(1.0)
-	edgeColor  = "#0050FF"
-	edgeLength = 200
-)
-
-func (app *ServiceApp) makeNode(stream Stream) *Node {
-	appConfig := app.getConfig()
-	cfg := stream.GetConfig()
-	serviceConfig := app.getServiceConfig()
-	background := serviceConfig.Color
-	serviceName := serviceConfig.Name
-	if cfg.IdService != serviceConfig.Id {
-		for i := range appConfig.Services {
-			if appConfig.Services[i].Id == cfg.IdService {
-				serviceName = appConfig.Services[i].Name
-				background = appConfig.Services[i].Color
-				break
-			}
-		}
-	}
-
-	label := fmt.Sprintf("%s(%s)\n[%s]", stream.GetName(),
-		englishUpperCaser.String(stream.GetTransformationName()), serviceName)
-
-	return &Node{
-		Id: stream.GetId(),
-		Color: struct {
-			Background string `json:"background"`
-		}{Background: background},
-		X:       cfg.XPos,
-		Y:       cfg.YPos,
-		Opacity: opacity,
-		Label:   label,
-	}
-}
-
-func (app *ServiceApp) makeEdges(stream Stream) []*Edge {
-	edges := make([]*Edge, 0)
-
-	for _, consumer := range stream.GetConsumers() {
-		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
-		label, _ = strings.CutPrefix(label, "types.")
-		if stat, ok := app.consumeStatistics[config.LinkId{From: stream.GetId(), To: consumer.GetId()}]; ok {
-			label += fmt.Sprintf("\ncalls: %d", stat.Count())
-		}
-
-		cfg := consumer.GetConfig()
-
-		if cfg.Type == api.Join ||
-			cfg.Type == api.MultiJoin {
-			if cfg.IdSource == stream.GetId() {
-				label = label + " (L)"
-			} else {
-				label = label + " (R)"
-			}
-		}
-
-		edges = append(edges, &Edge{
-			From:   stream.GetId(),
-			To:     consumer.GetId(),
-			Arrows: "to",
-			Length: edgeLength,
-			Label:  label,
-			Color: struct {
-				Opacity float32 `json:"opacity"`
-				Color   string  `json:"color"`
-			}{Opacity: opacity, Color: edgeColor},
-		})
-	}
-
-	return edges
-}
-
-type NetworkData struct {
-	Nodes []*Node `json:"nodes"`
-	Edges []*Edge `json:"edges"`
-}
-
-func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	networkData := NetworkData{
-		Nodes: make([]*Node, 0, len(app.streams)),
-		Edges: make([]*Edge, 0, len(app.streams)*2),
-	}
-	for _, stream := range app.streams {
-		networkData.Nodes = append(networkData.Nodes, app.makeNode(stream))
-		networkData.Edges = append(networkData.Edges, app.makeEdges(stream)...)
-	}
-	jsonData, err := json.Marshal(networkData)
-	if err != nil {
-		http.Error(w, "Error serializing data to JSON", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if _, err := w.Write(jsonData); err != nil {
-		app.Log().Warnf("dataHandler write error: %s", err.Error())
-	}
+func (app *ServiceApp) HasCustomHTTPServer() bool {
+	return false
 }
 
 func (app *ServiceApp) GetDataSource(id int) DataSource {
@@ -435,26 +309,22 @@ func (app *ServiceApp) GetDataSource(id int) DataSource {
 }
 
 func (app *ServiceApp) AddDataSource(dataSource DataSource) {
-	app.dataSources[dataSource.GetId()] = dataSource
+	app.dataSources[dataSource.GetID()] = dataSource
 }
 
 func (app *ServiceApp) GetDataSink(id int) DataSink {
 	return app.dataSinks[id]
 }
 
-func (app *ServiceApp) GetEndpointReader(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointReader {
-	return nil
-}
-
-func (app *ServiceApp) GetEndpointWriter(endpoint Endpoint, stream Stream, valueType reflect.Type) EndpointWriter {
+func (app *ServiceApp) CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage {
 	return nil
 }
 
 func (app *ServiceApp) AddDataSink(dataSink DataSink) {
-	app.dataSinks[dataSink.GetId()] = dataSink
+	app.dataSinks[dataSink.GetID()] = dataSink
 }
 
-func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error) {
+func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, error) {
 	if ser, err := app.environment.GetSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
 	} else if ser != nil {
@@ -467,50 +337,32 @@ func (app *ServiceApp) getSerde(valueType reflect.Type) (serde.Serializer, error
 		return ser, nil
 	}
 
-	return nil, fmt.Errorf("getSerde error. Unsupported type: %s", valueType.Name())
+	return nil, fmt.Errorf("getSerializer error. Unsupported type: %s", valueType.Name())
 }
 
 func (app *ServiceApp) Start(ctx context.Context) error {
+
+	serviceConfig := app.environment.ServiceConfig()
+
 	for _, stream := range app.streams {
-		if err := stream.Validate(); err != nil {
+		if err := stream.Build(); err != nil {
 			return err
 		}
 	}
 
-	serviceConfig := app.getServiceConfig()
-
-	if app.httpServer != nil {
-		addr := app.httpServer.Addr
-		if addr == "" {
-			addr = ":http"
-		}
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return err
-		}
-		go func() {
-			app.Log().Infof("Http service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
-
-			err := app.httpServer.Serve(ln)
-			if !errors.Is(err, http.ErrServerClosed) {
-				app.Log().Fatalln(err)
-			}
-			app.httpServerDone <- struct{}{}
-		}()
-	}
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
-			app.Log().Fatalln(err)
+			return err
 		}
 	}
 	for _, v := range app.dataSinks {
 		if err := v.Start(ctx); err != nil {
-			app.Log().Fatalln(err)
+			return err
 		}
 	}
 	for _, v := range app.storages {
 		if err := v.Start(ctx); err != nil {
-			app.Log().Fatalln(err)
+			return err
 		}
 	}
 	if err := app.delayPool.Start(ctx); err != nil {
@@ -526,6 +378,57 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, component := range app.components {
+		if err := component.Start(ctx); err != nil {
+			return err
+		}
+	}
+
+	if len(serviceConfig.StatusHandler) > 0 {
+		statusPath := "/" + strings.TrimPrefix(serviceConfig.StatusHandler, "/")
+		app.environment.RegisterHTTPHandler(statusPath, http.HandlerFunc(app.statusHandler))
+		app.environment.RegisterHTTPHandler(statusPath+"/data", http.HandlerFunc(app.dataHandler))
+		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.js", http.HandlerFunc(app.visJSHandler))
+		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.css", http.HandlerFunc(app.visCSSHandler))
+	}
+
+	if len(serviceConfig.MetricsHandler) > 0 && app.metricsEngine.HTTPMetricsHandler() != nil {
+		metricsPath := "/" + strings.TrimPrefix(serviceConfig.MetricsHandler, "/")
+		app.environment.RegisterHTTPHandler(metricsPath, app.metricsEngine.HTTPMetricsHandler())
+	}
+
+	if app.mux != nil {
+		var handler http.Handler = app.mux
+		if app.metricsEngine != nil {
+			handler = app.metricsEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
+		}
+		if app.tracingEngine != nil {
+			handler = app.tracingEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
+			inner := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Trace") != "" {
+					r = r.WithContext(tracing.EnableSampling(r.Context()))
+				}
+				inner.ServeHTTP(w, r)
+			})
+		}
+		addr := fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort)
+		app.httpServerDone = make(chan struct{})
+		app.httpServer = &http.Server{Handler: handler, Addr: addr}
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			return err
+		}
+		go func() {
+			app.environment.Log().Infof("Http service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+			err := app.httpServer.Serve(ln)
+			if !errors.Is(err, http.ErrServerClosed) {
+				panic(err)
+			}
+			app.httpServerDone <- struct{}{}
+		}()
+	}
+
 	return nil
 }
 
@@ -533,7 +436,7 @@ func (app *ServiceApp) Release() {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
-	serviceConfig := app.getServiceConfig()
+	serviceConfig := app.ServiceConfig()
 
 	wg := sync.WaitGroup{}
 
@@ -565,6 +468,14 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		}()
 	}
 
+	for _, v := range app.components {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
 	for _, v := range app.dataSources {
 		wg.Add(1)
 		go func() {
@@ -579,13 +490,13 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 			defer wg.Done()
 			go func() {
 				if err := app.httpServer.Shutdown(ctx); err != nil {
-					app.Log().Warnf("server shutdown: %s", err.Error())
+					app.environment.Log().Warnf("server shutdown: %s", err.Error())
 				}
 			}()
 			select {
 			case <-app.httpServerDone:
 			case <-ctx.Done():
-				app.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
+				app.environment.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 			}
 		}()
 	}
@@ -602,7 +513,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		app.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+		app.environment.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -625,19 +536,16 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			app.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+			app.environment.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
-}
 
-func (app *ServiceApp) GetConsumeTimeout(from int, to int) time.Duration {
-	appConfig := app.getConfig()
-	serviceConfig := app.getServiceConfig()
-	link := appConfig.GetLink(from, to)
-	if link == nil || link.Timeout == nil {
-		return time.Duration(serviceConfig.DefaultGrpcTimeout) * time.Millisecond
+	if err := app.metricsEngine.Shutdown(ctx); err != nil {
+		app.environment.Log().Warnf("metrics engine shutdown: %s", err.Error())
 	}
-	return time.Duration(*link.Timeout) * time.Millisecond
+	if err := app.tracingEngine.Shutdown(ctx); err != nil {
+		app.environment.Log().Warnf("tracing engine shutdown: %s", err.Error())
+	}
 }
 
 func (app *ServiceApp) Delay(duration time.Duration, f func()) {

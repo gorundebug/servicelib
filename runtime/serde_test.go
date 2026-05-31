@@ -8,19 +8,76 @@
 package runtime
 
 import (
-	"context"
-	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/datastruct"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
 type MockServiceConfig struct {
-	config.ServiceAppConfig `mapstructure:",squash"`
+	Services struct {
+		MockService config.ServiceConfig `yaml:"mockService"`
+	} `yaml:"services"`
+
+	Streams struct {
+	} `yaml:"streams"`
+
+	DataConnectors struct {
+	} `yaml:"dataConnectors"`
+
+	Endpoints struct {
+	} `yaml:"endpoints"`
+
+	Pools struct {
+	} `yaml:"pools"`
+
+	Links struct {
+	} `yaml:"links"`
+
+	Properties map[string]interface{} `yaml:",inline"`
+}
+
+func (c *MockServiceConfig) GetProperty(name string) interface{} {
+	return c.Properties[name]
+}
+
+func (c *MockServiceConfig) GetServices() []*config.ServiceConfig {
+	return []*config.ServiceConfig{
+		&c.Services.MockService,
+	}
+}
+
+func (c *MockServiceConfig) GetStreams() []config.StreamConfig {
+	return []config.StreamConfig{}
+}
+
+func (c *MockServiceConfig) GetDataConnectors() []config.DataConnectorConfig {
+	return []config.DataConnectorConfig{}
+}
+
+func (c *MockServiceConfig) GetEndpoints() []config.EndpointConfig {
+	return []config.EndpointConfig{}
+}
+
+func (c *MockServiceConfig) GetPools() []*config.PoolConfig {
+	return []*config.PoolConfig{}
+}
+
+func (c *MockServiceConfig) GetLinks() []*config.LinkConfig {
+	return []*config.LinkConfig{}
+}
+
+func (c *MockServiceConfig) GetModules() []*config.ModuleConfig {
+	return []*config.ModuleConfig{}
+}
+
+func (c *MockServiceConfig) ApplyEnvironment() error {
+	return nil
 }
 
 type MockService struct {
@@ -38,34 +95,35 @@ func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	return nil, nil
 }
 
-func (s *MockService) StreamsInit(ctx context.Context) {
-}
-
-func (s *MockService) SetConfig(config config.Config) {}
-
 func mockService(environment string) *MockService {
-
 	cfg := MockServiceConfig{
-		ServiceAppConfig: config.ServiceAppConfig{
-			Services: []config.ServiceConfig{
-				{
-					Service: api.Service{
-						Name:           "MockService",
-						HttpHost:       "127.0.0.1",
-						HttpPort:       9000,
-						MetricsHandler: "metrics",
-						StatusHandler:  "status",
-						Environment:    environment,
-						DelayExecutors: 1,
-					},
-				},
+		Services: struct {
+			MockService config.ServiceConfig `yaml:"mockService"`
+		}{
+			MockService: config.ServiceConfig{
+				Name:           "MockService",
+				HttpHost:       "127.0.0.1",
+				HttpPort:       9000,
+				MetricsHandler: "metrics",
+				StatusHandler:  "status",
+				Environment:    environment,
+				DelayExecutors: 1,
 			},
 		},
+		Streams:        struct{}{},
+		DataConnectors: struct{}{},
+		Endpoints:      struct{}{},
+		Pools:          struct{}{},
+		Links:          struct{}{},
+		Properties:     make(map[string]interface{}),
 	}
-	cfg.InitRuntimeConfig()
 	service := MockService{}
-	if err := service.serviceInit("MockService", &service, nil, &MockServiceLoader{}, &cfg); err != nil {
+	if runtimeCfg, err := config.NewRuntimeConfig(&cfg); err != nil {
 		panic(err)
+	} else {
+		if err := service.initRuntime("MockService", &service, nil, &MockServiceLoader{}, runtimeCfg); err != nil {
+			panic(err)
+		}
 	}
 	return &service
 }
@@ -116,7 +174,7 @@ func BenchmarkRangeWithCollection(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		col := NewCollection(a)
+		col := MakeCollection(a)
 		sum := 0
 		l := col.Len()
 		for j := 0; j < l; j++ {

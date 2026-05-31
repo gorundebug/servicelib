@@ -7,42 +7,32 @@
 
 package runtime
 
+import "context"
+
 type Collect[T any] interface {
-	Out(value T)
+	Out(ctx context.Context, value T)
+}
+
+type CollectFunc[T any] func(context.Context, T)
+
+func (f CollectFunc[T]) Out(ctx context.Context, v T) {
+	f(ctx, v)
 }
 
 type collector[T any] struct {
 	caller Caller[T]
 }
 
-func (c *collector[T]) Out(value T) {
+func (c *collector[T]) Out(ctx context.Context, value T) {
 	if c.caller != nil {
-		c.caller.Consume(value)
+		c.caller.Consume(ctx, value)
 	}
 }
 
-func makeCollector[T any](
-	caller Caller[T]) *collector[T] {
+func MakeCollector[T any](
+	caller Caller[T],
+) Collect[T] {
 	return &collector[T]{
-		caller: caller,
-	}
-}
-
-type parallelsCollector[T any] struct {
-	caller Caller[T]
-}
-
-func (c *parallelsCollector[T]) Out(value T) {
-	if c.caller != nil {
-		go func(value T) {
-			c.caller.Consume(value)
-		}(value)
-	}
-}
-
-func makeParallelsCollector[T any](
-	caller Caller[T]) *parallelsCollector[T] {
-	return &parallelsCollector[T]{
 		caller: caller,
 	}
 }

@@ -8,7 +8,6 @@
 package kafka
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,99 +15,251 @@ import (
 	"sync"
 	"time"
 
-	kafka "github.com/Shopify/sarama"
+	kafka "github.com/IBM/sarama"
+
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/serde"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"github.com/gorundebug/servicelib/runtime/store"
 )
 
-type HandlerData struct {
-	Stream   runtime.Stream
-	Endpoint runtime.Endpoint
-	Message  *kafka.ConsumerMessage
-	Session  kafka.ConsumerGroupSession
-	Claim    kafka.ConsumerGroupClaim
+const pendingRotationInterval = 30 * time.Second
+
+type handlerData struct {
+	message *kafka.ConsumerMessage
+	session kafka.ConsumerGroupSession
+	claim   kafka.ConsumerGroupClaim
 }
 
-type SaramaKafkaEndpointHandler[T any] interface {
-	Handler(*HandlerData, runtime.Collect[T])
+type ConsumerMessage struct {
+	handlerData *handlerData
+	Key, Value  []byte
+	Topic       string
+	Partition   int32
+	Offset      int64
 }
 
-type SaramaKafkaInputEndpoint interface {
+func (m *ConsumerMessage) Commit() {
+	m.handlerData.session.Commit()
+}
+
+func (m *ConsumerMessage) MarkMessage(metadata string) {
+	m.handlerData.session.MarkMessage(m.handlerData.message, metadata)
+}
+
+// StreamContext bundles the typed stream, result stream, output collector, and error collector
+// that are passed to every EndpointHandler lifecycle method.
+type StreamContext[T, R, E any] = runtime.StreamContext[T, R, E]
+
+// ResultCallback is the callback type registered via ResultContext.SetResultCallback.
+// It is called when a pipeline result R with a matching messageID arrives.
+// Return true to deregister the callback after this invocation; false to keep it active.
+type ResultCallback[HandlerState, T, R, E any] func(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+	handlerState HandlerState,
+	value R,
+) bool
+
+// ResultContext is given to EndpointHandler.ConsumeMessage.
+// The handler registers result callbacks keyed by messageID.
+// Done() signals that response processing is complete.
+// Committing/marking the Kafka message is done explicitly via ConsumerMessage.Commit()/MarkMessage().
+type ResultContext[HandlerState, T, R, E any] interface {
+	SetResultCallback(messageID string, cb ResultCallback[HandlerState, T, R, E])
+	Done()
+}
+
+type kafkaResult[HandlerState, T, R, E any] struct {
+	once               sync.Once
+	handlerState       HandlerState
+	span               tracing.Span
+	doneCh             chan struct{}
+	mu                 sync.RWMutex
+	cbMu               sync.Mutex
+	messageCallbackMap map[string]ResultCallback[HandlerState, T, R, E]
+}
+
+func (r *kafkaResult[HandlerState, T, R, E]) SetResultCallback(messageID string, cb ResultCallback[HandlerState, T, R, E]) {
+	r.cbMu.Lock()
+	defer r.cbMu.Unlock()
+	r.messageCallbackMap[messageID] = cb
+}
+
+func (r *kafkaResult[HandlerState, T, R, E]) Done() {
+	r.once.Do(func() {
+		tracing.SpanEvent(r.span, "done")
+		close(r.doneCh)
+	})
+}
+
+// EndpointHandler handles Kafka messages for a single endpoint.
+//
+// Pipeline lifecycle (pipeline result expected):
+//
+//	BeginRequest → ConsumeMessage → [await result] → EndRequest
+//	                    │                  ↑
+//	                    └─ SetResultCallback → cb(R)
+//
+// The framework blocks after ConsumeMessage until Done() is called on the
+// ResultContext (either directly in ConsumeMessage, or via a registered callback
+// when a matching pipeline result R arrives). EndRequest is called only after
+// Done() is signalled or the context is cancelled.
+//
+// Pipeline lifecycle (no pipeline result):
+//
+//	BeginRequest → ConsumeMessage → EndRequest
+//
+// Concurrency returns the maximum number of Kafka messages processed in parallel.
+// It is called on every incoming message so the limit can change dynamically.
+// Returning 0 means unlimited concurrency.
+//
+// BeginRequest initialises per-message handler state. If it returns a non-nil
+// error the pipeline will not be started: the framework will NOT call
+// ConsumeMessage or EndRequest. BeginRequest is therefore responsible for
+// releasing any resources it acquired before returning the error.
+//
+// ConsumeMessage is called once per Kafka message. It receives a ConsumerMessage
+// (Key, Value, Topic, Partition, Offset, and Commit/MarkMessage helpers) and may
+// push decoded values into the pipeline via sc.Collect, or register a callback via
+// resultCtx.SetResultCallback to be notified when a matching pipeline result arrives
+// asynchronously. If it returns a non-nil error the framework stops processing:
+// EndRequest is called with that error.
+//
+// EndRequest finalises the message handling. It receives the error that caused the
+// pipeline to stop (nil on the happy path). Unlike gRPC handlers, EndRequest does
+// not return an error.
+//
+// GetMessageID correlates an inbound pipeline result value R with the originating
+// message, enabling the framework to route the result back via the correct
+// ResultContext callback.
+//
+// Thread safety:
+// GetMessageID and the ResultContext callbacks registered via SetResultCallback
+// may be called concurrently from multiple goroutines (one per pipeline result
+// that arrives for the same message), and may also run concurrently with an
+// in-progress ConsumeMessage call. Implementations must synchronise all access
+// to HandlerState inside these methods.
+// BeginRequest, ConsumeMessage, and EndRequest are called sequentially from a
+// single goroutine per message, so no synchronisation is needed among them —
+// but access to HandlerState from these methods still requires synchronisation
+// if it is shared with GetMessageID or a registered callback.
+type EndpointHandler[HandlerState, T, R, E any] interface {
+	// Concurrency returns the maximum number of messages processed in parallel.
+	// Called on every incoming message so the limit can change dynamically.
+	// Returning 0 means unlimited.
+	Concurrency(sc StreamContext[T, R, E]) int
+	BeginRequest(ctx context.Context, sc StreamContext[T, R, E]) (context.Context, HandlerState, error)
+	ConsumeMessage(ctx context.Context, sc StreamContext[T, R, E], handlerState HandlerState, msgData ConsumerMessage, resultCtx ResultContext[HandlerState, T, R, E]) error
+	GetMessageID(ctx context.Context, sc StreamContext[T, R, E], handlerState HandlerState, value R) string
+	EndRequest(ctx context.Context, sc StreamContext[T, R, E], err error, handlerState HandlerState)
+}
+
+type resultConsumer[R any] interface {
+	consumeResult(ctx context.Context, value R)
+}
+
+type resultConsumerProxy[R any] struct {
+	consumer resultConsumer[R]
+}
+
+func (c *resultConsumerProxy[R]) Consume(ctx context.Context, value R) {
+	c.consumer.consumeResult(ctx, value)
+}
+
+type saramaKafkaInputEndpoint interface {
 	runtime.InputEndpoint
 	Start(context.Context, kafka.ClusterAdmin) error
 	Stop(context.Context)
 }
 
-type SaramaKafkaEndpointConsumer interface {
+type saramaKafkaEndpointConsumer interface {
 	runtime.InputEndpointConsumer
 	Start(context.Context) error
 	Stop(context.Context)
+	EndpointRequest(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim, message *kafka.ConsumerMessage)
 }
 
-type SaramaKafkaInputDataSource interface {
+type saramaKafkaInputDataSource interface {
 	runtime.DataSource
-	WaitGroup() *sync.WaitGroup
+	waitGroup() *sync.WaitGroup
 }
 
-type SaramaKafkaDataSource struct {
+type saramaKafkaDataSource struct {
 	*runtime.InputDataSource
 	wg sync.WaitGroup
 }
 
-type SaramaKafkaEndpoint struct {
+type saramaKafkaEndpoint struct {
 	*runtime.DataSourceEndpoint
-}
-
-type TypedSaramaKafkaEndpointConsumer[T any] struct {
-	*runtime.DataSourceEndpointConsumer[T]
-	reader        runtime.TypedEndpointReader[T]
+	consumer      saramaKafkaEndpointConsumer
 	consumerGroup kafka.ConsumerGroup
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
-	handler       SaramaKafkaEndpointHandler[T]
 }
 
-func makeKafkaConfig(cfg *config.DataConnectorConfig) (*kafka.Config, error) {
+type saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E any] struct {
+	*runtime.DataSourceEndpointConsumer[T, R, E]
+	sc        StreamContext[T, R, E]
+	hasResult bool
+	handler   EndpointHandler[HandlerState, T, R, E]
+	pending   *store.RotatingMap[string, *kafkaResult[HandlerState, T, R, E]]
+	concMu    sync.Mutex
+	concCond  *sync.Cond
+	active    int
+	stopped   bool
+	tracer    tracing.Tracer
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) Out(ctx context.Context, value T) {
+	ec.Consume(ctx, value)
+}
+
+func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
 	kafkaConfig := kafka.NewConfig()
 
-	if cfg.Version == nil {
+	if cfg.Version == "" {
 		kafkaConfig.Version = kafka.V2_6_0_0
 	} else {
 		var err error
-		kafkaConfig.Version, err = kafka.ParseKafkaVersion(*cfg.Version)
+		kafkaConfig.Version, err = kafka.ParseKafkaVersion(cfg.Version)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse kafka version for data connector with id %d", cfg.Id)
+			return nil, fmt.Errorf("failed to parse kafka version for data connector %q", cfg.Name)
 		}
 	}
-	if cfg.DialTimeout != nil {
-		kafkaConfig.Net.DialTimeout = time.Duration(*cfg.DialTimeout) * time.Millisecond
+	if cfg.DialTimeout != 0 {
+		kafkaConfig.Net.DialTimeout = time.Duration(cfg.DialTimeout) * time.Millisecond
 	}
 	return kafkaConfig, nil
 }
 
-func (ds *SaramaKafkaDataSource) Start(ctx context.Context) error {
-	cfg := ds.GetDataConnector()
-	if cfg.Brokers == nil {
-		return fmt.Errorf("no brokers specified for data connector with id %d", ds.GetId())
+func (ds *saramaKafkaDataSource) Start(ctx context.Context) error {
+	cfg, ok := ds.GetConfig().(*config.KafkaDataConnectorConfig)
+	if !ok || cfg.Implementation != api.DataConnectorImplementationIBMsarama {
+		return fmt.Errorf("invalid data connector configuration for saramaKafkaDataSource")
+	}
+
+	if cfg.Brokers == "" {
+		return fmt.Errorf("no brokers specified for data connector %q", ds.GetName())
 	}
 	kafkaConfig, err := makeKafkaConfig(cfg)
 	if err != nil {
 		return err
 	}
 
-	brokers := strings.Split(*cfg.Brokers, ",")
+	brokers := strings.Split(cfg.Brokers, ",")
 
 	admin, err := kafka.NewClusterAdmin(brokers, kafkaConfig)
 	if err != nil {
-		return fmt.Errorf("create kafka admin failed for sink endpoint with id=%d: %v",
-			ds.GetId(), err)
+		return fmt.Errorf("create kafka admin failed for data connector %q: %v",
+			ds.GetName(), err)
 	}
 
-	endpoints := ds.InputDataSource.GetEndpoints()
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
-		if err := endpoints.At(i).(SaramaKafkaInputEndpoint).Start(ctx, admin); err != nil {
+		if err := endpoints.At(i).(saramaKafkaInputEndpoint).Start(ctx, admin); err != nil {
 			return err
 		}
 	}
@@ -116,19 +267,19 @@ func (ds *SaramaKafkaDataSource) Start(ctx context.Context) error {
 	return nil
 }
 
-func (ds *SaramaKafkaDataSource) WaitGroup() *sync.WaitGroup {
+func (ds *saramaKafkaDataSource) waitGroup() *sync.WaitGroup {
 	return &ds.wg
 }
 
-func (ds *SaramaKafkaDataSource) Stop(ctx context.Context) {
-	endpoints := ds.InputDataSource.GetEndpoints()
+func (ds *saramaKafkaDataSource) Stop(ctx context.Context) {
+	endpoints := ds.GetEndpoints()
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
 		ds.wg.Add(1)
-		go func(endpoint SaramaKafkaInputEndpoint) {
+		go func(endpoint saramaKafkaInputEndpoint) {
 			defer ds.wg.Done()
 			endpoint.Stop(ctx)
-		}(endpoints.At(i).(SaramaKafkaInputEndpoint))
+		}(endpoints.At(i).(saramaKafkaInputEndpoint))
 	}
 	c := make(chan struct{})
 	go func() {
@@ -138,107 +289,94 @@ func (ds *SaramaKafkaDataSource) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ds.GetEnvironment().Log().Warnf("Stop kafka data source id=%d after timeout.", ds.GetId())
+		ds.OnStopTimeout(ctx)
 	}
 }
 
-func (ep *SaramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
-	cfg := ep.GetConfig()
-	if cfg.Topic == nil {
-		return fmt.Errorf("no topic specified for sink endpoint with id %d", ep.GetId())
+func (ep *saramaKafkaEndpoint) Setup(_ kafka.ConsumerGroupSession) error {
+	return nil
+}
+
+func (ep *saramaKafkaEndpoint) Cleanup(_ kafka.ConsumerGroupSession) error {
+	return nil
+}
+
+func (ep *saramaKafkaEndpoint) ConsumeClaim(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim) error {
+	for message := range claim.Messages() {
+		ep.consumer.EndpointRequest(session, claim, message)
 	}
-	if cfg.CreateTopic != nil && *cfg.CreateTopic {
+	return nil
+}
+
+func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
+	cfg, ok := ep.GetConfig().(*config.KafkaEndpointConfig)
+	if !ok {
+		return fmt.Errorf("invalid kafka endpoint configuration for endpoint %q", ep.GetName())
+	}
+	if cfg.Topic == "" {
+		return fmt.Errorf("no topic specified for endpoint %q", ep.GetName())
+	}
+	if cfg.CreateTopic {
 		numPartitions := 1
-		if cfg.Partitions != nil {
-			numPartitions = *cfg.Partitions
+		if cfg.Partitions != 0 {
+			numPartitions = cfg.Partitions
 		}
-
 		replicationFactor := 1
-		if cfg.ReplicationFactor != nil {
-			replicationFactor = *cfg.ReplicationFactor
+		if cfg.ReplicationFactor != 0 {
+			replicationFactor = cfg.ReplicationFactor
 		}
-
 		topicDetail := &kafka.TopicDetail{
 			NumPartitions:     int32(numPartitions),
 			ReplicationFactor: int16(replicationFactor),
 		}
-
-		if err := admin.CreateTopic(*cfg.Topic, topicDetail, false); err != nil {
+		if err := admin.CreateTopic(cfg.Topic, topicDetail, false); err != nil {
 			var kafkaErr *kafka.TopicError
 			if !errors.As(err, &kafkaErr) || !errors.Is(kafkaErr.Err, kafka.ErrTopicAlreadyExists) {
-				return fmt.Errorf("create topic failed for sink endpoint with id=%d: %v",
-					ep.GetId(), err)
+				return fmt.Errorf("create topic failed for endpoint %q: %v",
+					ep.GetName(), err)
 			}
 		}
 	}
 
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		if err := endpointConsumers.At(i).(SaramaKafkaEndpointConsumer).Start(ctx); err != nil {
-			return err
-		}
+	if err := ep.consumer.Start(ctx); err != nil {
+		return err
 	}
 
-	return nil
-}
-
-func (ep *SaramaKafkaEndpoint) Stop(ctx context.Context) {
-	endpointConsumers := ep.GetEndpointConsumers()
-	length := endpointConsumers.Len()
-	for i := 0; i < length; i++ {
-		endpointConsumers.At(i).(SaramaKafkaEndpointConsumer).Stop(ctx)
+	dsCfg, ok := ep.GetDataSource().GetConfig().(*config.KafkaDataConnectorConfig)
+	if !ok || dsCfg.Implementation != api.DataConnectorImplementationIBMsarama {
+		return fmt.Errorf("invalid data connector configuration for endpoint %q", ep.GetName())
 	}
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) getDataSource() SaramaKafkaInputDataSource {
-	return ec.Endpoint().GetDataSource().(SaramaKafkaInputDataSource)
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) Start(ctx context.Context) error {
-	reader := ec.Endpoint().GetEnvironment().GetEndpointReader(ec.Endpoint(), ec.Stream(), serde.GetSerdeType[T]())
-	if reader == nil {
-		return fmt.Errorf("reader does not defined for endpoint with id=%d", ec.Endpoint().GetId())
-	}
-	var ok bool
-	ec.reader, ok = reader.(runtime.TypedEndpointReader[T])
-	if !ok {
-		return fmt.Errorf("reader has invalid type for endpoint with id=%d", ec.Endpoint().GetId())
-	}
-	dataSourceCfg := ec.Endpoint().GetDataSource().GetDataConnector()
-	kafkaConfig, err := makeKafkaConfig(dataSourceCfg)
+	kafkaConfig, err := makeKafkaConfig(dsCfg)
 	if err != nil {
 		return err
 	}
 	kafkaConfig.Consumer.Offsets.Initial = kafka.OffsetOldest
-	brokers := strings.Split(*dataSourceCfg.Brokers, ",")
 
-	if ec.Endpoint().GetConfig().ConsumerGroup == nil {
-		return fmt.Errorf("consumer group does not set for kafka source endpoint with id=%d",
-			ec.Endpoint().GetId())
+	if cfg.ConsumerGroup == "" {
+		return fmt.Errorf("consumer group does not set for kafka source endpoint %q", ep.GetName())
 	}
 
-	ec.consumerGroup, err = kafka.NewConsumerGroup(brokers, *ec.Endpoint().GetConfig().ConsumerGroup, kafkaConfig)
+	ep.consumerGroup, err = kafka.NewConsumerGroup(
+		strings.Split(dsCfg.Brokers, ","),
+		cfg.ConsumerGroup,
+		kafkaConfig,
+	)
 	if err != nil {
-		return fmt.Errorf("new consumer group failed for kafka source endpoint with id=%d: %v",
-			ec.Endpoint().GetId(), err)
+		return fmt.Errorf("new consumer group failed for kafka source endpoint %q: %v",
+			ep.GetName(), err)
 	}
 
 	var cancelCtx context.Context
-	cancelCtx, ec.cancel = context.WithCancel(ctx)
-	ec.getDataSource().WaitGroup().Add(1)
-	ec.wg.Add(1)
+	cancelCtx, ep.cancel = context.WithCancel(ctx)
+	ep.wg.Add(1)
 	go func() {
-		defer func() {
-			ec.wg.Done()
-			ec.getDataSource().WaitGroup().Done()
-		}()
-		topics := []string{*ec.Endpoint().GetConfig().Topic}
+		defer ep.wg.Done()
+		topics := []string{cfg.Topic}
 		for {
-			if err := ec.consumerGroup.Consume(cancelCtx, topics, ec); err != nil {
-				ec.Endpoint().GetEnvironment().Log().Errorf(
-					"consumer group consume error for kafka source endpoint with id=%d: %v",
-					ec.Endpoint().GetId(), err)
+			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
+				ep.GetRuntimeEnvironment().Log().Errorf(
+					"consumer group consume error for kafka source endpoint %q: %v",
+					ep.GetName(), err)
 			}
 			if cancelCtx.Err() != nil {
 				break
@@ -249,118 +387,311 @@ func (ec *TypedSaramaKafkaEndpointConsumer[T]) Start(ctx context.Context) error 
 	return nil
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) Stop(ctx context.Context) {
-	ec.wg.Add(1)
+func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
+	ep.consumer.Stop(ctx)
+	ep.cancel()
+	c := make(chan struct{})
 	go func() {
-		defer func() {
-			ec.wg.Done()
-		}()
-		ec.cancel()
+		defer close(c)
+		ep.wg.Wait()
 	}()
-	go func() {
-		defer ec.getDataSource().WaitGroup().Done()
-
-		c := make(chan struct{})
-		go func() {
-			defer close(c)
-			ec.wg.Wait()
-		}()
-		select {
-		case <-c:
-			if err := ec.consumerGroup.Close(); err != nil {
-				ec.Endpoint().GetEnvironment().Log().Warnf("close consumer group failed for kafka source endpoint with id=%d: %v",
-					ec.Endpoint().GetId(), err)
-			}
-		case <-ctx.Done():
-			ec.Endpoint().GetEnvironment().Log().Warnf(
-				"Kafka source endpoint %d stopped by timeout.",
-				ec.Endpoint().GetId())
+	select {
+	case <-c:
+		if err := ep.consumerGroup.Close(); err != nil {
+			ep.GetRuntimeEnvironment().Log().Warnf(
+				"close consumer group failed for kafka source endpoint %q: %v",
+				ep.GetName(), err)
 		}
-	}()
+	case <-ctx.Done():
+		ep.GetRuntimeEnvironment().Log().Warnf(
+			"Kafka source endpoint %q stopped by timeout.", ep.GetName())
+	}
 }
 
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) Setup(session kafka.ConsumerGroupSession) error {
-	return nil
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) Cleanup(session kafka.ConsumerGroupSession) error {
-	return nil
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) Out(value T) {
-	ec.Stream().Consume(value)
-}
-
-func (ec *TypedSaramaKafkaEndpointConsumer[T]) ConsumeClaim(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		if ec.reader != nil {
-			value, err := ec.reader.Read(bytes.NewReader(message.Value))
-			if err != nil {
-				ec.Endpoint().GetEnvironment().Log().Warnf("read message error in endpoint with id=%d: %v",
-					ec.Endpoint().GetId(), err)
-			} else {
-				ec.Stream().Consume(value)
-				session.MarkMessage(message, "")
-			}
-		} else {
-			ec.handler.Handler(&HandlerData{
-				Stream:   ec.Stream(),
-				Endpoint: ec.Endpoint(),
-				Message:  message,
-				Session:  session,
-				Claim:    claim,
-			}, ec)
-		}
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) Start(ctx context.Context) error {
+	if ec.hasResult {
+		ec.pending = store.MakeRotatingMap[string, *kafkaResult[HandlerState, T, R, E]](pendingRotationInterval)
+		return ec.pending.Start(ctx)
 	}
 	return nil
 }
 
-func getSaramaKafkaDataSource(id int, env runtime.ServiceExecutionEnvironment) runtime.DataSource {
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) Stop(ctx context.Context) {
+	if ec.pending != nil {
+		ec.pending.Stop(ctx)
+	}
+	ec.concMu.Lock()
+	ec.stopped = true
+	ec.concMu.Unlock()
+	ec.concCond.Broadcast()
+}
+
+// acquireConcurrency blocks until a concurrency slot is available or the consumer is stopped.
+// Note: during a Kafka rebalance, session.Context() is cancelled by sarama. In-flight requests
+// will complete via handlerCtx.Done() and release their slots, which broadcasts to any goroutine
+// waiting here. This may slightly delay ConsumeClaim returning during rebalance, but is not
+// critical in practice since in-flight requests finish quickly on a cancelled context.
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) acquireConcurrency() bool {
+	for {
+		limit := ec.handler.Concurrency(ec.sc)
+
+		ec.concMu.Lock()
+		if ec.stopped {
+			ec.concMu.Unlock()
+			return false
+		}
+		if limit == 0 || ec.active < limit {
+			ec.active++
+			ec.concMu.Unlock()
+			return true
+		}
+		ec.concCond.Wait()
+		ec.concMu.Unlock()
+	}
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) releaseConcurrency() {
+	ec.concMu.Lock()
+	ec.active--
+	ec.concCond.Broadcast()
+	ec.concMu.Unlock()
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim, message *kafka.ConsumerMessage) {
+	if !ec.acquireConcurrency() {
+		return
+	}
+	defer ec.releaseConcurrency()
+
+	ctx := session.Context()
+	var span tracing.Span
+	if ec.tracer != nil {
+		ctx, span = ec.tracer.Start(ctx, "kafka.input",
+			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
+		)
+		defer span.End()
+	}
+	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
+	if err != nil {
+		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+		}
+		ec.Endpoint().OnBeginRequestFailed(ctx, err)
+		return
+	}
+	tracing.SpanEvent(span, "begin_request")
+	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
+
+	var streamID string
+	if sid, ok := runtime.StreamIdFromContext(handlerCtx); ok {
+		streamID = sid.GetID()
+	} else {
+		streamID = runtime.NewStreamID()
+		handlerCtx = runtime.WithStreamId(handlerCtx, streamID)
+	}
+	if span != nil {
+		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID), tracing.BoolAttr("has_result", ec.hasResult))
+	}
+
+	result := &kafkaResult[HandlerState, T, R, E]{
+		handlerState:       handlerState,
+		span:               span,
+		doneCh:             make(chan struct{}),
+		messageCallbackMap: make(map[string]ResultCallback[HandlerState, T, R, E]),
+	}
+	if ec.hasResult {
+		ec.pending.Set(streamID, result)
+	}
+
+	if err = ec.handler.ConsumeMessage(
+		handlerCtx,
+		ec.sc,
+		handlerState,
+		ConsumerMessage{
+			handlerData: &handlerData{
+				message: message,
+				session: session,
+				claim:   claim,
+			},
+			Key:       message.Key,
+			Value:     message.Value,
+			Topic:     message.Topic,
+			Partition: message.Partition,
+			Offset:    message.Offset,
+		},
+		result,
+	); err != nil {
+		if ec.hasResult {
+			result.mu.Lock()
+			defer result.mu.Unlock()
+			ec.pending.Pop(streamID)
+		}
+		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+		}
+		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+		return
+	}
+	tracing.SpanEvent(span, "consume_message")
+
+	if !ec.hasResult {
+		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
+		return
+	}
+
+	select {
+	case <-result.doneCh:
+		tracing.SpanEvent(span, "done")
+		result.mu.Lock()
+		defer result.mu.Unlock()
+		ec.pending.Pop(streamID)
+		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
+	case <-handlerCtx.Done():
+		tracing.SpanError(span, handlerCtx.Err())
+		if span != nil {
+			tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+		}
+		result.mu.Lock()
+		defer result.mu.Unlock()
+		ec.pending.Pop(streamID)
+		ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
+	}
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) consumeResult(ctx context.Context, value R) {
+	sid, ok := runtime.StreamIdFromContext(ctx)
+	if !ok {
+		ec.Endpoint().OnMissingStreamID(ctx)
+		return
+	}
+	result, loaded := ec.pending.Get(sid.GetID())
+	if !loaded {
+		ec.Endpoint().OnLateResult(ctx, sid.GetID())
+		return
+	}
+
+	result.mu.RLock()
+	defer result.mu.RUnlock()
+
+	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
+		ec.Endpoint().OnLateResult(ctx, sid.GetID())
+		tracing.SpanEvent(result.span, "late_result")
+		return
+	}
+
+	messageID := ec.handler.GetMessageID(ctx, ec.sc, result.handlerState, value)
+
+	result.cbMu.Lock()
+	cb, ok := result.messageCallbackMap[messageID]
+	result.cbMu.Unlock()
+	if !ok || cb == nil {
+		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
+		if result.span != nil {
+			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+		}
+		return
+	}
+	if cb(ctx, ec.sc, result.handlerState, value) {
+		result.cbMu.Lock()
+		if _, exists := result.messageCallbackMap[messageID]; exists {
+			delete(result.messageCallbackMap, messageID)
+		} else {
+			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
+			if result.span != nil {
+				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
+			}
+		}
+		result.cbMu.Unlock()
+	}
+	if result.span != nil {
+		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
+	}
+}
+
+func getOrCreateSaramaKafkaDataSource(id int, env runtime.RuntimeEnvironment) (runtime.DataSource, error) {
 	dataSource := env.GetDataSource(id)
 	if dataSource != nil {
-		return dataSource
+		return dataSource, nil
 	}
-	cfg := env.AppConfig().GetDataConnectorById(id)
+	cfg := env.RuntimeConfig().GetDataConnectorByID(id)
 	if cfg == nil {
-		env.Log().Fatalf("config for datasource with id=%d not found", id)
-		return nil
+		return nil, fmt.Errorf("config for datasource with id=%d not found", id)
 	}
-	kafkaDataSource := &SaramaKafkaDataSource{
-		InputDataSource: runtime.MakeInputDataSource(cfg, env),
+	inputDS, err := runtime.MakeInputDataSource(cfg, env)
+	if err != nil {
+		return nil, err
 	}
-	var inputDataSource SaramaKafkaInputDataSource = kafkaDataSource
+	kafkaDataSource := &saramaKafkaDataSource{
+		InputDataSource: inputDS,
+	}
+	var inputDataSource saramaKafkaInputDataSource = kafkaDataSource
 	env.AddDataSource(inputDataSource)
-	return inputDataSource
+	return inputDataSource, nil
 }
 
-func getSaramaKafkaDataSourceEndpoint(id int, env runtime.ServiceExecutionEnvironment) runtime.InputEndpoint {
-	cfg := env.AppConfig().GetEndpointConfigById(id)
+func createSaramaKafkaDataSourceEndpoint(id int, env runtime.RuntimeEnvironment) (*saramaKafkaEndpoint, error) {
+	cfg := env.RuntimeConfig().GetEndpointConfigByID(id)
 	if cfg == nil {
-		env.Log().Fatalf("config for endpoint with id=%d not found", id)
-		return nil
+		return nil, fmt.Errorf("config for endpoint with id=%d not found", id)
 	}
-	dataSource := getSaramaKafkaDataSource(cfg.IdDataConnector, env)
+	dataSource, err := getOrCreateSaramaKafkaDataSource(cfg.GetIdDataConnector(), env)
+	if err != nil {
+		return nil, err
+	}
 	endpoint := dataSource.GetEndpoint(id)
 	if endpoint != nil {
-		return endpoint
+		return nil, fmt.Errorf("endpoint %q already exists", cfg.GetName())
 	}
-	kafkaEndpoint := &SaramaKafkaEndpoint{
-		DataSourceEndpoint: runtime.MakeDataSourceEndpoint(dataSource, id, env),
+	sourceEndpoint, err := runtime.MakeDataSourceEndpoint(dataSource, id, env)
+	if err != nil {
+		return nil, err
 	}
-	var inputEndpoint SaramaKafkaInputEndpoint = kafkaEndpoint
+	kafkaEndpoint := &saramaKafkaEndpoint{
+		DataSourceEndpoint: sourceEndpoint,
+	}
+	var inputEndpoint saramaKafkaInputEndpoint = kafkaEndpoint
 	dataSource.AddEndpoint(inputEndpoint)
-	return kafkaEndpoint
+	return kafkaEndpoint, nil
 }
 
-func MakeSaramaKafkaEndpointConsumer[T any](stream runtime.TypedInputStream[T], handler SaramaKafkaEndpointHandler[T]) runtime.Consumer[T] {
-	env := stream.GetEnvironment()
-	endpoint := getSaramaKafkaDataSourceEndpoint(stream.GetEndpointId(), env)
-	typedEndpointConsumer := &TypedSaramaKafkaEndpointConsumer[T]{
-		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T](endpoint, stream),
-		handler:                    handler,
+func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	handler EndpointHandler[HandlerState, T, R, E],
+) (runtime.Consumer[T], error) {
+	env := stream.GetRuntimeEnvironment()
+	endpoint, err := createSaramaKafkaDataSourceEndpoint(stream.GetEndpointId(), env)
+	if err != nil {
+		return nil, err
 	}
-	var endpointConsumer SaramaKafkaEndpointConsumer = typedEndpointConsumer
-	var consumer runtime.Consumer[T] = typedEndpointConsumer
-	endpoint.AddEndpointConsumer(endpointConsumer)
-	return consumer
+	if handler == nil {
+		return nil, fmt.Errorf("handler is nil for kafka endpoint consumer for the stream %q", stream.GetName())
+	}
+	var tr tracing.Tracer
+	if t := env.Tracing(); t != nil {
+		tr = t.Tracer(env.ServiceConfig().Name)
+	}
+	endpointConsumer := &saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]{
+		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
+		hasResult:                  stream.GetResultStream() != nil,
+		handler:                    handler,
+		tracer:                     tr,
+	}
+	endpointConsumer.concCond = sync.NewCond(&endpointConsumer.concMu)
+	endpointConsumer.sc = runtime.MakeStreamContext[T, R, E](
+		endpointConsumer.Stream(),
+		endpointConsumer.Stream().GetResultStream(),
+		runtime.CollectFunc[T](endpointConsumer.Out),
+		runtime.CollectFunc[E](endpointConsumer.Stream().GetErrorStream().Consume),
+	)
+	if endpointConsumer.hasResult {
+		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: endpointConsumer})
+	}
+	endpoint.consumer = endpointConsumer
+	return endpointConsumer, nil
 }

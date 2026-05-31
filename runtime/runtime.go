@@ -9,27 +9,26 @@ package runtime
 
 import (
 	"bytes"
-	"flag"
+	"context"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/datastruct"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/log"
-	"github.com/gorundebug/servicelib/runtime/pool"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/gorundebug/servicelib/runtime/store"
-	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/rs/xid"
+	"github.com/spf13/viper"
+
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"github.com/gorundebug/servicelib/runtime/pool"
+	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
 type Caller[T any] interface {
@@ -45,18 +44,18 @@ type ServiceLoader interface {
 }
 
 type ServiceExecutionRuntime interface {
-	reloadConfig(config.Config)
-	serviceInit(name string, env ServiceExecutionEnvironment,
+	updateConfig(config *config.RuntimeConfig)
+	initRuntime(
+		name string,
+		env RuntimeEnvironment,
 		dep environment.ServiceDependencies,
 		loader ServiceLoader,
-		config config.Config) error
-	getSerde(valueType reflect.Type) (serde.Serializer, error)
-	registerStream(stream Stream)
-	registerSerde(tp reflect.Type, serializer serde.StreamSerializer)
-	getRegisteredSerde(tp reflect.Type) serde.StreamSerializer
-	registerConsumeStatistics(linkId config.LinkId, statistics ConsumeStatistics)
-	registerStorage(storage store.Storage)
-	getLog() log.Logger
+		runtimeConfig *config.RuntimeConfig,
+	) error
+	registerSerializer(tp reflect.Type, serializer serde.StreamSerializer)
+	getSerializer(valueType reflect.Type) (serde.Serializer, error)
+	getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer
+	registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics)
 }
 
 func getPath(argPath string) (string, error) {
@@ -64,7 +63,7 @@ func getPath(argPath string) (string, error) {
 	if !filepath.IsAbs(argPath) {
 		dir, err := os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("path error: %s", err.Error())
+			return "", fmt.Errorf("path error: %w", err)
 		}
 		filePath = filepath.Join(dir, argPath)
 	} else {
@@ -73,68 +72,28 @@ func getPath(argPath string) (string, error) {
 	return filePath, nil
 }
 
-func replacePlaceholders(config interface{}, values map[string]interface{}) interface{} {
-	switch val := config.(type) {
-	case string:
-		if strings.HasPrefix(val, "$") {
-			placeholder := val[1:]
-			if val, ok := values[placeholder]; ok {
-				return val
-			}
-		}
-		return val
-	case map[interface{}]interface{}:
-		for key, value := range val {
-			val[key] = replacePlaceholders(value, values)
-		}
-		return val
-	case map[string]interface{}:
-		for key, value := range val {
-			val[key] = replacePlaceholders(value, values)
-		}
-		return val
-	case []interface{}:
-		for i, value := range val {
-			val[i] = replacePlaceholders(value, values)
-		}
-		return val
-	default:
-		return val
-	}
+type serviceLoader[Environment RuntimeEnvironment, Cfg config.Config] struct {
+	watcher                    *fsnotify.Watcher
+	wg                         sync.WaitGroup
+	service                    Environment
+	viper                      *viper.Viper
+	configReloadSuccessCounter metrics.Int64Counter
+	configReloadErrorCounter   metrics.Int64Counter
 }
 
-func getConfigData(cfg map[string]any) (io.Reader, error) {
-	output, err := yaml.Marshal(cfg)
+func (l *serviceLoader[Environment, Cfg]) createConfigReloadCounters() {
+	scope := l.service.Metrics().Scope("service", metrics.Labels{
+		"service": l.service.ServiceConfig().Name,
+	})
+	var err error
+	l.configReloadSuccessCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "success"})
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling config to YAML: %s", err)
+		l.service.Log().Errorf("failed to create config_reloads_total counter: %v", err)
 	}
-	return bytes.NewReader(output), nil
-}
-
-func getConfigMap(configData []byte, configValuesFile string) (map[string]any, error) {
-	valuesData, err := os.ReadFile(configValuesFile)
+	l.configReloadErrorCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "error"})
 	if err != nil {
-		return nil, fmt.Errorf("error reading values file: %s", err)
+		l.service.Log().Errorf("failed to create config_reloads_total counter: %v", err)
 	}
-
-	var cfg map[string]any
-	var values map[string]any
-
-	if err = yaml.Unmarshal(configData, &cfg); err != nil {
-		return nil, fmt.Errorf("error unmarshalling config YAML: %s", err)
-	}
-	if err = yaml.Unmarshal(valuesData, &values); err != nil {
-		return nil, fmt.Errorf("error unmarshalling values YAML: %s", err)
-	}
-
-	replacePlaceholders(cfg, values)
-	return cfg, nil
-}
-
-type serviceLoader[Environment ServiceExecutionEnvironment, Cfg config.Config] struct {
-	watcher *fsnotify.Watcher
-	wg      sync.WaitGroup
-	service Environment
 }
 
 func (l *serviceLoader[Environment, Cfg]) Stop() {
@@ -143,173 +102,288 @@ func (l *serviceLoader[Environment, Cfg]) Stop() {
 	}
 }
 
-func (l *serviceLoader[Environment, Cfg]) init(name string,
+func (l *serviceLoader[Environment, Cfg]) init(
+	ctx context.Context,
+	name string,
 	dep environment.ServiceDependencies,
-	configSettings *config.ConfigSettings) error {
+	baseConfigPath *string,
+	overrideConfigPath *string,
+	serviceMaker func() Environment,
+	configMaker func() Cfg,
+) error {
 
-	serviceType := serde.GetSerdeTypeWithoutPtr[Environment]()
-	l.service = reflect.New(serviceType).Interface().(Environment)
+	l.viper = viper.New()
+	l.viper.SetConfigType("yaml")
+	l.service = serviceMaker()
+	cfg := configMaker()
 
-	valuesPathArg := flag.String("values", "./values.yaml", "service config values path")
-	configPathArg := flag.String("config", "./config.yaml", "service config path")
-	flag.Parse()
+	if baseConfigPath == nil || *baseConfigPath == "" {
 
-	configFileName, err := getPath(*configPathArg)
-	if err != nil {
-		return fmt.Errorf("get config file path error: %s", err)
-	}
-
-	_, err = os.Stat(configFileName)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("config file %q does not exist", configFileName)
-	}
-
-	valuesFileName, err := getPath(*valuesPathArg)
-	if err != nil {
-		return fmt.Errorf("get config values file path error: %s", err)
-	}
-
-	_, err = os.Stat(valuesFileName)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("config values file %q does not exist", valuesFileName)
-	}
-
-	viper.SetConfigType("yaml")
-	viper.AutomaticEnv()
-
-	configFile := filepath.Clean(configFileName)
-
-	valuesFile := filepath.Clean(valuesFileName)
-	valuesDir, _ := filepath.Split(valuesFile)
-	realValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
-
-	configData, err := os.ReadFile(configFile)
-	if err != nil {
-		return fmt.Errorf("error reading config file: %s", err)
-	}
-
-	l.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("failed to create watcher: %s", err)
-	}
-
-	configType := serde.GetSerdeTypeWithoutPtr[Cfg]()
-
-	err = func() error {
-		if err := l.watcher.Add(valuesDir); err != nil {
-			return fmt.Errorf("watcher add error: %s", err)
+		if err := cfg.ApplyEnvironment(); err != nil {
+			return fmt.Errorf("apply environment error: %w", err)
 		}
 
-		cfgMap, err := getConfigMap(configData, valuesFile)
+		runtimeCfg, err := config.NewRuntimeConfig(cfg)
 		if err != nil {
-			return fmt.Errorf("get config map error: %s", err)
+			return fmt.Errorf("create runtime config error: %w", err)
 		}
 
-		reader, err := getConfigData(cfgMap)
-		if err != nil {
-			return fmt.Errorf("get config data error: %s", err)
+		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+			return fmt.Errorf("service init error: %w", err)
 		}
-
-		err = viper.ReadConfig(reader)
-		if err != nil {
-			return fmt.Errorf("viper read config error: %s\n", err)
-		}
-
-		cfg := reflect.New(configType).Interface().(Cfg)
-
-		if err := viper.Unmarshal(cfg); err != nil {
-			return fmt.Errorf("unmarshal config error: %s", err)
-		}
-
-		cfg.AppConfig().InitRuntimeConfig()
-		return l.service.GetRuntime().serviceInit(name, l.service, dep, l, cfg)
-	}()
-
-	if err != nil {
-		_ = l.watcher.Close()
-		return err
+		l.createConfigReloadCounters()
+		return nil
 	}
 
-	l.wg.Add(1)
-	go func() {
-		defer l.wg.Done()
+	baseConfigFileName, err := getPath(*baseConfigPath)
+	if err != nil {
+		return fmt.Errorf("get config file path error: %w", err)
+	}
 
-		for {
-			select {
-			case event, ok := <-l.watcher.Events:
-				if !ok {
-					return
-				}
-				currentValuesFile, _ := filepath.EvalSymlinks(valuesFileName)
-				// we only care about the config file with the following cases:
-				// 1 - if the config file was modified or created
-				// 2 - if the real path to the config file changed (eg: k8s ConfigMap replacement)
-				if (filepath.Clean(event.Name) == valuesFile &&
-					(event.Has(fsnotify.Write) || event.Has(fsnotify.Create))) ||
-					(currentValuesFile != "" && currentValuesFile != realValuesFile) {
-					realValuesFile = currentValuesFile
+	if _, err = os.Stat(baseConfigFileName); os.IsNotExist(err) {
+		return fmt.Errorf("config file %q does not exist", baseConfigFileName)
+	}
 
-					if cfgMap, err := getConfigMap(configData, realValuesFile); err != nil {
-						l.service.Log().Errorf("Reload config map error: %s", err)
-					} else {
-						if err := viper.MergeConfigMap(cfgMap); err != nil {
-							l.service.Log().Errorf("Viper merge config error: %s", err)
+	configData, err := os.ReadFile(baseConfigFileName)
+	if err != nil {
+		return fmt.Errorf("error reading config file: %w", err)
+	}
+
+	if overrideConfigPath != nil && *overrideConfigPath != "" {
+		overrideConfigFileName, err := getPath(*overrideConfigPath)
+		if err != nil {
+			return fmt.Errorf("get override config file path error: %w", err)
+		}
+
+		if _, err = os.Stat(overrideConfigFileName); os.IsNotExist(err) {
+			return fmt.Errorf("override config file %q does not exist", overrideConfigFileName)
+		}
+
+		overrideConfigFile := filepath.Clean(overrideConfigFileName)
+		overrideConfigDir, _ := filepath.Split(overrideConfigFile)
+		realOverrideConfigFile, err := filepath.EvalSymlinks(overrideConfigFileName)
+		if err != nil {
+			return fmt.Errorf("error evaluating override config file path: %w", err)
+		}
+
+		closeWatcher := true
+
+		l.watcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			return fmt.Errorf("failed to create watcher: %w", err)
+		}
+
+		defer func() {
+			if closeWatcher {
+				_ = l.watcher.Close()
+			}
+		}()
+
+		if err := l.watcher.Add(overrideConfigDir); err != nil {
+			return fmt.Errorf("watcher add error: %w", err)
+		}
+
+		overrideData, err := os.ReadFile(realOverrideConfigFile)
+		if err != nil {
+			return fmt.Errorf("error reading override config file: %w", err)
+		}
+
+		if err = l.viper.ReadConfig(bytes.NewReader(configData)); err != nil {
+			return fmt.Errorf("viper read config error: %w", err)
+		}
+
+		if err = l.viper.MergeConfig(bytes.NewReader(overrideData)); err != nil {
+			return fmt.Errorf("viper merge config error: %w", err)
+		}
+
+		if err := l.viper.Unmarshal(cfg); err != nil {
+			return fmt.Errorf("unmarshal config error: %w", err)
+		}
+
+		if err := cfg.ApplyEnvironment(); err != nil {
+			return fmt.Errorf("apply environment error: %w", err)
+		}
+
+		runtimeCfg, err := config.NewRuntimeConfig(cfg)
+		if err != nil {
+			return fmt.Errorf("create runtime config error: %w", err)
+		}
+
+		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+			return fmt.Errorf("service init error: %w", err)
+		}
+
+		l.createConfigReloadCounters()
+		closeWatcher = false
+
+		l.wg.Add(1)
+		go func() {
+			defer l.wg.Done()
+
+			for {
+				select {
+				case event, ok := <-l.watcher.Events:
+					if !ok {
+						return
+					}
+					currentOverrideConfigFile, err := filepath.EvalSymlinks(overrideConfigFileName)
+					if err != nil {
+						l.service.Log().Errorf("error evaluating override config file path: %s", err)
+						continue
+					}
+					eventPath, err := filepath.EvalSymlinks(event.Name)
+					if err != nil {
+						l.service.Log().Errorf("error evaluating override config file path: %s", err)
+						continue
+					}
+					// we only care about the config file with the following cases:
+					// 1 - if the config file was modified or created
+					// 2 - if the real path to the config file changed (eg: k8s ConfigMap replacement)
+					if (filepath.Clean(eventPath) == overrideConfigFile &&
+						(event.Has(fsnotify.Write) || event.Has(fsnotify.Create))) ||
+						(currentOverrideConfigFile != "" && currentOverrideConfigFile != realOverrideConfigFile) {
+						realOverrideConfigFile = currentOverrideConfigFile
+
+						newOverrideData, err := os.ReadFile(realOverrideConfigFile)
+						if err != nil {
+							l.service.Log().Errorf("error reading override config file: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						newConfigData, err := os.ReadFile(baseConfigFileName)
+						if err != nil {
+							l.service.Log().Errorf("error reading config file: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						newViper := viper.New()
+						newViper.SetConfigType("yaml")
+
+						if err := newViper.ReadConfig(bytes.NewReader(newConfigData)); err != nil {
+							l.service.Log().Errorf("viper read config error: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						if err := newViper.MergeConfig(bytes.NewReader(newOverrideData)); err != nil {
+							l.service.Log().Errorf("viper merge config error: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						newCfg := configMaker()
+
+						if err := newViper.Unmarshal(newCfg); err != nil {
+							l.service.Log().Errorf("Viper unmarshal config error: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						if err := newCfg.ApplyEnvironment(); err != nil {
+							l.service.Log().Errorf("apply environment error: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
+							continue
+						}
+
+						l.viper = newViper
+
+						newRuntimeCfg, err := config.NewRuntimeConfig(newCfg)
+						if err != nil {
+							l.service.Log().Errorf("create runtime config error: %s", err)
+							if l.configReloadErrorCounter != nil {
+								l.configReloadErrorCounter.Inc(ctx)
+							}
 						} else {
-							cfg := reflect.New(configType).Interface().(Cfg)
-							if err := viper.Unmarshal(cfg); err != nil {
-								l.service.Log().Errorf("Viper unmarshal config error: %s", err)
-							} else {
-								cfg.AppConfig().InitRuntimeConfig()
-								l.service.GetRuntime().reloadConfig(cfg)
+							if l.configReloadSuccessCounter != nil {
+								l.configReloadSuccessCounter.Inc(ctx)
 							}
 						}
+						l.service.GetRuntime().updateConfig(newRuntimeCfg)
 					}
-				} else if event.Has(fsnotify.Remove) &&
-					filepath.Clean(event.Name) == valuesFile {
-					return
+				case err, ok := <-l.watcher.Errors:
+					if ok {
+						l.service.Log().Errorf("watcher error: %s", err)
+					}
 				}
-
-			case err, ok := <-l.watcher.Errors:
-				if ok {
-					l.service.Log().Errorf("watcher error: %s", err)
-				}
-				return
 			}
+		}()
+
+	} else {
+		if err := l.viper.ReadConfig(bytes.NewReader(configData)); err != nil {
+			return fmt.Errorf("viper read config error: %w", err)
 		}
-	}()
+
+		if err := l.viper.Unmarshal(cfg); err != nil {
+			return fmt.Errorf("unmarshal config error: %w", err)
+		}
+
+		if err := cfg.ApplyEnvironment(); err != nil {
+			return fmt.Errorf("apply environment error: %w", err)
+		}
+
+		runtimeCfg, err := config.NewRuntimeConfig(cfg)
+		if err != nil {
+			return fmt.Errorf("create runtime config error: %w", err)
+		}
+
+		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+			return fmt.Errorf("service init error: %w", err)
+		}
+		l.createConfigReloadCounters()
+	}
 
 	return nil
 }
 
-func MakeService[Environment ServiceExecutionEnvironment, Cfg config.Config](name string,
+func MakeService[Environment RuntimeEnvironment, Cfg config.Config](
+	ctx context.Context,
+	name string,
 	dep environment.ServiceDependencies,
-	configSettings *config.ConfigSettings) (Environment, error) {
+	baseConfigPath *string,
+	overrideConfigPath *string,
+	serviceMaker func() Environment,
+	configMaker func() Cfg,
+) (Environment, error) {
 	loader := &serviceLoader[Environment, Cfg]{}
-	if err := loader.init(name, dep, configSettings); err != nil {
+	if err := loader.init(ctx, name, dep, baseConfigPath, overrideConfigPath, serviceMaker, configMaker); err != nil {
 		var env Environment
-		return env, fmt.Errorf("make service %q error: %s", name, err)
+		return env, fmt.Errorf("make service %q error: %w", name, err)
 	}
 	return loader.service, nil
 }
 
-func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.Serializer, error) {
+func MakeSerdeForType(tp reflect.Type, rt ServiceExecutionRuntime) (serde.Serializer, error) {
 	var err error
 	var ser serde.Serializer
 
-	ser, err = runtime.getSerde(tp)
+	ser, err = rt.getSerializer(tp)
 	if err != nil {
 		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-			ser, err = makeSerdeForType(tp.Elem(), runtime)
+			ser, err = MakeSerdeForType(tp.Elem(), rt)
 			if err != nil {
 				return nil, err
 			}
 			return serde.MakeArraySerde(tp, ser), nil
 		} else if tp.Kind() == reflect.Map {
-			serKeyArray, err := makeSerdeForType(reflect.SliceOf(tp.Key()), runtime)
+			serKeyArray, err := MakeSerdeForType(reflect.SliceOf(tp.Key()), rt)
 			if err != nil {
 				return nil, err
 			}
-			serValueArray, err := makeSerdeForType(reflect.SliceOf(tp.Elem()), runtime)
+			serValueArray, err := MakeSerdeForType(reflect.SliceOf(tp.Elem()), rt)
 			if err != nil {
 				return nil, err
 			}
@@ -319,55 +393,56 @@ func makeSerdeForType(tp reflect.Type, runtime ServiceExecutionRuntime) (serde.S
 	return ser, err
 }
 
-func makeTypedArraySerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer, error) {
+func MakeTypedArraySerde[T any](rt ServiceExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	elementType := v.Type().Elem()
-	serElm, err := makeSerdeForType(elementType, runtime)
+	serElm, err := MakeSerdeForType(elementType, rt)
 	if err != nil {
 		return nil, err
 	}
 	arrSer, err := serde.MakeTypedArraySerde[T](serElm)
 	if err != nil {
-		runtime.getLog().Fatalln(err)
+		return nil, err
 	}
-	return arrSer, err
+	return arrSer, nil
 }
 
-func makeTypedMapSerde[T any](runtime ServiceExecutionRuntime) (serde.Serializer, error) {
+func MakeTypedMapSerde[T any](rt ServiceExecutionRuntime) (serde.Serializer, error) {
 	var t T
 	v := reflect.ValueOf(t)
 	mapType := v.Type()
 	keyType := mapType.Key()
-	keyArraySerde, err := makeSerdeForType(reflect.SliceOf(keyType), runtime)
+	keyArraySerde, err := MakeSerdeForType(reflect.SliceOf(keyType), rt)
 	if err != nil {
 		return nil, err
 	}
 	valueType := mapType.Elem()
-	valueArraySerde, err := makeSerdeForType(reflect.SliceOf(valueType), runtime)
+	valueArraySerde, err := MakeSerdeForType(reflect.SliceOf(valueType), rt)
 	if err != nil {
 		return nil, err
 	}
 	mapSer, err := serde.MakeTypedMapSerde[T](keyArraySerde, valueArraySerde)
 	if err != nil {
-		runtime.getLog().Fatalln(err)
+		return nil, err
 	}
 	return mapSer, nil
 }
 
-func registerSerde[T any](runtime ServiceExecutionRuntime, ser serde.StreamSerde[T]) {
-	runtime.registerSerde(serde.GetSerdeType[T](), ser)
+func registerSerde[T any](rt ServiceExecutionRuntime, ser serde.StreamSerde[T]) {
+	rt.registerSerializer(serde.GetSerdeType[T](), ser)
 }
 
-func getRegisteredSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
-	if ser := runtime.getRegisteredSerde(serde.GetSerdeType[T]()); ser != nil {
+func getRegisteredSerde[T any](rt ServiceExecutionRuntime) serde.StreamSerde[T] {
+	if ser := rt.getRegisteredSerializer(serde.GetSerdeType[T]()); ser != nil {
 		return ser.(serde.StreamSerde[T])
 	}
 	return nil
 }
 
-func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
-	if ser := getRegisteredSerde[T](runtime); ser != nil {
+func MakeSerde[T any](env RuntimeEnvironment) serde.StreamSerde[T] {
+	rt := env.GetRuntime()
+	if ser := getRegisteredSerde[T](rt); ser != nil {
 		return ser
 	}
 	tp := serde.GetSerdeType[T]()
@@ -375,11 +450,11 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	var err error
 	var ser serde.Serializer
 
-	if ser, err = runtime.getSerde(tp); err != nil {
+	if ser, err = rt.getSerializer(tp); err != nil {
 		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-			ser, err = makeTypedArraySerde[T](runtime)
+			ser, err = MakeTypedArraySerde[T](rt)
 		} else if tp.Kind() == reflect.Map {
-			ser, err = makeTypedMapSerde[T](runtime)
+			ser, err = MakeTypedMapSerde[T](rt)
 		}
 	}
 	if ser == nil || err != nil {
@@ -387,15 +462,16 @@ func MakeSerde[T any](runtime ServiceExecutionRuntime) serde.StreamSerde[T] {
 	}
 	serT, ok := ser.(serde.Serde[T])
 	if !ok {
-		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		panic(fmt.Sprintf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name()))
 	}
 	streamSer := serde.MakeStreamSerde(serT)
-	registerSerde[T](runtime, streamSer)
+	registerSerde[T](rt, streamSer)
 	return streamSer
 }
 
-func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
-	if ser := getRegisteredSerde[datastruct.KeyValue[K, V]](runtime); ser != nil {
+func MakeKeyValueSerde[K comparable, V any](env RuntimeEnvironment) serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]] {
+	rt := env.GetRuntime()
+	if ser := getRegisteredSerde[datastruct.KeyValue[K, V]](rt); ser != nil {
 		return ser.(serde.StreamKeyValueSerde[datastruct.KeyValue[K, V]])
 	}
 	tp := serde.GetSerdeType[K]()
@@ -403,11 +479,11 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	var err error
 	var ser serde.Serializer
 
-	if ser, err = runtime.getSerde(tp); err != nil {
+	if ser, err = rt.getSerializer(tp); err != nil {
 		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-			ser, err = makeTypedArraySerde[K](runtime)
+			ser, err = MakeTypedArraySerde[K](rt)
 		} else if tp.Kind() == reflect.Map {
-			ser, err = makeTypedMapSerde[K](runtime)
+			ser, err = MakeTypedMapSerde[K](rt)
 		}
 	}
 	if err != nil {
@@ -415,15 +491,15 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	}
 	serdeK, ok := ser.(serde.Serde[K])
 	if !ok {
-		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		panic(fmt.Sprintf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name()))
 	}
 
 	tp = serde.GetSerdeType[V]()
-	if ser, err = runtime.getSerde(tp); err != nil {
+	if ser, err = rt.getSerializer(tp); err != nil {
 		if tp.Kind() == reflect.Array || tp.Kind() == reflect.Slice {
-			ser, err = makeTypedArraySerde[V](runtime)
+			ser, err = MakeTypedArraySerde[V](rt)
 		} else if tp.Kind() == reflect.Map {
-			ser, err = makeTypedMapSerde[V](runtime)
+			ser, err = MakeTypedMapSerde[V](rt)
 		}
 	}
 	if ser == nil || err != nil {
@@ -431,10 +507,10 @@ func MakeKeyValueSerde[K comparable, V any](runtime ServiceExecutionRuntime) ser
 	}
 	serdeV, ok := ser.(serde.Serde[V])
 	if !ok {
-		runtime.getLog().Fatalf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name())
+		panic(fmt.Sprintf("Invalid type conversion from SerdeType to Serde[%s] ", tp.Name()))
 	}
 	streamSer := serde.MakeStreamKeyValueSerde[K, V](serdeK, serdeV)
-	registerSerde[datastruct.KeyValue[K, V]](runtime, streamSer)
+	registerSerde[datastruct.KeyValue[K, V]](rt, streamSer)
 	return streamSer
 }
 
@@ -445,80 +521,94 @@ func IsKeyValueType[T any]() bool {
 	return tp.PkgPath() == "github.com/gorundebug/servicelib/runtime/datastruct" && keyValuePattern.MatchString(tp.Name())
 }
 
-func makeCaller[T any](source TypedStream[T]) Caller[T] {
-	env := source.GetEnvironment()
-	runtime := env.GetRuntime()
-	cfg := env.AppConfig()
+var defaultCallSemantic = config.FunctionCallSemanticsConfig{}
+
+func MakeCaller[T any](source TypedStream[T]) Caller[T] {
+	env := source.GetRuntimeEnvironment()
+	cfg := env.RuntimeConfig()
 	serviceConfig := env.ServiceConfig()
 	consumer := source.GetConsumer()
-	link := cfg.GetLink(source.GetId(), consumer.GetId())
-	if link == nil {
-		env.Log().Fatalf("No link found between streams from=%d to=%d", source.GetId(), consumer.GetId())
-		return nil
+	link := cfg.GetLink(source.GetID(), consumer.GetID())
+
+	var callSemantics config.CallSemanticsConfig
+
+	if link != nil {
+		callSemantics = link.GetCallSemantics()
 	}
-	streamFrom := source.GetConfig()
-	var callSemantics api.CallSemantics
-	if streamFrom.IdService == serviceConfig.Id {
-		callSemantics = link.CallSemantics
-	} else {
-		callSemantics = *link.IncomeCallSemantics
+
+	if callSemantics == nil {
+		if serviceConfig.DefaultCallSemantics != nil {
+			callSemantics = serviceConfig.DefaultCallSemantics.Get()
+		}
+		if callSemantics == nil {
+			callSemantics = &defaultCallSemantic
+		}
 	}
+
+	scope := env.Metrics().Scope("stream", metrics.Labels{
+		"service": env.ServiceConfig().Name,
+		"from":    source.GetName(),
+		"to":      consumer.GetName(),
+	})
+	messagesCounter, err := scope.Counter("messages_total", "Total number of messages processed by stream link", nil)
+	if err != nil {
+		env.Log().Errorf("failed to create stream_messages_total counter: %v", err)
+	}
+
+	var tr tracing.Tracer
+	if t := env.Tracing(); t != nil {
+		tr = t.Tracer(serviceConfig.Name)
+	}
+
 	var streamCaller Caller[T]
 	consumeStat := &consumeStatistics{}
-	switch callSemantics {
-	case api.FunctionCall:
+	switch cs := callSemantics.(type) {
+	case *config.FunctionCallSemanticsConfig:
 		c := &directCaller[T]{
 			caller: caller[T]{
-				source:     source,
-				consumer:   consumer,
-				statistics: consumeStat,
+				source:          source,
+				consumer:        consumer,
+				statistics:      consumeStat,
+				messagesCounter: messagesCounter,
+				tracer:          tr,
 			},
 		}
 		streamCaller = c
 
-	case api.TaskPool:
-		var taskPool pool.TaskPool
-		if streamFrom.IdService == serviceConfig.Id {
-			taskPool = env.GetTaskPool(*link.PoolName)
-		} else {
-			taskPool = env.GetTaskPool(*link.IncomePoolName)
-		}
+	case *config.TaskPoolCallSemanticsConfig:
+		taskPool := env.GetTaskPool(cs.PoolName)
 		c := &taskPoolCaller[T]{
 			caller: caller[T]{
-				source:     source,
-				consumer:   consumer,
-				statistics: consumeStat,
+				source:          source,
+				consumer:        consumer,
+				statistics:      consumeStat,
+				messagesCounter: messagesCounter,
+				tracer:          tr,
 			},
 			pool: taskPool,
 		}
 		streamCaller = c
 
-	case api.PriorityTaskPool:
-		var priorityTaskPool pool.PriorityTaskPool
-		var priority int
-		if streamFrom.IdService == serviceConfig.Id {
-			priorityTaskPool = env.GetPriorityTaskPool(*link.PoolName)
-			priority = *link.Priority
-		} else {
-			priorityTaskPool = env.GetPriorityTaskPool(*link.IncomePoolName)
-			priority = *link.IncomePriority
-		}
+	case *config.PriorityTaskPoolCallSemanticsConfig:
+		priorityTaskPool := env.GetPriorityTaskPool(cs.PoolName)
 		c := &priorityTaskPoolCaller[T]{
 			caller: caller[T]{
-				source:     source,
-				consumer:   consumer,
-				statistics: consumeStat,
+				source:          source,
+				consumer:        consumer,
+				statistics:      consumeStat,
+				messagesCounter: messagesCounter,
+				tracer:          tr,
 			},
 			pool:     priorityTaskPool,
-			priority: priority,
+			priority: cs.Priority,
 		}
 		streamCaller = c
 
 	default:
-		env.Log().Fatalf("undefined callSemantics [%d] ", callSemantics)
+		panic(fmt.Sprintf("undefined callSemantics type [%T] ", callSemantics))
 	}
 
-	runtime.registerConsumeStatistics(config.LinkId{From: source.GetId(), To: consumer.GetId()}, consumeStat)
+	env.GetRuntime().registerConsumeStatistics(config.LinkID{From: source.GetID(), To: consumer.GetID()}, consumeStat)
 	return streamCaller
 }
 
@@ -534,19 +624,42 @@ func (s *consumeStatistics) Inc() {
 	s.count.Add(1)
 }
 
+// noopSpan is returned by StartSpan when tracing is disabled, avoiding nil checks in callers.
+type noopSpan struct{}
+
+func (noopSpan) End()                                                {}
+func (noopSpan) SetAttributes(_ ...tracing.Attribute)                {}
+func (noopSpan) RecordError(_ error)                                 {}
+func (noopSpan) SetStatus(_ tracing.StatusCode, _ string)            {}
+func (noopSpan) AddEvent(_ string, _ ...tracing.Attribute)           {}
+func (noopSpan) SpanContext() tracing.SpanContext                     { return tracing.SpanContext{} }
+
 type caller[T any] struct {
-	statistics *consumeStatistics
-	source     TypedStream[T]
-	consumer   TypedStreamConsumer[T]
+	statistics      *consumeStatistics
+	source          TypedStream[T]
+	consumer        TypedStreamConsumer[T]
+	messagesCounter metrics.Int64Counter
+	tracer          tracing.Tracer
 }
 
 type directCaller[T any] struct {
 	caller[T]
 }
 
-func (c *directCaller[T]) Consume(value T) {
+func (c *directCaller[T]) Consume(ctx context.Context, value T) {
 	c.statistics.Inc()
-	c.consumer.Consume(value)
+	if c.messagesCounter != nil {
+		c.messagesCounter.Inc(ctx)
+	}
+	if c.tracer != nil {
+		var span tracing.Span
+		ctx, span = c.tracer.Start(ctx, "stream.call",
+			tracing.StringAttr("from", c.source.GetName()),
+			tracing.StringAttr("to", c.consumer.GetName()),
+		)
+		defer span.End()
+	}
+	c.consumer.Consume(ctx, value)
 }
 
 type taskPoolCaller[T any] struct {
@@ -554,11 +667,27 @@ type taskPoolCaller[T any] struct {
 	pool pool.TaskPool
 }
 
-func (c *taskPoolCaller[T]) Consume(value T) {
+func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 	c.statistics.Inc()
-	c.pool.AddTask(func() {
-		c.consumer.Consume(value)
-	})
+	if c.messagesCounter != nil {
+		c.messagesCounter.Inc(ctx)
+	}
+	if c.tracer != nil {
+		var span tracing.Span
+		ctx, span = c.tracer.Start(ctx, "stream.call",
+			tracing.StringAttr("from", c.source.GetName()),
+			tracing.StringAttr("to", c.consumer.GetName()),
+			tracing.StringAttr("type", "taskpool"),
+		)
+		c.pool.AddTask(ctx, func() {
+			defer span.End()
+			c.consumer.Consume(ctx, value)
+		})
+	} else {
+		c.pool.AddTask(ctx, func() {
+			c.consumer.Consume(ctx, value)
+		})
+	}
 }
 
 type priorityTaskPoolCaller[T any] struct {
@@ -567,16 +696,33 @@ type priorityTaskPoolCaller[T any] struct {
 	priority int
 }
 
-func (c *priorityTaskPoolCaller[T]) Consume(value T) {
+func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 	c.statistics.Inc()
-	c.pool.AddTask(c.priority, func() {
-		c.consumer.Consume(value)
-	})
+	if c.messagesCounter != nil {
+		c.messagesCounter.Inc(ctx)
+	}
+	if c.tracer != nil {
+		var span tracing.Span
+		ctx, span = c.tracer.Start(ctx, "stream.call",
+			tracing.StringAttr("from", c.source.GetName()),
+			tracing.StringAttr("to", c.consumer.GetName()),
+			tracing.StringAttr("type", "prioritytaskpool"),
+		)
+		c.pool.AddTask(ctx, c.priority, func() {
+			defer span.End()
+			c.consumer.Consume(ctx, value)
+		})
+	} else {
+		c.pool.AddTask(ctx, c.priority, func() {
+			c.consumer.Consume(ctx, value)
+		})
+	}
 }
 
 type ServiceStream[T any] struct {
-	environment ServiceExecutionEnvironment
+	environment RuntimeEnvironment
 	id          int
+	tracer      tracing.Tracer
 }
 
 func (s *ServiceStream[T]) GetTypeName() string {
@@ -585,34 +731,58 @@ func (s *ServiceStream[T]) GetTypeName() string {
 }
 
 func (s *ServiceStream[T]) GetName() string {
-	return s.GetConfig().Name
+	return s.GetConfig().GetName()
 }
 
-func (s *ServiceStream[T]) GetId() int {
+func (s *ServiceStream[T]) GetID() int {
 	return s.id
 }
 
-func (s *ServiceStream[T]) GetConfig() *config.StreamConfig {
-	return s.environment.AppConfig().GetStreamConfigById(s.id)
+func (s *ServiceStream[T]) GetConfig() config.StreamConfig {
+	return s.environment.RuntimeConfig().GetStreamConfigByID(s.id)
 }
 
-func (s *ServiceStream[T]) GetEnvironment() ServiceExecutionEnvironment {
+func (s *ServiceStream[T]) GetEnvironment() environment.ServiceEnvironment {
 	return s.environment
 }
 
 func (s *ServiceStream[T]) GetTransformationName() string {
-	return s.GetConfig().GetTransformationName()
+	return config.GetTransformationName(s.GetConfig().GetType())
 }
 
-func (s *ServiceStream[T]) Validate() error {
-	return nil
+func MakeServiceStream[T any](id int, env RuntimeEnvironment) ServiceStream[T] {
+	var tr tracing.Tracer
+	if t := env.Tracing(); t != nil {
+		tr = t.Tracer(env.ServiceConfig().Name)
+	}
+	return ServiceStream[T]{
+		environment: env,
+		id:          id,
+		tracer:      tr,
+	}
+}
+
+// StartSpan starts a new span for this stream's operation.
+// Returns a no-op span when tracing is disabled, so callers never need nil checks.
+func (s *ServiceStream[T]) StartSpan(ctx context.Context, operation string) (context.Context, tracing.Span) {
+	if s.tracer == nil {
+		return ctx, noopSpan{}
+	}
+	return s.tracer.Start(ctx, operation, tracing.StringAttr("stream", s.GetName()))
 }
 
 type ConsumedStream[T any] struct {
 	ServiceStream[T]
-	caller   Caller[T]
-	serde    serde.StreamSerde[T]
-	consumer TypedStreamConsumer[T]
+	downstream Caller[T]
+	serde      serde.StreamSerde[T]
+	consumer   TypedStreamConsumer[T]
+}
+
+func MakeConsumedStream[T any](id int, env RuntimeEnvironment, ser serde.StreamSerde[T]) ConsumedStream[T] {
+	return ConsumedStream[T]{
+		ServiceStream: MakeServiceStream[T](id, env),
+		serde:         ser,
+	}
 }
 
 func (s *ConsumedStream[T]) GetConsumers() []Stream {
@@ -626,24 +796,75 @@ func (s *ConsumedStream[T]) GetSerde() serde.StreamSerde[T] {
 	return s.serde
 }
 
-func (s *ConsumedStream[T]) SetConsumer(consumer TypedStreamConsumer[T]) {
+func (s *ConsumedStream[T]) Build() error {
+	return nil
+}
+
+func (s *ConsumedStream[T]) GetRuntimeEnvironment() RuntimeEnvironment {
+	return s.environment
+}
+
+func (s *ConsumedStream[T]) SetDownstream(consumer TypedStreamConsumer[T], stream TypedStream[T]) {
 	if s.consumer != nil {
-		consumer.GetEnvironment().Log().Fatalf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().Name)
+		panic(fmt.Sprintf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().GetName()))
 	}
 	s.consumer = consumer
-	s.caller = makeCaller[T](s)
+	s.downstream = MakeCaller[T](stream)
 }
 
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {
 	return s.consumer
 }
 
+func (s *ConsumedStream[T]) Collector() Collect[T] {
+	return MakeCollector[T](s.downstream)
+}
+
+func (s *ConsumedStream[T]) Emit(ctx context.Context, value T) {
+	if s.downstream != nil {
+		s.downstream.Consume(ctx, value)
+	}
+}
+
 type StreamFunction[T any] struct {
-	context ServiceStream[T] //nolint:unused
+	stream ServiceStream[T] //nolint:unused
 }
 
 func (f *StreamFunction[T]) BeforeCall() {
 }
 
 func (f *StreamFunction[T]) AfterCall() {
+}
+
+type StreamId interface {
+	GetID() string
+}
+
+type streamId struct {
+	id string
+}
+
+func (s *streamId) GetID() string {
+	return s.id
+}
+
+type streamIdKeyType struct{}
+
+var streamIdKey = streamIdKeyType{}
+
+func WithStreamId(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, streamIdKey, &streamId{id: id})
+}
+
+func StreamIdFromContext(ctx context.Context) (StreamId, bool) {
+	v := ctx.Value(streamIdKey)
+	if v == nil {
+		return nil, false
+	}
+	sid, ok := v.(StreamId)
+	return sid, ok
+}
+
+func NewStreamID() string {
+	return xid.New().String()
 }

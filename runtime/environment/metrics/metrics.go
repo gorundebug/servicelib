@@ -8,97 +8,138 @@
 package metrics
 
 import (
-	"net/http"
-	"time"
+    "context"
+    "net/http"
+    "time"
+
+    "google.golang.org/grpc/stats"
 )
 
 type MetricsEngine interface {
-	Metrics() Metrics
-	MetricsHandler() http.Handler
+    HTTPMetricsHandler() http.Handler
+    GRPCStatsHandler() stats.Handler
+    GRPCClientHandler() stats.Handler
+    HTTPClientTransport(base http.RoundTripper) http.RoundTripper
+    HTTPServerHandler(mux http.Handler, name string) http.Handler
+    Metrics() Metrics
+    Shutdown(ctx context.Context) error
 }
 
-type Counter interface {
-	Inc()
+type Int64Counter interface {
+    Inc(ctx context.Context)
+    Add(ctx context.Context, v int64)
 }
 
-type CounterVec interface {
-	WithLabelValues(lvs ...string) Counter
+type Int64CounterVec interface {
+    With(labels Labels) Int64Counter
 }
 
-type Gauge interface {
-	Set(float64)
-	Inc()
-	Dec()
-	Add(float64)
-	Sub(float64)
-	SetToCurrentTime()
+type Float64Counter interface {
+    Add(ctx context.Context, v float64)
 }
 
-type GaugeVec interface {
-	WithLabelValues(lvs ...string) Gauge
+type Float64CounterVec interface {
+    With(labels Labels) Float64Counter
 }
 
-type Histogram interface {
-	Observe(float64)
+type Float64Gauge interface {
+    Set(v float64)
+    Inc()
+    Dec()
+    Add(delta float64)
+    Sub(delta float64)
 }
 
-type HistogramVec interface {
-	WithLabelValues(lvs ...string) Histogram
+type Float64GaugeVec interface {
+    With(labels Labels) Float64Gauge
+    Delete(labels Labels)
 }
 
-type Summary interface {
-	Observe(float64)
+type Int64Gauge interface {
+    Set(v int64)
+    Inc()
+    Dec()
+    Add(delta int64)
+    Sub(delta int64)
 }
 
-type SummaryVec interface {
-	WithLabelValues(lvs ...string) Summary
+type Int64GaugeVec interface {
+    With(labels Labels) Int64Gauge
+    Delete(labels Labels)
+}
+
+type Float64Histogram interface {
+    Observe(ctx context.Context, v float64)
+}
+
+type Float64HistogramVec interface {
+    With(labels Labels) Float64Histogram
+}
+
+type Int64Histogram interface {
+    Observe(ctx context.Context, v int64)
+}
+
+type Int64HistogramVec interface {
+    With(labels Labels) Int64Histogram
 }
 
 type Labels map[string]string
 
 type Opts struct {
-	Namespace   string
-	Subsystem   string
-	Name        string
-	Help        string
-	ConstLabels Labels
+    Namespace   string
+    Subsystem   string
+    Name        string
+    Help        string
+    ConstLabels Labels
 }
 
 type CounterOpts struct {
-	Opts
+    Opts
 }
 
-type SummaryOpts struct {
-	Opts
-	Objectives map[float64]float64
-	MaxAge     time.Duration
-	AgeBuckets uint32
-	BufCap     uint32
-}
+// DefaultMaxCardinality is the default limit of unique label combinations for
+// GaugeVec metrics. Set GaugeOpts.MaxCardinality = -1 to disable the limit.
+const DefaultMaxCardinality = 1000
 
 type GaugeOpts struct {
-	Opts
+    Opts
+    // MaxCardinality limits the number of unique label combinations for Vec
+    // metrics. When the limit is reached, With() returns a no-op gauge and the
+    // dropped series counter is incremented.
+    // 0 uses DefaultMaxCardinality. -1 disables the limit.
+    MaxCardinality int
 }
 
 type HistogramOpts struct {
-	Opts
-	Buckets                         []float64
-	NativeHistogramBucketFactor     float64
-	NativeHistogramZeroThreshold    float64
-	NativeHistogramMaxBucketNumber  uint32
-	NativeHistogramMinResetDuration time.Duration
-	NativeHistogramMaxZeroThreshold float64
-	NativeHistogramMaxExemplars     int
-	NativeHistogramExemplarTTL      time.Duration
+    Opts
+    Buckets                         []float64
+    NativeHistogramBucketFactor     float64
+    NativeHistogramZeroThreshold    float64
+    NativeHistogramMaxBucketNumber  uint32
+    NativeHistogramMinResetDuration time.Duration
+    NativeHistogramMaxZeroThreshold float64
+    NativeHistogramMaxExemplars     int
+    NativeHistogramExemplarTTL      time.Duration
+}
+
+// MetricsScope is a factory bound to a fixed name prefix and a set of base
+// labels. Calling Counter/Gauge/Histogram on it creates metrics whose full
+// name is "<prefix>_<name>" and whose labels are the base labels merged with
+// any extra labels supplied to the method.
+// Vec variants use base labels as ConstLabels; variable labels are supplied
+// via .With() at observation time.
+// Histogram and HistogramVec accept optional bucket boundaries; if omitted,
+// the default Prometheus buckets are used.
+type MetricsScope interface {
+    Counter(name, help string, labels Labels) (Int64Counter, error)
+    CounterVec(name, help string) (Int64CounterVec, error)
+    Gauge(name, help string, labels Labels) (Int64Gauge, error)
+    GaugeVec(name, help string) (Int64GaugeVec, error)
+    Histogram(name, help string, labels Labels, buckets ...float64) (Float64Histogram, error)
+    HistogramVec(name, help string, buckets ...float64) (Float64HistogramVec, error)
 }
 
 type Metrics interface {
-	CounterVec(opts CounterOpts, labelNames []string) CounterVec
-	Counter(opts CounterOpts) Counter
-	SummaryVec(opts SummaryOpts, labelNames []string) SummaryVec
-	Summary(opts SummaryOpts) Summary
-	GaugeVec(opts GaugeOpts, labelNames []string) GaugeVec
-	Gauge(opts GaugeOpts) Gauge
-	HistogramVec(opts HistogramOpts, labelNames []string) HistogramVec
-	Histogram(opts HistogramOpts) Histogram
+    Scope(prefix string, labels Labels) MetricsScope
 }

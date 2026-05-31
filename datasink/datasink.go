@@ -8,15 +8,59 @@
 package datasink
 
 import (
-	"github.com/gorundebug/servicelib/datasink/kafka"
-	"github.com/gorundebug/servicelib/datasink/localsink"
-	"github.com/gorundebug/servicelib/runtime"
+    "context"
+
+    grpcsink "github.com/gorundebug/servicelib/datasink/grpc"
+    httpsink "github.com/gorundebug/servicelib/datasink/http"
+    "github.com/gorundebug/servicelib/datasink/kafka"
+    "github.com/gorundebug/servicelib/datasink/localsink"
+    "github.com/gorundebug/servicelib/runtime"
 )
 
-func CustomEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], dataConsumer localsink.DataConsumer[T]) runtime.SinkConsumer[T] {
-	return localsink.MakeCustomEndpointSink[T, R](stream, dataConsumer)
+func CustomEndpointConsumer[HandlerState, T, E any](stream runtime.TypedSinkStream[T, E], handler localsink.EndpointHandler[HandlerState, T, E]) (runtime.Consumer[T], error) {
+    return localsink.MakeCustomEndpointConsumer[HandlerState, T, E](stream, handler)
 }
 
-func SaramaKafkaEndpointSink[T, R any](stream runtime.TypedSinkStream[T, R], partitioner kafka.Partitioner[T]) runtime.SinkConsumer[T] {
-	return kafka.MakeSaramaKafkaEndpointSink[T, R](stream, partitioner)
+func SaramaKafkaEndpointConsumer[HandlerState, T, E any](stream runtime.TypedSinkStream[T, E], handler kafka.EndpointHandler[HandlerState, T, E], opts ...kafka.SaramaKafkaSinkOption[HandlerState, T, E]) (runtime.Consumer[T], error) {
+    return kafka.MakeSaramaKafkaEndpointConsumer[HandlerState, T, E](stream, handler, opts...)
+}
+
+func GRPCBidiStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+    stream runtime.TypedSinkStreamWithResult[T, R, E],
+    handler grpcsink.EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+    streamFactory func(ctx context.Context) (grpcsink.BidiStreamingGRPCStream[ReqT, ResR], error),
+) (runtime.Consumer[T], error) {
+    return grpcsink.MakeGRPCBidiStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E](stream, handler, streamFactory)
+}
+
+func GRPCServerStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+    stream runtime.TypedSinkStreamWithResult[T, R, E],
+    handler grpcsink.EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+    callFn func(ctx context.Context, req ReqT) (grpcsink.ServerStreamingGRPCStream[ResR], error),
+) (runtime.Consumer[T], error) {
+    return grpcsink.MakeGRPCServerStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E](stream, handler, callFn)
+}
+
+func GRPCClientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+    stream runtime.TypedSinkStreamWithResult[T, R, E],
+    handler grpcsink.EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+    streamFactory func(ctx context.Context) (grpcsink.ClientStreamingGRPCStream[ReqT, ResR], error),
+) (runtime.Consumer[T], error) {
+    return grpcsink.MakeGRPCClientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E](stream, handler, streamFactory)
+}
+
+func GRPCNoStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+    stream runtime.TypedSinkStreamWithResult[T, R, E],
+    handler grpcsink.EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+    callFn func(ctx context.Context, req ReqT) (ResR, error),
+) (runtime.Consumer[T], error) {
+    return grpcsink.MakeGRPCNoStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E](stream, handler, callFn)
+}
+
+func NetHTTPSinkEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
+    stream runtime.TypedSinkStreamWithResult[T, R, E],
+    client httpsink.Client,
+    handler httpsink.EndpointHandler[HandlerState, ReqT, ResR, T, R, E],
+) (runtime.Consumer[T], error) {
+    return httpsink.MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR](stream, client, handler)
 }
