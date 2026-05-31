@@ -77,6 +77,9 @@ func (s *HashMapJoinStorage[K]) rotate(ctx context.Context) {
 func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int, value interface{}, f JoinValueFunc) {
 	ttl := s.config.GetTTL()
 	renewTTL := s.config.GetRenewTTL()
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		ttl = time.Until(ctxDeadline)
+	}
 	if ttl > 0 {
 		s.rotateLock.RLock()
 		defer s.rotateLock.RUnlock()

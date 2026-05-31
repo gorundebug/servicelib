@@ -565,6 +565,55 @@ func TestJoinValue_WriteRace_ConcurrentInsert_CoversLine107(t *testing.T) {
 	wg.Wait()
 }
 
+// ---------- context deadline tests ----------
+
+// TestJoinValue_ExpiredContext_CallbackInvokedImmediately verifies that when the
+// context deadline has already passed, f is called immediately regardless of the
+// config TTL (the item gets a zero deadline, so IsZero() bypasses the deadline check).
+func TestJoinValue_ExpiredContext_CallbackInvokedImmediately(t *testing.T) {
+	s, _ := makeStorage(t, time.Hour, false)
+	defer s.Stop(context.Background())
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	called := false
+	s.JoinValue(ctx, "k1", 0, "val", func(values [][]interface{}) bool {
+		called = true
+		return true
+	})
+
+	if !called {
+		t.Fatal("callback was not called with expired context")
+	}
+}
+
+// TestJoinValue_ContextDeadline_UsedInsteadOfConfigTTL verifies that when the
+// context carries a deadline, it overrides the config TTL: the item deadline is
+// set to the context deadline, not to now+configTTL.
+func TestJoinValue_ContextDeadline_UsedInsteadOfConfigTTL(t *testing.T) {
+	s, _ := makeStorage(t, time.Hour, false)
+	defer s.Stop(context.Background())
+
+	ctxDeadline := time.Now().Add(time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), ctxDeadline)
+	defer cancel()
+
+	s.JoinValue(ctx, "k1", 0, "v", func(values [][]interface{}) bool { return false })
+
+	s.lock.RLock()
+	item := s.storage1["k1"]
+	s.lock.RUnlock()
+
+	if item == nil {
+		t.Fatal("item not found in storage1")
+	}
+	// deadline must be close to ctxDeadline, not 1 hour from now
+	if item.deadline.After(ctxDeadline.Add(time.Millisecond)) {
+		t.Fatalf("item deadline %v is much later than context deadline %v — config TTL was not overridden", item.deadline, ctxDeadline)
+	}
+}
+
 // TestJoinValue_Storage1ReadPath_CoverLine85 covers the case where an existing
 // item with a future deadline is found in the read lock (lines 85-87). We
 // pre-insert an item whose 1 ns deadline will have just expired by the time
