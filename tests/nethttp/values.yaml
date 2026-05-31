@@ -1,0 +1,4 @@
+httpServerHost: 127.0.0.1
+httpServerPort: 8080
+incomeServiceGrpcPort: 9201
+incomeServiceMonitoringPort: 9091
