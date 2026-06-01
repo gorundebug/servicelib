@@ -144,6 +144,10 @@ func (c *Config) GetModules() []*cfg.ModuleConfig {
 	}
 }
 
+func (c *Config) GetTypes() []*cfg.TypeConfig {
+	return nil
+}
+
 func (c *Config) ApplyEnvironment() error {
 	return nil
 }

@@ -336,5 +336,14 @@ func MakeGRPCClientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E a
 		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: ec})
 	}
 	endpoint.consumer = ec
+	env.RegisterEndpointConsumer(ec)
 	return ec, ec.handle, nil
+}
+
+func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) GetID() int {
+	return ec.Endpoint().GetID()
+}
+
+func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }

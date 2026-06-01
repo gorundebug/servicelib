@@ -53,6 +53,7 @@ type RuntimeEnvironment interface {
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	RegisterHTTPHandler(path string, handler http.Handler)
 	RegisterStream(stream RuntimeStream)
+	RegisterEndpointConsumer(consumer RuntimeEndpointConsumer)
 	RegisterStorage(storage store.Storage)
 	CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage
 }
@@ -89,6 +90,15 @@ type RuntimeStream interface {
 	GetRuntimeEnvironment() RuntimeEnvironment
 	Stream() Stream
 	GetConsumers() []Stream
+	FunctionImplementation() interface{}
+	GetErrorConsumer() RuntimeStream
+	GetValueType() reflect.Type
+	GetKeyType() reflect.Type
+}
+
+type RuntimeEndpointConsumer interface {
+	GetID() int
+	FunctionImplementation() interface{}
 }
 
 type TypedSerializedRuntimeStream[T any] interface {

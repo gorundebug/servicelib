@@ -29,6 +29,7 @@ type HttpEndpointConfig struct {
 	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
 	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
 	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
@@ -48,6 +49,7 @@ type GrpcEndpointConfig struct {
 	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
 	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
 	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
@@ -72,6 +74,7 @@ type KafkaEndpointConfig struct {
 	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
 	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
 	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
@@ -90,6 +93,7 @@ type CustomEndpointConfig struct {
 	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
 	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
 	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 

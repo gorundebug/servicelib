@@ -8,123 +8,158 @@
 package operators
 
 import (
-    "context"
+	"context"
+	"reflect"
 
-    "github.com/gorundebug/servicelib/runtime"
-    "github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
 )
 
 var _ runtime.TypedSinkStream[any, any] = (*SinkStream[any, any])(nil)
 var _ runtime.TypedSinkStreamWithResult[any, any, any] = (*SinkStreamWithResult[any, any, any])(nil)
 
 type SinkStream[T, E any] struct {
-    runtime.ServiceStream[T]
-    source        runtime.TypedStream[T]
-    sinkConsumer  runtime.Consumer[T]
-    errorConsumer *ErrorStream[E]
+	runtime.ServiceStream[T]
+	source        runtime.TypedStream[T]
+	sinkConsumer  runtime.Consumer[T]
+	errorConsumer *ErrorStream[E]
 }
 
 func MakeSinkStream[T, E any](streamConfig *config.SinkStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedSinkStream[T, E], error) {
-    env := stream.GetRuntimeEnvironment()
+	env := stream.GetRuntimeEnvironment()
 
-    sinkStream := &SinkStream[T, E]{
-        ServiceStream: runtime.MakeServiceStream[T](streamConfig.ID, env),
-        source:        stream,
-        errorConsumer: MakeErrorStream[E](streamConfig.ID, env),
-    }
-    stream.SetConsumer(sinkStream)
-    env.RegisterStream(sinkStream)
-    return sinkStream, nil
+	sinkStream := &SinkStream[T, E]{
+		ServiceStream: runtime.MakeServiceStream[T](streamConfig.ID, env),
+		source:        stream,
+		errorConsumer: MakeErrorStream[E](streamConfig.ID, env),
+	}
+	stream.SetConsumer(sinkStream)
+	env.RegisterStream(sinkStream)
+	return sinkStream, nil
 }
 
 func (s *SinkStream[T, E]) Consume(ctx context.Context, value T) {
-    if s.sinkConsumer != nil {
-        ctx, span := s.StartSpan(ctx, "stream.sink")
-        defer span.End()
-        s.sinkConsumer.Consume(ctx, value)
-    }
+	if s.sinkConsumer != nil {
+		ctx, span := s.StartSpan(ctx, "stream.sink")
+		defer span.End()
+		s.sinkConsumer.Consume(ctx, value)
+	}
 }
 
 func (s *SinkStream[T, E]) Build() error {
-    return nil
+	return nil
 }
 
 func (s *SinkStream[T, E]) Stream() runtime.Stream {
-    return s
+	return s
 }
 
 func (s *SinkStream[T, E]) GetRuntimeEnvironment() runtime.RuntimeEnvironment {
-    return s.source.GetRuntimeEnvironment()
+	return s.source.GetRuntimeEnvironment()
 }
 
 func (s *SinkStream[T, E]) GetConsumers() []runtime.Stream {
-    return s.errorConsumer.GetConsumers()
+	return nil
 }
 
 func (s *SinkStream[T, E]) GetErrorStream() runtime.TypedConsumedStream[E] {
-    return s.errorConsumer
+	return s.errorConsumer
+}
+
+func (s *SinkStream[T, E]) FunctionImplementation() interface{} {
+	return nil
+}
+
+func (s *SinkStream[T, E]) GetErrorConsumer() runtime.RuntimeStream {
+	return s.errorConsumer
+}
+
+func (s *SinkStream[T, E]) GetValueType() reflect.Type {
+	var t T
+	return reflect.TypeOf(&t).Elem()
+}
+
+func (s *SinkStream[T, E]) GetKeyType() reflect.Type {
+	return nil
 }
 
 func (s *SinkStream[T, E]) SetSinkConsumer(consumer runtime.Consumer[T]) {
-    s.sinkConsumer = consumer
+	s.sinkConsumer = consumer
 }
 
 func (s *SinkStream[T, E]) GetEndpointId() int {
-    return s.GetConfig().(*config.SinkStreamConfig).IdEndpoint
+	return s.GetConfig().(*config.SinkStreamConfig).IdEndpoint
 }
 
 type SinkStreamWithResult[T, R, E any] struct {
-    runtime.ConsumedStream[R]
-    source        runtime.TypedStream[T]
-    sinkConsumer  runtime.Consumer[T]
-    errorConsumer *ErrorStream[E]
+	runtime.ConsumedStream[R]
+	source        runtime.TypedStream[T]
+	sinkConsumer  runtime.Consumer[T]
+	errorConsumer *ErrorStream[E]
 }
 
 func MakeSinkStreamWithResult[T, R, E any](streamConfig *config.SinkStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedSinkStreamWithResult[T, R, E], error) {
-    env := stream.GetRuntimeEnvironment()
+	env := stream.GetRuntimeEnvironment()
 
-    sinkStream := &SinkStreamWithResult[T, R, E]{
-        ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
-        source:         stream,
-        errorConsumer:  MakeErrorStream[E](streamConfig.ID, env),
-    }
-    stream.SetConsumer(sinkStream)
-    env.RegisterStream(sinkStream)
-    return sinkStream, nil
+	sinkStream := &SinkStreamWithResult[T, R, E]{
+		ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
+		source:         stream,
+		errorConsumer:  MakeErrorStream[E](streamConfig.ID, env),
+	}
+	stream.SetConsumer(sinkStream)
+	env.RegisterStream(sinkStream)
+	return sinkStream, nil
 }
 
 func (s *SinkStreamWithResult[T, R, E]) ConsumeResult(ctx context.Context, value R) {
-    s.Emit(ctx, value)
+	s.Emit(ctx, value)
 }
 
 func (s *SinkStreamWithResult[T, R, E]) Consume(ctx context.Context, value T) {
-    if s.sinkConsumer != nil {
-        ctx, span := s.StartSpan(ctx, "stream.sink")
-        defer span.End()
-        s.sinkConsumer.Consume(ctx, value)
-    }
+	if s.sinkConsumer != nil {
+		ctx, span := s.StartSpan(ctx, "stream.sink")
+		defer span.End()
+		s.sinkConsumer.Consume(ctx, value)
+	}
 }
 
 func (s *SinkStreamWithResult[T, R, E]) GetErrorStream() runtime.TypedConsumedStream[E] {
-    return s.errorConsumer
+	return s.errorConsumer
+}
+
+func (s *SinkStreamWithResult[T, R, E]) FunctionImplementation() interface{} {
+	return nil
+}
+
+func (s *SinkStreamWithResult[T, R, E]) GetErrorConsumer() runtime.RuntimeStream {
+	return s.errorConsumer
+}
+
+func (s *SinkStreamWithResult[T, R, E]) GetValueType() reflect.Type {
+	var r R
+	return reflect.TypeOf(&r).Elem()
+}
+
+func (s *SinkStreamWithResult[T, R, E]) GetKeyType() reflect.Type {
+	return nil
 }
 
 func (s *SinkStreamWithResult[T, R, E]) Stream() runtime.Stream {
-    return s
+	return s
 }
 
 func (s *SinkStreamWithResult[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-    s.SetDownstream(consumer, s)
+	s.SetDownstream(consumer, s)
 }
 
 func (s *SinkStreamWithResult[T, R, E]) GetConsumers() []runtime.Stream {
-    return append(s.ConsumedStream.GetConsumers(), s.errorConsumer.GetConsumers()...)
+	return s.ConsumedStream.GetConsumers()
 }
 
 func (s *SinkStreamWithResult[T, R, E]) SetSinkConsumer(consumer runtime.Consumer[T]) {
-    s.sinkConsumer = consumer
+	s.sinkConsumer = consumer
 }
 
 func (s *SinkStreamWithResult[T, R, E]) GetEndpointId() int {
-    return s.GetConfig().(*config.SinkStreamConfig).IdEndpoint
+	return s.GetConfig().(*config.SinkStreamConfig).IdEndpoint
 }

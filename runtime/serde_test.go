@@ -76,6 +76,10 @@ func (c *MockServiceConfig) GetModules() []*config.ModuleConfig {
 	return []*config.ModuleConfig{}
 }
 
+func (c *MockServiceConfig) GetTypes() []*config.TypeConfig {
+	return []*config.TypeConfig{}
+}
+
 func (c *MockServiceConfig) ApplyEnvironment() error {
 	return nil
 }

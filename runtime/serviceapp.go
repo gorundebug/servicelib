@@ -39,6 +39,7 @@ type ServiceApp struct {
 	config            atomic.Pointer[config.RuntimeConfig]
 	environment       RuntimeEnvironment
 	streams           map[int]RuntimeStream
+	endpointConsumers map[int]RuntimeEndpointConsumer
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
 	serdes            map[reflect.Type]serde.StreamSerializer
@@ -114,6 +115,10 @@ func (app *ServiceApp) TracingEngine() tracing.TracingEngine {
 
 func (app *ServiceApp) RegisterStream(stream RuntimeStream) {
 	app.streams[stream.Stream().GetID()] = stream
+}
+
+func (app *ServiceApp) RegisterEndpointConsumer(consumer RuntimeEndpointConsumer) {
+	app.endpointConsumers[consumer.GetID()] = consumer
 }
 
 func (app *ServiceApp) RegisterStorage(storage store.Storage) {
@@ -223,6 +228,7 @@ func (app *ServiceApp) initRuntime(name string,
 	infoGauge.Set(1)
 
 	app.streams = make(map[int]RuntimeStream)
+	app.endpointConsumers = make(map[int]RuntimeEndpointConsumer)
 	app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 
@@ -388,6 +394,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		statusPath := "/" + strings.TrimPrefix(serviceConfig.StatusHandler, "/")
 		app.environment.RegisterHTTPHandler(statusPath, http.HandlerFunc(app.statusHandler))
 		app.environment.RegisterHTTPHandler(statusPath+"/data", http.HandlerFunc(app.dataHandler))
+		app.environment.RegisterHTTPHandler(statusPath+"/graph", http.HandlerFunc(app.graphHandler))
 		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.js", http.HandlerFunc(app.visJSHandler))
 		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.css", http.HandlerFunc(app.visCSSHandler))
 	}

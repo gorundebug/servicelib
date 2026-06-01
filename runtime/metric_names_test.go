@@ -51,6 +51,7 @@ func (c *testConnectorConfig) GetEndpoints() []config.EndpointConfig {
 func (c *testConnectorConfig) GetPools() []*config.PoolConfig     { return nil }
 func (c *testConnectorConfig) GetLinks() []*config.LinkConfig     { return nil }
 func (c *testConnectorConfig) GetModules() []*config.ModuleConfig { return nil }
+func (c *testConnectorConfig) GetTypes() []*config.TypeConfig     { return nil }
 func (c *testConnectorConfig) GetProperty(string) interface{}     { return nil }
 func (c *testConnectorConfig) ApplyEnvironment() error            { return nil }
 

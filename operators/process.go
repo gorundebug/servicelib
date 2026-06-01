@@ -8,75 +8,93 @@
 package operators
 
 import (
-    "context"
+	"context"
+	"reflect"
 
-    "github.com/gorundebug/servicelib/runtime"
-    "github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
 )
 
 var _ runtime.TypedProcessConsumedStream[any, any, any] = (*ProcessStream[any, any, any])(nil)
 
 type ProcessFunctionContext[T, R, E any] struct {
-    runtime.StreamFunction[R]
-    stream runtime.TypedStream[R]
-    f      ProcessFunction[T, R, E]
+	runtime.StreamFunction[R]
+	stream runtime.TypedStream[R]
+	f      ProcessFunction[T, R, E]
 }
 
 func (f *ProcessFunctionContext[T, R, E]) call(ctx context.Context, value T, out runtime.Collect[R], errOut runtime.Collect[E]) {
-    f.BeforeCall()
-    defer f.AfterCall()
-    f.f.Process(ctx, f.stream, value, out, errOut)
+	f.BeforeCall()
+	defer f.AfterCall()
+	f.f.Process(ctx, f.stream, value, out, errOut)
 }
 
 type ProcessStream[T, R, E any] struct {
-    runtime.ConsumedStream[R]
-    errorConsumer       *ErrorStream[E]
-    source              runtime.TypedStream[T]
-    f                   ProcessFunctionContext[T, R, E]
-    downstreamCollector runtime.CollectFunc[R]
-    errorCollector      runtime.CollectFunc[E]
+	runtime.ConsumedStream[R]
+	errorConsumer       *ErrorStream[E]
+	source              runtime.TypedStream[T]
+	f                   ProcessFunctionContext[T, R, E]
+	downstreamCollector runtime.CollectFunc[R]
+	errorCollector      runtime.CollectFunc[E]
 }
 
 func MakeProcessStream[T, R, E any](streamConfig *config.ProcessStreamConfig, stream runtime.TypedStream[T], f ProcessFunction[T, R, E]) (runtime.TypedProcessConsumedStream[T, R, E], error) {
-    env := stream.GetRuntimeEnvironment()
+	env := stream.GetRuntimeEnvironment()
 
-    processStream := &ProcessStream[T, R, E]{
-        ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
-        errorConsumer:  MakeErrorStream[E](streamConfig.ID, env),
-        source:         stream,
-        f: ProcessFunctionContext[T, R, E]{
-            stream: nil,
-            f:      f,
-        },
-    }
-    processStream.f.stream = processStream
+	processStream := &ProcessStream[T, R, E]{
+		ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
+		errorConsumer:  MakeErrorStream[E](streamConfig.ID, env),
+		source:         stream,
+		f: ProcessFunctionContext[T, R, E]{
+			stream: nil,
+			f:      f,
+		},
+	}
+	processStream.f.stream = processStream
 
-    processStream.downstreamCollector = processStream.Emit
-    processStream.errorCollector = processStream.errorConsumer.Consume
+	processStream.downstreamCollector = processStream.Emit
+	processStream.errorCollector = processStream.errorConsumer.Consume
 
-    stream.SetConsumer(processStream)
-    env.RegisterStream(processStream)
-    return processStream, nil
+	stream.SetConsumer(processStream)
+	env.RegisterStream(processStream)
+	return processStream, nil
 }
 
 func (s *ProcessStream[T, R, E]) GetErrorStream() runtime.TypedConsumedStream[E] {
-    return s.errorConsumer
+	return s.errorConsumer
+}
+
+func (s *ProcessStream[T, R, E]) FunctionImplementation() interface{} {
+	return s.f.f
+}
+
+func (s *ProcessStream[T, R, E]) GetErrorConsumer() runtime.RuntimeStream {
+	return s.errorConsumer
+}
+
+func (s *ProcessStream[T, R, E]) GetValueType() reflect.Type {
+	var r R
+	return reflect.TypeOf(&r).Elem()
+}
+
+func (s *ProcessStream[T, R, E]) GetKeyType() reflect.Type {
+	return nil
 }
 
 func (s *ProcessStream[T, R, E]) Stream() runtime.Stream {
-    return s
+	return s
 }
 
 func (s *ProcessStream[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-    s.SetDownstream(consumer, s)
+	s.SetDownstream(consumer, s)
 }
 
 func (s *ProcessStream[T, R, E]) GetConsumers() []runtime.Stream {
-    return append(s.ConsumedStream.GetConsumers(), s.errorConsumer.GetConsumers()...)
+	return s.ConsumedStream.GetConsumers()
 }
 
 func (s *ProcessStream[T, R, E]) Consume(ctx context.Context, value T) {
-    ctx, span := s.StartSpan(ctx, "stream.process")
-    defer span.End()
-    s.f.call(ctx, value, s.downstreamCollector, s.errorCollector)
+	ctx, span := s.StartSpan(ctx, "stream.process")
+	defer span.End()
+	s.f.call(ctx, value, s.downstreamCollector, s.errorCollector)
 }

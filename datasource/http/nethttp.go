@@ -574,5 +574,14 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: ec})
 	}
 	endpoint.consumer = ec
+	env.RegisterEndpointConsumer(ec)
 	return ec, ec.serveHTTP, nil
+}
+
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) GetID() int {
+	return ec.Endpoint().GetID()
+}
+
+func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }

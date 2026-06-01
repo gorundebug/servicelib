@@ -355,5 +355,14 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 	)
 	stream.SetSinkConsumer(ec)
 	endpoint.consumer = ec
+	env.RegisterEndpointConsumer(ec)
 	return ec, nil
+}
+
+func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) GetID() int {
+	return ec.endpoint.GetID()
+}
+
+func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }

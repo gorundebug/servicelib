@@ -10,6 +10,7 @@ package operators
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/gorundebug/servicelib/api"
@@ -99,6 +100,24 @@ func (s *JoinStream[K, T1, T2, R]) consume(ctx context.Context, key K, index int
 
 func (s *JoinStream[K, T1, T2, R]) ConsumeRight(ctx context.Context, value datastruct.KeyValue[K, T2]) {
 	s.consume(ctx, value.Key, 1, value.Value)
+}
+
+func (s *JoinStream[K, T1, T2, R]) FunctionImplementation() interface{} {
+	return s.f.f
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetErrorConsumer() runtime.RuntimeStream {
+	return nil
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetValueType() reflect.Type {
+	var r R
+	return reflect.TypeOf(&r).Elem()
+}
+
+func (s *JoinStream[K, T1, T2, R]) GetKeyType() reflect.Type {
+	var k K
+	return reflect.TypeOf(&k).Elem()
 }
 
 func (s *JoinStream[K, T1, T2, R]) Stream() runtime.Stream {

@@ -10,6 +10,7 @@ package operators
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/gorundebug/servicelib/runtime"
@@ -171,6 +172,24 @@ func (s *MultiJoinStream[K, T, R]) addLink(link multiJoinLinkStream) int {
 	index := len(s.links) + 1
 	s.links = append(s.links, link)
 	return index
+}
+
+func (s *MultiJoinStream[K, T, R]) FunctionImplementation() interface{} {
+	return s.f.f
+}
+
+func (s *MultiJoinStream[K, T, R]) GetErrorConsumer() runtime.RuntimeStream {
+	return nil
+}
+
+func (s *MultiJoinStream[K, T, R]) GetValueType() reflect.Type {
+	var r R
+	return reflect.TypeOf(&r).Elem()
+}
+
+func (s *MultiJoinStream[K, T, R]) GetKeyType() reflect.Type {
+	var k K
+	return reflect.TypeOf(&k).Elem()
 }
 
 func (s *MultiJoinStream[K, T, R]) Stream() runtime.Stream {

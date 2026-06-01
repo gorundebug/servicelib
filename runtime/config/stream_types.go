@@ -11,31 +11,31 @@ import "github.com/gorundebug/servicelib/api"
 
 // StreamConfig is the interface for all stream types.
 type StreamConfig interface {
-    GetID() int
-    GetName() string
-    GetPipeline() string
-    GetType() api.TransformationType
-    GetIdService() int
-    GetIdSource() int
-    GetIdSources() []int
-    GetXPos() float64
-    GetYPos() float64
-    GetProperty(name string) interface{}
+	GetID() int
+	GetName() string
+	GetPipeline() string
+	GetType() api.TransformationType
+	GetIdService() int
+	GetIdSource() int
+	GetIdSources() []int
+	GetXPos() float64
+	GetYPos() float64
+	GetProperty(name string) interface{}
 }
 
 // InputStreamConfig is the configuration for the Input transformation.
 type InputStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    IdEndpoint int                    `yaml:"idEndpoint,omitempty" mapstructure:"idEndpoint"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	IdEndpoint int                    `yaml:"idEndpoint,omitempty" mapstructure:"idEndpoint"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *InputStreamConfig) GetID() int                          { return s.ID }
@@ -51,20 +51,21 @@ func (s *InputStreamConfig) GetProperty(name string) interface{} { return s.Prop
 
 // MapStreamConfig is the configuration for the Map transformation.
 type MapStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *MapStreamConfig) GetID() int                          { return s.ID }
@@ -80,19 +81,20 @@ func (s *MapStreamConfig) GetProperty(name string) interface{} { return s.Proper
 
 // FilterStreamConfig is the configuration for the Filter transformation.
 type FilterStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *FilterStreamConfig) GetID() int                          { return s.ID }
@@ -108,25 +110,26 @@ func (s *FilterStreamConfig) GetProperty(name string) interface{} { return s.Pro
 
 // JoinStreamConfig is the configuration for the Join transformation.
 type JoinStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    JoinType                 api.JoinType           `yaml:"joinType,omitempty" mapstructure:"joinType"`
-    JoinStorage              api.JoinStorageType    `yaml:"joinStorage,omitempty" mapstructure:"joinStorage"`
-    Ttl                      int                    `yaml:"ttl,omitempty" mapstructure:"ttl"`
-    RenewTTL                 bool                   `yaml:"renewTTL,omitempty" mapstructure:"renewTTL"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	JoinType                 api.JoinType           `yaml:"joinType,omitempty" mapstructure:"joinType"`
+	JoinStorage              api.JoinStorageType    `yaml:"joinStorage,omitempty" mapstructure:"joinStorage"`
+	Ttl                      int                    `yaml:"ttl,omitempty" mapstructure:"ttl"`
+	RenewTTL                 bool                   `yaml:"renewTTL,omitempty" mapstructure:"renewTTL"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *JoinStreamConfig) GetID() int                          { return s.ID }
@@ -142,31 +145,32 @@ func (s *JoinStreamConfig) GetProperty(name string) interface{} { return s.Prope
 
 // MultiJoinStreamConfig is the configuration for the MultiJoin transformation.
 type MultiJoinStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    JoinStorage              api.JoinStorageType    `yaml:"joinStorage,omitempty" mapstructure:"joinStorage"`
-    Ttl                      int                    `yaml:"ttl,omitempty" mapstructure:"ttl"`
-    RenewTTL                 bool                   `yaml:"renewTTL,omitempty" mapstructure:"renewTTL"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	JoinStorage              api.JoinStorageType    `yaml:"joinStorage,omitempty" mapstructure:"joinStorage"`
+	Ttl                      int                    `yaml:"ttl,omitempty" mapstructure:"ttl"`
+	RenewTTL                 bool                   `yaml:"renewTTL,omitempty" mapstructure:"renewTTL"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *MultiJoinStreamConfig) GetID() int          { return s.ID }
 func (s *MultiJoinStreamConfig) GetName() string     { return s.Name }
 func (s *MultiJoinStreamConfig) GetPipeline() string { return s.Pipeline }
 func (s *MultiJoinStreamConfig) GetType() api.TransformationType {
-    return api.TransformationTypeMultiJoin
+	return api.TransformationTypeMultiJoin
 }
 func (s *MultiJoinStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *MultiJoinStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -177,20 +181,21 @@ func (s *MultiJoinStreamConfig) GetProperty(name string) interface{} { return s.
 
 // ProcessStreamConfig is the configuration for the Process transformation.
 type ProcessStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    Pattern                  api.ProcessPattern     `yaml:"pattern,omitempty" mapstructure:"pattern"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	Pattern                  api.ProcessPattern     `yaml:"pattern,omitempty" mapstructure:"pattern"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *ProcessStreamConfig) GetID() int                          { return s.ID }
@@ -206,20 +211,21 @@ func (s *ProcessStreamConfig) GetProperty(name string) interface{} { return s.Pr
 
 // DelayStreamConfig is the configuration for the Delay transformation.
 type DelayStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    Duration                 int                    `yaml:"duration,omitempty" mapstructure:"duration"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	Duration                 int                    `yaml:"duration,omitempty" mapstructure:"duration"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *DelayStreamConfig) GetID() int                          { return s.ID }
@@ -235,20 +241,21 @@ func (s *DelayStreamConfig) GetProperty(name string) interface{} { return s.Prop
 
 // FlatMapStreamConfig is the configuration for the FlatMap transformation.
 type FlatMapStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *FlatMapStreamConfig) GetID() int                          { return s.ID }
@@ -264,22 +271,22 @@ func (s *FlatMapStreamConfig) GetProperty(name string) interface{} { return s.Pr
 
 // FlatMapIterableStreamConfig is the configuration for the FlatMapIterable transformation.
 type FlatMapIterableStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *FlatMapIterableStreamConfig) GetID() int          { return s.ID }
 func (s *FlatMapIterableStreamConfig) GetName() string     { return s.Name }
 func (s *FlatMapIterableStreamConfig) GetPipeline() string { return s.Pipeline }
 func (s *FlatMapIterableStreamConfig) GetType() api.TransformationType {
-    return api.TransformationTypeFlatMapIterable
+	return api.TransformationTypeFlatMapIterable
 }
 func (s *FlatMapIterableStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *FlatMapIterableStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -290,21 +297,22 @@ func (s *FlatMapIterableStreamConfig) GetProperty(name string) interface{} { ret
 
 // KeyByStreamConfig is the configuration for the KeyBy transformation.
 type KeyByStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    KeyType                  string                 `yaml:"keyType,omitempty" mapstructure:"keyType"`
-    ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	KeyType                  string                 `yaml:"keyType,omitempty" mapstructure:"keyType"`
+	ValueType                string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *KeyByStreamConfig) GetID() int                          { return s.ID }
@@ -320,14 +328,14 @@ func (s *KeyByStreamConfig) GetProperty(name string) interface{} { return s.Prop
 
 // MergeStreamConfig is the configuration for the Merge transformation.
 type MergeStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *MergeStreamConfig) GetID() int                          { return s.ID }
@@ -343,14 +351,14 @@ func (s *MergeStreamConfig) GetProperty(name string) interface{} { return s.Prop
 
 // SplitStreamConfig is the configuration for the Split transformation.
 type SplitStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *SplitStreamConfig) GetID() int                          { return s.ID }
@@ -366,26 +374,27 @@ func (s *SplitStreamConfig) GetProperty(name string) interface{} { return s.Prop
 
 // CaseStreamConfig is the configuration for the Case transformation.
 type CaseStreamConfig struct {
-    ID                       int                    `yaml:"id" mapstructure:"id"`
-    Name                     string                 `yaml:"name" mapstructure:"name"`
-    Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService                int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
-    FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
-    FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
-    PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
-    FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
-    FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
-    Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID                       int                    `yaml:"id" mapstructure:"id"`
+	Name                     string                 `yaml:"name" mapstructure:"name"`
+	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService                int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos                     float64                `yaml:"yPos" mapstructure:"yPos"`
+	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                 `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *CaseStreamConfig) GetID() int          { return s.ID }
 func (s *CaseStreamConfig) GetName() string     { return s.Name }
 func (s *CaseStreamConfig) GetPipeline() string { return s.Pipeline }
 func (s *CaseStreamConfig) GetType() api.TransformationType {
-    return api.TransformationTypeCase
+	return api.TransformationTypeCase
 }
 func (s *CaseStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *CaseStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -396,16 +405,16 @@ func (s *CaseStreamConfig) GetProperty(name string) interface{} { return s.Prope
 
 // SinkStreamConfig is the configuration for the Sink transformation.
 type SinkStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    IdEndpoint int                    `yaml:"idEndpoint,omitempty" mapstructure:"idEndpoint"`
-    ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	IdEndpoint int                    `yaml:"idEndpoint,omitempty" mapstructure:"idEndpoint"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *SinkStreamConfig) GetID() int                          { return s.ID }
@@ -421,21 +430,21 @@ func (s *SinkStreamConfig) GetProperty(name string) interface{} { return s.Prope
 
 // CycleLinkStreamConfig is the configuration for the CycleLink transformation.
 type CycleLinkStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *CycleLinkStreamConfig) GetID() int          { return s.ID }
 func (s *CycleLinkStreamConfig) GetName() string     { return s.Name }
 func (s *CycleLinkStreamConfig) GetPipeline() string { return s.Pipeline }
 func (s *CycleLinkStreamConfig) GetType() api.TransformationType {
-    return api.TransformationTypeCycleLink
+	return api.TransformationTypeCycleLink
 }
 func (s *CycleLinkStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *CycleLinkStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -446,21 +455,22 @@ func (s *CycleLinkStreamConfig) GetProperty(name string) interface{} { return s.
 
 // WhenStreamConfig is the configuration for the Case transformation.
 type WhenStreamConfig struct {
-    ID         int                    `yaml:"id" mapstructure:"id"`
-    Name       string                 `yaml:"name" mapstructure:"name"`
-    Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
-    IdService  int                    `yaml:"idService" mapstructure:"idService"`
-    IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
-    XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
-    YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
-    Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (s *WhenStreamConfig) GetID() int          { return s.ID }
 func (s *WhenStreamConfig) GetName() string     { return s.Name }
 func (s *WhenStreamConfig) GetPipeline() string { return s.Pipeline }
 func (s *WhenStreamConfig) GetType() api.TransformationType {
-    return api.TransformationTypeWhen
+	return api.TransformationTypeWhen
 }
 func (s *WhenStreamConfig) GetIdService() int   { return s.IdService }
 func (s *WhenStreamConfig) GetIdSource() int    { return s.IdSource }
@@ -468,6 +478,6 @@ func (s *WhenStreamConfig) GetIdSources() []int { return nil }
 func (s *WhenStreamConfig) GetXPos() float64    { return s.XPos }
 func (s *WhenStreamConfig) GetYPos() float64    { return s.YPos }
 func (s *WhenStreamConfig) GetProperty(
-    name string) interface{} {
-    return s.Properties[name]
+	name string) interface{} {
+	return s.Properties[name]
 }

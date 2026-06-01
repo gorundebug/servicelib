@@ -537,5 +537,14 @@ func MakeCustomEndpointConsumer[HandlerState, T, R, E any](
 		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: endpointConsumer})
 	}
 	endpoint.consumer = endpointConsumer
+	env.RegisterEndpointConsumer(endpointConsumer)
 	return endpointConsumer, nil
+}
+
+func (ec *customEndpointConsumer[HandlerState, T, R, E]) GetID() int {
+	return ec.Endpoint().GetID()
+}
+
+func (ec *customEndpointConsumer[HandlerState, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }

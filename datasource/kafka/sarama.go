@@ -693,5 +693,14 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R, E any](
 		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: endpointConsumer})
 	}
 	endpoint.consumer = endpointConsumer
+	env.RegisterEndpointConsumer(endpointConsumer)
 	return endpointConsumer, nil
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) GetID() int {
+	return ec.Endpoint().GetID()
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }

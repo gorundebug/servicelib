@@ -240,5 +240,14 @@ func MakeCustomEndpointConsumer[HandlerState, T, R any](stream runtime.TypedSink
 	}
 	stream.SetSinkConsumer(typedEndpointConsumer)
 	endpoint.consumer = typedEndpointConsumer
+	env.RegisterEndpointConsumer(typedEndpointConsumer)
 	return typedEndpointConsumer, nil
+}
+
+func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) GetID() int {
+	return ep.Endpoint().GetID()
+}
+
+func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) FunctionImplementation() interface{} {
+	return ep.handler
 }

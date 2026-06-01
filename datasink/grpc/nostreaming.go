@@ -129,5 +129,14 @@ func MakeGRPCNoStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 	)
 	stream.SetSinkConsumer(ec)
 	endpoint.consumer = ec
+	env.RegisterEndpointConsumer(ec)
 	return ec, nil
+}
+
+func (ec *grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) GetID() int {
+	return ec.Endpoint().GetID()
+}
+
+func (ec *grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
 }
