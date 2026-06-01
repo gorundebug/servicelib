@@ -26,25 +26,21 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 	for _, svc := range cfg.GetServices() {
 		services = append(services, config.ServiceConfigToAPI(svc))
 	}
-	cfgPools := cfg.GetPools()
-	pools := make([]api.Pool, 0, len(cfgPools))
-	for _, p := range cfgPools {
-		pools = append(pools, api.Pool{Name: p.Name, ExecutorsCount: p.ExecutorsCount})
+	pools := make([]api.Pool, 0, len(app.taskPools)+len(app.priorityTaskPools))
+	for _, p := range app.taskPools {
+		pools = append(pools, api.Pool{Name: p.GetName(), ExecutorsCount: p.GetExecutorsCount()})
 	}
-
-	// Map parent stream ID → config error stream so we use real config IDs.
-	parentToConfigErrorStream := make(map[int]config.StreamConfig)
-	for _, sc := range cfg.GetStreams() {
-		if sc.GetType() == api.TransformationTypeError && sc.GetIdSource() != 0 {
-			parentToConfigErrorStream[sc.GetIdSource()] = sc
-		}
+	for _, p := range app.priorityTaskPools {
+		pools = append(pools, api.Pool{Name: p.GetName(), ExecutorsCount: p.GetExecutorsCount()})
 	}
 
 	registeredStreams := make(map[int]bool, len(app.streams))
 	for id := range app.streams {
 		registeredStreams[id] = true
 	}
-	errorStreamIDs := make(map[int]bool)
+	// errorConsumerFrom maps errorConsumer.Id → virtual error stream Id (-producer.Id),
+	// so that links to error consumers are rewritten to originate from the virtual node.
+	errorConsumerFrom := make(map[int]int)
 
 	typeMap := make(map[string]api.Type)
 	modulesByPath := make(map[string]api.Module)
@@ -78,37 +74,22 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 		if ec == nil || len(ec.GetConsumers()) == 0 {
 			continue
 		}
-		if errSC, ok := parentToConfigErrorStream[s.Id]; ok {
-			errStream := config.StreamConfigToAPI(errSC)
-			if name, dt, pkg := typeInfoFromReflect(ec.GetValueType()); dt != api.DataTypeUndefined {
-				typeName := name
-				if typeName == "" {
-					typeName = config.ToCamelCaseFirstLower(errStream.Name)
-				}
-				if typeName != "" {
-					errStream.ValueType = &typeName
-					addTypeEntry(typeName, dt, pkg, typeMap, modulesByPath, modulePathMap)
-				}
-			}
-			streams = append(streams, errStream)
-			errorStreamIDs[errSC.GetID()] = true
-		} else {
-			errStream := api.Stream{
-				Id:        -s.Id,
-				Type:      api.TransformationTypeError,
-				IdService: s.IdService,
-				IdSource:  s.Id,
-			}
-			if name, dt, pkg := typeInfoFromReflect(ec.GetValueType()); dt != api.DataTypeUndefined {
-				typeName := name
-				if typeName == "" {
-					typeName = config.ToCamelCaseFirstLower(s.Name) + "Error"
-				}
-				errStream.ValueType = &typeName
-				addTypeEntry(typeName, dt, pkg, typeMap, modulesByPath, modulePathMap)
-			}
-			streams = append(streams, errStream)
+		errStream := api.Stream{
+			Id:        -s.Id,
+			Type:      api.TransformationTypeError,
+			IdService: s.IdService,
+			IdSource:  s.Id,
 		}
+		if name, dt, pkg := typeInfoFromReflect(ec.GetValueType()); dt != api.DataTypeUndefined {
+			typeName := name
+			if typeName == "" {
+				typeName = config.ToCamelCaseFirstLower(s.Name) + "Error"
+			}
+			errStream.ValueType = &typeName
+			addTypeEntry(typeName, dt, pkg, typeMap, modulesByPath, modulePathMap)
+		}
+		streams = append(streams, errStream)
+		errorConsumerFrom[ec.Stream().GetID()] = -s.Id
 	}
 
 	types := make([]api.Type, 0, len(typeMap))
@@ -154,6 +135,7 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 	}
 
 	// Links: only non-default call semantics; topology is in IdSource/IdSources.
+	// Semantics come from runtime callers (resolved in MakeCaller), not from config.
 	var defaultCS api.CallSemantics = api.CallSemanticsInherited
 	if svcCfg := app.ServiceConfig(); svcCfg != nil && svcCfg.DefaultCallSemantics != nil {
 		if cs := svcCfg.DefaultCallSemantics.Get(); cs != nil {
@@ -161,14 +143,27 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 		}
 	}
 	var links []api.Link
-	for _, l := range cfg.GetLinks() {
-		link := config.LinkConfigToAPI(l)
-		fromOk := registeredStreams[link.From] || errorStreamIDs[link.From]
-		toOk := registeredStreams[link.To] || errorStreamIDs[link.To]
-		nonDefault := link.CallSemantics != api.CallSemanticsInherited && link.CallSemantics != defaultCS
-		if fromOk && toOk && nonDefault {
-			links = append(links, link)
+	for _, li := range app.runtimeLinks {
+		if !registeredStreams[li.From] || !registeredStreams[li.To] {
+			continue
 		}
+		cs := li.CallSemantics.GetType()
+		if cs == api.CallSemanticsInherited || cs == defaultCS {
+			continue
+		}
+		from := li.From
+		if virtualID, ok := errorConsumerFrom[li.To]; ok {
+			from = virtualID
+		}
+		link := api.Link{From: from, To: li.To, CallSemantics: cs}
+		switch c := li.CallSemantics.(type) {
+		case *config.TaskPoolCallSemanticsConfig:
+			link.PoolName = &c.PoolName
+		case *config.PriorityTaskPoolCallSemanticsConfig:
+			link.PoolName = &c.PoolName
+			link.Priority = &c.Priority
+		}
+		links = append(links, link)
 	}
 
 	return &api.StreamApp{

@@ -56,6 +56,7 @@ type ServiceExecutionRuntime interface {
 	getSerializer(valueType reflect.Type) (serde.Serializer, error)
 	getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics)
+	registerLinkInfo(linkID config.LinkID, callSemantics config.CallSemanticsConfig)
 }
 
 func getPath(argPath string) (string, error) {
@@ -608,7 +609,9 @@ func MakeCaller[T any](source TypedStream[T]) Caller[T] {
 		panic(fmt.Sprintf("undefined callSemantics type [%T] ", callSemantics))
 	}
 
-	env.GetRuntime().registerConsumeStatistics(config.LinkID{From: source.GetID(), To: consumer.GetID()}, consumeStat)
+	linkID := config.LinkID{From: source.GetID(), To: consumer.GetID()}
+	env.GetRuntime().registerConsumeStatistics(linkID, consumeStat)
+	env.GetRuntime().registerLinkInfo(linkID, callSemantics)
 	return streamCaller
 }
 
@@ -627,12 +630,12 @@ func (s *consumeStatistics) Inc() {
 // noopSpan is returned by StartSpan when tracing is disabled, avoiding nil checks in callers.
 type noopSpan struct{}
 
-func (noopSpan) End()                                                {}
-func (noopSpan) SetAttributes(_ ...tracing.Attribute)                {}
-func (noopSpan) RecordError(_ error)                                 {}
-func (noopSpan) SetStatus(_ tracing.StatusCode, _ string)            {}
-func (noopSpan) AddEvent(_ string, _ ...tracing.Attribute)           {}
-func (noopSpan) SpanContext() tracing.SpanContext                     { return tracing.SpanContext{} }
+func (noopSpan) End()                                      {}
+func (noopSpan) SetAttributes(_ ...tracing.Attribute)      {}
+func (noopSpan) RecordError(_ error)                       {}
+func (noopSpan) SetStatus(_ tracing.StatusCode, _ string)  {}
+func (noopSpan) AddEvent(_ string, _ ...tracing.Attribute) {}
+func (noopSpan) SpanContext() tracing.SpanContext          { return tracing.SpanContext{} }
 
 type caller[T any] struct {
 	statistics      *consumeStatistics

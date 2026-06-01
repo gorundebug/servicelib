@@ -27,6 +27,8 @@ type Task struct {
 type TaskPool interface {
 	Pool
 	AddTask(ctx context.Context, fn func()) *Task
+	GetName() string
+	GetExecutorsCount() int
 }
 
 type TaskPoolImpl struct {
@@ -73,6 +75,12 @@ func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolCon
 	}
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool, nil
+}
+
+func (p *TaskPoolImpl) GetName() string { return p.name }
+
+func (p *TaskPoolImpl) GetExecutorsCount() int {
+	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
 }
 
 func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) *Task {

@@ -50,6 +50,7 @@ type ServiceApp struct {
 	metricsEngine     metrics.MetricsEngine
 	tracingEngine     tracing.TracingEngine
 	consumeStatistics map[config.LinkID]ConsumeStatistics
+	runtimeLinks      []RuntimeLinkInfo
 	storages          []store.Storage
 	delayPool         pool.DelayPool
 	taskPools         map[string]pool.TaskPool
@@ -135,6 +136,14 @@ func (app *ServiceApp) getRegisteredSerializer(tp reflect.Type) serde.StreamSeri
 
 func (app *ServiceApp) registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics) {
 	app.consumeStatistics[linkID] = statistics
+}
+
+func (app *ServiceApp) registerLinkInfo(linkID config.LinkID, callSemantics config.CallSemanticsConfig) {
+	app.runtimeLinks = append(app.runtimeLinks, RuntimeLinkInfo{
+		From:          linkID.From,
+		To:            linkID.To,
+		CallSemantics: callSemantics,
+	})
 }
 
 func (app *ServiceApp) Log() log.Logger {

@@ -28,6 +28,8 @@ type PriorityTask struct {
 type PriorityTaskPool interface {
 	Pool
 	AddTask(ctx context.Context, priority int, fn func()) *PriorityTask
+	GetName() string
+	GetExecutorsCount() int
 }
 
 type PriorityTaskPoolImpl struct {
@@ -104,6 +106,12 @@ func (pq *TaskPriorityQueue) Pop() interface{} {
 	item.index = -1
 	*pq = old[0 : n-1]
 	return item
+}
+
+func (p *PriorityTaskPoolImpl) GetName() string { return p.name }
+
+func (p *PriorityTaskPoolImpl) GetExecutorsCount() int {
+	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
 }
 
 func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) *PriorityTask {

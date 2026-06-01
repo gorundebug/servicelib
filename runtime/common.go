@@ -85,6 +85,13 @@ type TypedSerializedStream[T any] interface {
 	GetSerde() serde.StreamSerde[T]
 }
 
+// RuntimeLinkInfo holds the resolved call semantics for a registered stream link.
+type RuntimeLinkInfo struct {
+	From          int
+	To            int
+	CallSemantics config.CallSemanticsConfig
+}
+
 type RuntimeStream interface {
 	Build() error
 	GetRuntimeEnvironment() RuntimeEnvironment
