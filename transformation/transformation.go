@@ -74,8 +74,8 @@ func MultiJoinLink[K comparable, T1, T2, R any](
     return operators.MakeMultiJoinLink[K, T1, T2, R](multiJoinStream, rightStream)
 }
 
-func WhenStream[T, R any](caseStream runtime.TypedCaseStream[T]) (runtime.TypedConsumedStream[R], error) {
-    return operators.MakeWhenStream[T, R](caseStream)
+func WhenStream[T, R any](streamConfig *config.WhenStreamConfig, caseStream runtime.TypedCaseStream[T]) (runtime.TypedConsumedStream[R], error) {
+    return operators.MakeWhenStream[T, R](streamConfig, caseStream)
 }
 
 func CaseStream[T any](streamConfig *config.CaseStreamConfig, stream runtime.TypedStream[T], f operators.BuildSwitchFunction[T]) (runtime.TypedCaseStream[T], error) {

@@ -140,6 +140,7 @@ type Edge struct {
 const (
 	defaultOpacity = float32(1.0)
 	edgeColor      = "#0050FF"
+	edgeErrorColor = "#FF3030"
 	edgeLength     = 200
 )
 
@@ -190,44 +191,47 @@ func (app *ServiceApp) makeNode(runtimeStream RuntimeStream) *Node {
 	return n
 }
 
+func (app *ServiceApp) makeEdge(from Stream, typeName string, consumer Stream, color string) *Edge {
+	label, _ := strings.CutPrefix(typeName, "*")
+	label, _ = strings.CutPrefix(label, "types.")
+	if stat, ok := app.consumeStatistics[config.LinkID{From: from.GetID(), To: consumer.GetID()}]; ok {
+		label += fmt.Sprintf("\ncalls: %d", stat.Count())
+	}
+	cfg := consumer.GetConfig()
+	if cfg.GetType() == api.TransformationTypeJoin ||
+		cfg.GetType() == api.TransformationTypeMultiJoin {
+		if cfg.GetIdSource() == from.GetID() {
+			label += " (L)"
+		} else {
+			label += " (R)"
+		}
+	}
+	return &Edge{
+		From:   from.GetID(),
+		To:     consumer.GetID(),
+		Arrows: "to",
+		Length: edgeLength,
+		Label:  label,
+		Color: struct {
+			Opacity float32 `json:"opacity"`
+			Color   string  `json:"color"`
+		}{Opacity: defaultOpacity, Color: color},
+	}
+}
+
 func (app *ServiceApp) makeEdges(runtimeStream RuntimeStream) []*Edge {
 	edges := make([]*Edge, 0)
 	stream := runtimeStream.Stream()
 
-	allConsumers := runtimeStream.GetConsumers()
-	if ec := runtimeStream.GetErrorConsumer(); ec != nil {
-		allConsumers = append(allConsumers, ec.GetConsumers()...)
+	for _, consumer := range runtimeStream.GetConsumers() {
+		edges = append(edges, app.makeEdge(stream, stream.GetTypeName(), consumer, edgeColor))
 	}
 
-	for _, consumer := range allConsumers {
-		label, _ := strings.CutPrefix(stream.GetTypeName(), "*")
-		label, _ = strings.CutPrefix(label, "types.")
-		if stat, ok := app.consumeStatistics[config.LinkID{From: stream.GetID(), To: consumer.GetID()}]; ok {
-			label += fmt.Sprintf("\ncalls: %d", stat.Count())
+	if ec := runtimeStream.GetErrorConsumer(); ec != nil {
+		errTypeName := ec.Stream().GetTypeName()
+		for _, consumer := range ec.GetConsumers() {
+			edges = append(edges, app.makeEdge(stream, errTypeName, consumer, edgeErrorColor))
 		}
-
-		cfg := consumer.GetConfig()
-
-		if cfg.GetType() == api.TransformationTypeJoin ||
-			cfg.GetType() == api.TransformationTypeMultiJoin {
-			if cfg.GetIdSource() == stream.GetID() {
-				label = label + " (L)"
-			} else {
-				label = label + " (R)"
-			}
-		}
-
-		edges = append(edges, &Edge{
-			From:   stream.GetID(),
-			To:     consumer.GetID(),
-			Arrows: "to",
-			Length: edgeLength,
-			Label:  label,
-			Color: struct {
-				Opacity float32 `json:"opacity"`
-				Color   string  `json:"color"`
-			}{Opacity: defaultOpacity, Color: edgeColor},
-		})
 	}
 
 	return edges

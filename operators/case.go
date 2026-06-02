@@ -9,12 +9,13 @@ package operators
 
 import (
 	"context"
-	"github.com/gorundebug/servicelib/runtime/environment"
 	"reflect"
 	"strconv"
 
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/serde"
 )
 
@@ -23,6 +24,7 @@ var _ runtime.TypedCaseStream[any] = (*CaseStream[any])(nil)
 
 type WhenStream[T, R any] struct {
 	streamLink
+	id         int
 	caseStream runtime.TypedCaseStream[T]
 	index      int
 	caller     runtime.Caller[R]
@@ -30,7 +32,22 @@ type WhenStream[T, R any] struct {
 	serde      serde.StreamSerde[R]
 }
 
+func (s *WhenStream[T, R]) GetID() int {
+	return s.id
+}
+
+func (s *WhenStream[T, R]) GetConfig() config.StreamConfig {
+	return s.caseStream.GetRuntimeEnvironment().RuntimeConfig().GetStreamConfigByID(s.id)
+}
+
+func (s *WhenStream[T, R]) GetTransformationName() string {
+	return config.GetTransformationName(api.TransformationTypeWhen)
+}
+
 func (s *WhenStream[T, R]) GetName() string {
+	if cfg := s.GetConfig(); cfg != nil {
+		return cfg.GetName()
+	}
 	return s.caseStream.GetName() + "CaseLink" + strconv.Itoa(s.index)
 }
 
@@ -105,12 +122,15 @@ func (s *WhenStream[T, R]) Stream() runtime.Stream {
 	return s
 }
 
-func MakeWhenStream[T, R any](caseStream runtime.TypedCaseStream[T]) (runtime.TypedWhenStream[R], error) {
+func MakeWhenStream[T, R any](streamConfig *config.WhenStreamConfig, caseStream runtime.TypedCaseStream[T]) (runtime.TypedWhenStream[R], error) {
+	env := caseStream.GetRuntimeEnvironment()
 	whenStream := &WhenStream[T, R]{
 		streamLink: streamLink{stream: caseStream},
+		id:         streamConfig.ID,
 		caseStream: caseStream,
-		serde:      runtime.MakeSerde[R](caseStream.GetRuntimeEnvironment()),
+		serde:      runtime.MakeSerde[R](env),
 	}
+	env.RegisterStream(whenStream)
 	if err := caseStream.AddStream(whenStream); err != nil {
 		return nil, err
 	}
@@ -183,7 +203,7 @@ func (s *CaseStream[T]) Consume(ctx context.Context, value T) {
 func (s *CaseStream[T]) GetConsumers() []runtime.Stream {
 	var consumers = make([]runtime.Stream, 0, len(s.whenStreams))
 	for _, stream := range s.whenStreams {
-		consumers = append(consumers, stream.GetWhenConsumer())
+		consumers = append(consumers, stream)
 	}
 	return consumers
 }
