@@ -71,6 +71,12 @@ No HTTP routing. No transport handling. No serialization code. Only business log
 
 ---
 
+## Visual Designer
+
+![Service Topology Runtime](screen.png)
+
+---
+
 ## Operators
 
 | Operator | Purpose |
