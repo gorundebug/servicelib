@@ -15,14 +15,17 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -120,85 +123,34 @@ func (tr *tracingImpl) Tracer(name string) tracing.Tracer {
 	return &tracerImpl{t: tr.provider.Tracer(name)}
 }
 
-// ── lightweight propagation handlers ─────────────────────────────────────────
+// ── samplingGRPCServerHandler ─────────────────────────────────────────────────
 
-// grpcMetadataCarrier adapts gRPC metadata to the otel TextMapCarrier interface.
-type grpcMetadataCarrier metadata.MD
-
-func (c grpcMetadataCarrier) Get(key string) string {
-	vals := metadata.MD(c).Get(key)
-	if len(vals) > 0 {
-		return vals[0]
-	}
-	return ""
+// samplingGRPCServerHandler enables per-request tracing when the caller sends
+// "x-trace" metadata, then delegates to the inner otelgrpc server handler that
+// creates the actual gRPC server span with full semconv attributes.
+type samplingGRPCServerHandler struct {
+	inner stats.Handler
 }
 
-func (c grpcMetadataCarrier) Set(key, value string) {
-	metadata.MD(c).Set(key, value)
-}
-
-func (c grpcMetadataCarrier) Keys() []string {
-	keys := make([]string, 0, len(c))
-	for k := range c {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// propagationServerStats extracts trace context from incoming gRPC metadata.
-// It does not create spans — zero overhead for non-traced requests.
-type propagationServerStats struct {
-	prop propagation.TextMapPropagator
-}
-
-func (h *propagationServerStats) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+func (h *samplingGRPCServerHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		ctx = h.prop.Extract(ctx, grpcMetadataCarrier(md))
 		if vals := md.Get("x-trace"); len(vals) > 0 && vals[0] != "" {
 			ctx = tracing.EnableSampling(ctx)
 		}
 	}
-	return ctx
+	return h.inner.TagRPC(ctx, info)
 }
 
-func (h *propagationServerStats) HandleRPC(_ context.Context, _ stats.RPCStats) {}
-func (h *propagationServerStats) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
-	return ctx
-}
-func (h *propagationServerStats) HandleConn(_ context.Context, _ stats.ConnStats) {}
-
-// propagationClientStats injects trace context into outgoing gRPC metadata.
-type propagationClientStats struct {
-	prop propagation.TextMapPropagator
+func (h *samplingGRPCServerHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	h.inner.HandleRPC(ctx, s)
 }
 
-func (h *propagationClientStats) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	} else {
-		md = md.Copy()
-	}
-	h.prop.Inject(ctx, grpcMetadataCarrier(md))
-	return metadata.NewOutgoingContext(ctx, md)
+func (h *samplingGRPCServerHandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+	return h.inner.TagConn(ctx, info)
 }
 
-func (h *propagationClientStats) HandleRPC(_ context.Context, _ stats.RPCStats) {}
-func (h *propagationClientStats) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
-	return ctx
-}
-func (h *propagationClientStats) HandleConn(_ context.Context, _ stats.ConnStats) {}
-
-// propagationTransport injects trace context into outgoing HTTP request headers.
-type propagationTransport struct {
-	base http.RoundTripper
-	prop propagation.TextMapPropagator
-}
-
-func (t *propagationTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req = req.Clone(req.Context())
-	t.prop.Inject(req.Context(), propagation.HeaderCarrier(req.Header))
-	return t.base.RoundTrip(req)
+func (h *samplingGRPCServerHandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	h.inner.HandleConn(ctx, s)
 }
 
 // ── TracingEngine ─────────────────────────────────────────────────────────────
@@ -213,29 +165,53 @@ func (e *TracingEngine) Tracing() tracing.Tracing {
 	return e.impl
 }
 
-// GRPCStatsHandler extracts incoming trace context from gRPC metadata.
-// No span is created — zero overhead when not sampling.
+// GRPCStatsHandler enables per-request sampling via "x-trace" metadata and
+// creates gRPC server spans with standard semconv attributes (method, status, etc.).
 func (e *TracingEngine) GRPCStatsHandler() stats.Handler {
-	return &propagationServerStats{prop: otel.GetTextMapPropagator()}
+	return &samplingGRPCServerHandler{
+		inner: otelgrpc.NewServerHandler(
+			otelgrpc.WithTracerProvider(e.provider),
+			otelgrpc.WithMeterProvider(noopmetric.NewMeterProvider()),
+			otelgrpc.WithPropagators(otel.GetTextMapPropagator()),
+		),
+	}
 }
 
-// GRPCClientHandler injects outgoing trace context into gRPC metadata.
+// GRPCClientHandler creates gRPC client spans and injects outgoing trace context.
 func (e *TracingEngine) GRPCClientHandler() stats.Handler {
-	return &propagationClientStats{prop: otel.GetTextMapPropagator()}
+	return otelgrpc.NewClientHandler(
+		otelgrpc.WithTracerProvider(e.provider),
+		otelgrpc.WithMeterProvider(noopmetric.NewMeterProvider()),
+		otelgrpc.WithPropagators(otel.GetTextMapPropagator()),
+	)
 }
 
-// HTTPClientTransport injects outgoing trace context into HTTP headers.
+// HTTPClientTransport creates HTTP client spans (including DNS, connect, TLS timing)
+// and injects outgoing trace context into request headers.
 func (e *TracingEngine) HTTPClientTransport(base http.RoundTripper) http.RoundTripper {
-	return &propagationTransport{base: base, prop: otel.GetTextMapPropagator()}
+	return otelhttp.NewTransport(base,
+		otelhttp.WithTracerProvider(e.provider),
+		otelhttp.WithMeterProvider(noopmetric.NewMeterProvider()),
+		otelhttp.WithPropagators(otel.GetTextMapPropagator()),
+	)
 }
 
-// HTTPServerHandler extracts incoming trace context from HTTP headers.
-// No span is created — zero overhead when not sampling.
-func (e *TracingEngine) HTTPServerHandler(mux http.Handler, _ string) http.Handler {
-	prop := otel.GetTextMapPropagator()
+// HTTPServerHandler creates a transport-level HTTP server span that covers
+// routing, auth middleware, panic recovery, and request decoding — everything
+// before the endpoint handler runs. Per-request sampling is enabled when the
+// caller sends "X-Trace: 1"; the flag is set before otelhttp creates the span
+// so contextSampler sees it.
+func (e *TracingEngine) HTTPServerHandler(mux http.Handler, name string) http.Handler {
+	inner := otelhttp.NewHandler(mux, name,
+		otelhttp.WithTracerProvider(e.provider),
+		otelhttp.WithMeterProvider(noopmetric.NewMeterProvider()),
+		otelhttp.WithPropagators(otel.GetTextMapPropagator()),
+	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := prop.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		if v := r.Header.Get("x-trace"); v != "" {
+			r = r.WithContext(tracing.EnableSampling(r.Context()))
+		}
+		inner.ServeHTTP(w, r)
 	})
 }
 

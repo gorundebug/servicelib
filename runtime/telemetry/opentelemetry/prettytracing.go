@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -23,8 +25,9 @@ import (
 // Each span occupies one line so that spans from multiple services can be
 // correlated by trace ID across separate log streams:
 //
-//	[1782d516][HotelSearch  ]  23:01:20.203    120ms  grpc.output   endpoint="Search Rooms"
-//	[1782d516][HotelInventory]  23:01:20.280     85ms  grpc.input    endpoint="Search Rooms"
+//	[1782d516][HotelSearch     ]  23:01:20.203    120ms  grpc.output    endpoint="Search Rooms"
+//	[1782d516][HotelInventory  ]  23:01:20.280     85ms  grpc.input     endpoint="Search Rooms"  » begin_request consume_message eof done
+//	[1782d516][HotelSearch     ]  23:01:20.365     12ms  grpc.output  ✖ endpoint="Search Rooms"  error="deadline exceeded"
 //
 // Works correctly with both WithSyncer (one span per call) and WithBatcher
 // (multiple spans per call, sorted by start time within a trace).
@@ -44,7 +47,6 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// Sort all spans by start time so output is chronological.
 	sorted := make([]sdktrace.ReadOnlySpan, len(spans))
 	copy(sorted, spans)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -66,16 +68,32 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 		}
 
 		dur := s.EndTime().Sub(s.StartTime())
-		fmt.Fprintf(e.w, "[%s][%-16s]  %s  %8s  %-28s",
+		statusMark := "  "
+		if s.Status().Code == codes.Error {
+			statusMark = "✖ "
+		}
+
+		fmt.Fprintf(e.w, "[%s][%-16s]  %s  %8s  %-28s%s",
 			traceID,
 			svcName,
 			s.StartTime().Format("15:04:05.000"),
 			prettyDuration(dur),
 			s.Name(),
+			statusMark,
 		)
+
 		for _, attr := range s.Attributes() {
 			fmt.Fprintf(e.w, " %s=%q", string(attr.Key), attr.Value.AsString())
 		}
+
+		if evs := s.Events(); len(evs) > 0 {
+			names := make([]string, len(evs))
+			for i, ev := range evs {
+				names[i] = ev.Name
+			}
+			fmt.Fprintf(e.w, "  » %s", strings.Join(names, " "))
+		}
+
 		fmt.Fprintln(e.w)
 	}
 	return nil
