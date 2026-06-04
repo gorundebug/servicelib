@@ -10,6 +10,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -39,6 +40,8 @@ type InputEndpoint interface {
 	OnLateResult(ctx context.Context, sessionID string)
 	OnUnknownMessageID(ctx context.Context, sessionID string, messageID string)
 	OnDuplicateMessageID(ctx context.Context, sessionID string, messageID string)
+	OnPendingAdd(ctx context.Context, streamID string)
+	OnPendingRemove(ctx context.Context, streamID string)
 	OnInvalidHTTPMethod(ctx context.Context, method string)
 	OnBeginRequestFailed(ctx context.Context, err error)
 	OnRequestStart(ctx context.Context) time.Time
@@ -124,6 +127,9 @@ type DataSourceEndpoint struct {
 	messagesTotal             metrics.Int64Counter
 	requestDuration           metrics.Float64Histogram
 	activeRequests            metrics.Int64Gauge
+	pendingRequests           metrics.Int64Gauge
+	pendingMu                 sync.RWMutex
+	pendingStartTimes         map[string]time.Time
 }
 
 func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEnvironment) (*DataSourceEndpoint, error) {
@@ -169,6 +175,17 @@ func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEn
 		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
 	}
 	if ep.activeRequests, err = scope.Gauge("active_requests", "Number of active requests in data source endpoint", nil); err != nil {
+		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
+	}
+	if ep.pendingRequests, err = scope.Gauge("pending_requests", "Number of requests awaiting a pipeline result", nil); err != nil {
+		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
+	}
+	ep.pendingStartTimes = make(map[string]time.Time)
+	if err = scope.ObservableFloat64Gauge(
+		"pending_oldest_age_seconds",
+		"Age in seconds of the oldest pending request awaiting a pipeline result",
+		ep.oldestPendingAge,
+	); err != nil {
 		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
 	}
 	return ep, nil
@@ -224,6 +241,35 @@ func (ep *DataSourceEndpoint) OnDuplicateMessageID(ctx context.Context, sessionI
 		"consumeResult called for endpoint %q: duplicate messageID %s (session: %s)",
 		ep.GetName(), messageID, sessionID)
 	ep.duplicateMessageIDCounter.Inc(ctx)
+}
+
+func (ep *DataSourceEndpoint) oldestPendingAge() float64 {
+	ep.pendingMu.RLock()
+	defer ep.pendingMu.RUnlock()
+	var oldest time.Time
+	for _, t := range ep.pendingStartTimes {
+		if oldest.IsZero() || t.Before(oldest) {
+			oldest = t
+		}
+	}
+	if oldest.IsZero() {
+		return 0
+	}
+	return time.Since(oldest).Seconds()
+}
+
+func (ep *DataSourceEndpoint) OnPendingAdd(_ context.Context, streamID string) {
+	ep.pendingRequests.Inc()
+	ep.pendingMu.Lock()
+	ep.pendingStartTimes[streamID] = time.Now()
+	ep.pendingMu.Unlock()
+}
+
+func (ep *DataSourceEndpoint) OnPendingRemove(_ context.Context, streamID string) {
+	ep.pendingRequests.Dec()
+	ep.pendingMu.Lock()
+	delete(ep.pendingStartTimes, streamID)
+	ep.pendingMu.Unlock()
 }
 
 func (ep *DataSourceEndpoint) OnInvalidHTTPMethod(ctx context.Context, method string) {

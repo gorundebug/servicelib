@@ -108,6 +108,7 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		var outputSpan tracing.Span
 		if ec.tracer != nil {
 			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output",
+				tracing.StringAttr("stream", ec.stream.GetName()),
 				tracing.StringAttr("endpoint", ec.endpoint.GetName()),
 			)
 		}

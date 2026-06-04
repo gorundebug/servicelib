@@ -13,6 +13,8 @@
 //     datasource_endpoint_messages_total{connector, endpoint}      counter
 //     datasource_endpoint_request_duration_seconds{connector, endpoint} histogram
 //     datasource_endpoint_active_requests{connector, endpoint}     gauge
+//     datasource_endpoint_pending_requests{connector, endpoint}    gauge
+//     datasource_endpoint_pending_oldest_age_seconds{connector, endpoint} gauge
 
 local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libsonnet';
 local lib = import '_lib.libsonnet';
@@ -88,6 +90,48 @@ lib.dashboard(
       ],
       w=12, h=8,
       unit='short',
+    ),
+
+    // -------------------------------------------------------------------------
+    // Row: Pending Requests
+    // -------------------------------------------------------------------------
+    lib.row('Pending Requests'),
+
+    lib.ts(
+      title='Pending Requests',
+      targets=[
+        lib.promQ(
+          'datasource_endpoint_pending_requests{%s}' % epFilter,
+          '{{connector}} / {{endpoint}}'
+        ),
+      ],
+      w=12, h=8,
+      unit='short',
+    ),
+
+    lib.ts(
+      title='Oldest Pending Request Age',
+      targets=[
+        lib.promQ(
+          'datasource_endpoint_pending_oldest_age_seconds{%s}' % epFilter,
+          '{{connector}} / {{endpoint}}'
+        ),
+      ],
+      w=12, h=8,
+      unit='s',
+    ),
+
+    lib.ts(
+      title='Late Results Rate',
+      targets=[
+        lib.rate(
+          'datasource_endpoint_events_total',
+          '%s, event="late_result"' % epFilter,
+          '{{connector}} / {{endpoint}}'
+        ),
+      ],
+      w=12, h=8,
+      unit='ops',
     ),
 
     // -------------------------------------------------------------------------

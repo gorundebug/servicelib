@@ -467,6 +467,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	var span tracing.Span
 	if ec.tracer != nil {
 		ctx, span = ec.tracer.Start(ctx, "kafka.input",
+			tracing.StringAttr("stream", ec.Stream().GetName()),
 			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
 		)
 		defer span.End()
@@ -502,6 +503,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	}
 	if ec.hasResult {
 		ec.pending.Set(streamID, result)
+		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 
 	if err = ec.handler.ConsumeMessage(
@@ -526,6 +528,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 			result.mu.Lock()
 			defer result.mu.Unlock()
 			ec.pending.Pop(streamID)
+			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
 		tracing.SpanError(span, err)
 		if span != nil {
@@ -549,6 +552,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
 	case <-handlerCtx.Done():
@@ -559,6 +563,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
 	}

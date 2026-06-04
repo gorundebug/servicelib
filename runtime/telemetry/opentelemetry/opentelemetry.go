@@ -233,6 +233,22 @@ func (s *metricsScope) HistogramVec(name, help string, buckets ...float64) (metr
 	return h, nil
 }
 
+func (s *metricsScope) ObservableFloat64Gauge(name, help string, fn func() float64) error {
+	obs, err := s.m.meter.Float64ObservableGauge(s.fullName(name), otelmetric.WithDescription(help))
+	if err != nil {
+		return fmt.Errorf("failed to create observable gauge %q: %w", s.fullName(name), err)
+	}
+	base := attrsFromLabels(s.base)
+	_, err = s.m.meter.RegisterCallback(func(_ context.Context, o otelmetric.Observer) error {
+		o.ObserveFloat64(obs, fn(), otelmetric.WithAttributes(base...))
+		return nil
+	}, obs)
+	if err != nil {
+		return fmt.Errorf("failed to register callback for observable gauge %q: %w", s.fullName(name), err)
+	}
+	return nil
+}
+
 // ── Float64Gauge (observable) ─────────────────────────────────────────────────
 
 type float64Gauge struct {

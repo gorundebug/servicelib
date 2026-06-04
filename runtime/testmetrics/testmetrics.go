@@ -174,6 +174,10 @@ func (s *testScope) HistogramVec(name, _ string, _ ...float64) (metrics.Float64H
 	return &testFloat64HistogramVec{m: s.m, name: s.fullName(name), base: s.base}, nil
 }
 
+func (s *testScope) ObservableFloat64Gauge(_ string, _ string, _ func() float64) error {
+	return nil
+}
+
 // ── TestMetrics ───────────────────────────────────────────────────────────────
 
 // TestMetrics implements metrics.MetricsEngine with in-memory storage.

@@ -171,6 +171,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	var span tracing.Span
 	if ec.tracer != nil {
 		ctx, span = ec.tracer.Start(ctx, "grpc.input",
+			tracing.StringAttr("stream", ec.Stream().GetName()),
 			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
 		)
 		defer span.End()
@@ -201,6 +202,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	result := makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
 	if ec.hasResult {
 		ec.pending.Set(streamID, result)
+		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 
 	if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, result, sender); err != nil {
@@ -208,6 +210,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 			result.mu.Lock()
 			defer result.mu.Unlock()
 			ec.pending.Pop(streamID)
+			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
 		tracing.SpanError(span, err)
 		if span != nil {
@@ -249,6 +252,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if err != nil {
 			tracing.SpanError(span, err)
@@ -263,6 +267,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
 		if err != nil {
 			tracing.SpanError(span, err)

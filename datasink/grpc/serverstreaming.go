@@ -35,6 +35,7 @@ func (ec *grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	var span tracing.Span
 	if ec.tracer != nil {
 		ctx, span = ec.tracer.Start(ctx, "grpc.output",
+			tracing.StringAttr("stream", ec.stream.GetName()),
 			tracing.StringAttr("endpoint", ec.endpoint.GetName()),
 		)
 		defer span.End()

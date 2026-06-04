@@ -68,6 +68,9 @@ func (s *mockMetricsScope) Histogram(_, _ string, _ metrics.Labels, _ ...float64
 func (s *mockMetricsScope) HistogramVec(_, _ string, _ ...float64) (metrics.Float64HistogramVec, error) {
 	return nil, nil
 }
+func (s *mockMetricsScope) ObservableFloat64Gauge(_, _ string, _ func() float64) error {
+	return nil
+}
 
 type mockCounter struct{}
 

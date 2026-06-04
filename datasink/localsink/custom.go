@@ -137,6 +137,7 @@ func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 	var span tracing.Span
 	if ep.tracer != nil {
 		ctx, span = ep.tracer.Start(ctx, "local.output",
+			tracing.StringAttr("stream", ep.Stream().GetName()),
 			tracing.StringAttr("endpoint", ep.Endpoint().GetName()),
 		)
 		defer span.End()

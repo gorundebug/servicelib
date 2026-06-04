@@ -409,6 +409,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 	var span tracing.Span
 	if ec.tracer != nil {
 		reqCtx, span = ec.tracer.Start(reqCtx, "http.input",
+			tracing.StringAttr("stream", ec.Stream().GetName()),
 			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
 			tracing.StringAttr("method", r.Method),
 			tracing.StringAttr("path", r.URL.Path),
@@ -447,6 +448,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 	}
 	if ec.hasResult {
 		ec.pending.Set(streamID, result)
+		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 
 	if err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, data, result); err != nil {
@@ -454,6 +456,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 			result.mu.Lock()
 			defer result.mu.Unlock()
 			ec.pending.Pop(streamID)
+			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
 		tracing.SpanError(span, err)
 		if span != nil {
@@ -477,6 +480,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState, data)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
 	case <-handlerCtx.Done():
@@ -487,6 +491,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
+		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState, data)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
 	}

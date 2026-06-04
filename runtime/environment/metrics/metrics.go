@@ -138,6 +138,11 @@ type MetricsScope interface {
     GaugeVec(name, help string) (Int64GaugeVec, error)
     Histogram(name, help string, labels Labels, buckets ...float64) (Float64Histogram, error)
     HistogramVec(name, help string, buckets ...float64) (Float64HistogramVec, error)
+    // ObservableFloat64Gauge registers a gauge whose value is computed by fn on
+    // every metrics collection cycle (Prometheus scrape, OTLP push, etc.).
+    // Use it for values that change independently of metric update calls —
+    // for example, the age of the oldest entry in an in-memory map.
+    ObservableFloat64Gauge(name, help string, fn func() float64) error
 }
 
 type Metrics interface {

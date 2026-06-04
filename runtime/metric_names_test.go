@@ -142,6 +142,7 @@ var expectedDataSourceEndpointMetrics = []string{
 	"datasource_endpoint_active_requests",
 	"datasource_endpoint_events_total",
 	"datasource_endpoint_messages_total",
+	"datasource_endpoint_pending_requests",
 	"datasource_endpoint_request_duration_seconds",
 }
 

@@ -138,6 +138,7 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	var span tracing.Span
 	if ec.tracer != nil {
 		ctx, span = ec.tracer.Start(ctx, "http.output",
+			tracing.StringAttr("stream", ec.stream.GetName()),
 			tracing.StringAttr("endpoint", ec.endpoint.GetName()),
 		)
 		defer span.End()
