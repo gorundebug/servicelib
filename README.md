@@ -231,7 +231,17 @@ The focus is intentionally narrow: **typed executable architecture for Go servic
 - ✅ HTTP / gRPC / Kafka connectors
 - ✅ Full OpenTelemetry tracing + Prometheus metrics
 - ✅ Live topology visualization
-- 🔧 Code generation system (in progress)
+- 🅱️ Code generation system (beta)
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Architecture Reference](docs/architecture-reference.md) | Runtime internals, execution model, lifecycle |
+| [DSL Reference](docs/dsl-reference.md) | Topology YAML format — nodes, edges, connectors, types |
+| [Architecture Reference (LLM)](docs/architecture_llm.md) | Condensed reference for AI-assisted development |
 
 ---
 
