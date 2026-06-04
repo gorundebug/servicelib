@@ -1,494 +1,250 @@
+<div align="center">
+
 # Service Topology Runtime
 
-> **Executable architecture for Go services**
->
-> Design your service as a typed topology graph.
-> Generate the infrastructure.
-> Implement only the business logic.
+**Executable architecture for Go services**
+
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square)](https://opensource.org/licenses/MIT)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-enabled-f5a623?style=flat-square)](https://opentelemetry.io/)
+[![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-e6522c?style=flat-square)](https://prometheus.io/)
+
+Design your service as a typed topology graph.  
+Generate the infrastructure. Implement only the business logic.
+
+**[gorundebug.com](https://www.gorundebug.com)**
+
+</div>
 
 ---
 
-# What Is This?
-
-Service Topology Runtime is an **executable architecture runtime** for Go.
-
-Instead of manually wiring:
-
-* HTTP handlers
-* gRPC services
-* Kafka consumers/producers
-* serialization
-* concurrency
-* lifecycle management
-* retries
-* error propagation
-* stream routing
-
-you describe the service as a **typed dataflow graph**.
-
-The graph becomes:
-
-* the runtime topology
-* the execution model
-* the architecture documentation
-* the code generation source
-
-The architecture diagram is the running program.
-
----
-
-# Why?
+## The Idea
 
 Modern backend services contain two very different kinds of code:
 
-## 1. Infrastructure Plumbing
+| Layer | What it is | Who should write it |
+|---|---|---|
+| **Infrastructure** | routing, transports, serialization, lifecycle, metrics, tracing | The framework |
+| **Business Logic** | validation, transformations, integrations, decisions | You |
 
-The repetitive code:
+This project eliminates the first category entirely.
 
-* routing
-* connectors
-* transports
-* concurrency
-* serialization
-* orchestration
-* lifecycle handling
-
-This code is:
-
-* large
-* repetitive
-* error-prone
-* architecturally inconsistent
-
-## 2. Business Logic
-
-The actual decisions your service makes:
-
-* validation
-* transformations
-* integrations
-* business rules
-
-This is the code that matters.
+You describe the service as a **typed dataflow graph**. The framework generates connectors, handlers, lifecycle glue, and runtime wiring. You implement only the nodes.
 
 ---
 
-This project eliminates category #1.
+## How It Works
 
-You design the topology visually.
-
-The framework generates:
-
-* connectors
-* handlers
-* lifecycle glue
-* runtime integration
-* typed stubs
-
-You implement only the nodes.
-
----
-
-# Core Idea
-
-A service is modeled as a **typed execution graph**.
-
-Example:
-
-```text
-KafkaInput
-    → Filter
-    → KeyBy
-    → Join
-    → Map
-    → HttpSink
+```
+Visual Designer  →  Topology Definition  →  Code Generator
+                                                    ↓
+                              Your Business Logic  ←  Generated Typed Stubs
+                                      ↓
+                               Runtime Execution
 ```
 
-This is not just a diagram.
-
-It is:
-
-* executable
-* typed
-* validated
-* inspectable
-* generatable
-
-Every edge has a type.
-
-Every node has a contract.
-
-Every connector has a lifecycle.
-
----
-
-# Philosophy
-
-This is:
-
-* NOT low-code
-* NOT no-code
-* NOT drag-and-drop automation
-* NOT a workflow engine
-* NOT an enterprise BPM system
-
-Developers still write real Go code.
-
-The difference is:
-
-* architecture becomes declarative
-* infrastructure becomes generated
-* runtime wiring becomes automatic
-
-The framework disappears.
-The architecture remains.
-
----
-
-# Mental Model
-
-| Layer          | Responsibility                    |
-| -------------- | --------------------------------- |
-| **Graph**      | Architecture and topology         |
-| **Nodes**      | Business logic                    |
-| **Runtime**    | Execution, lifecycle, concurrency |
-| **Connectors** | External integration              |
-
-Business logic is isolated from infrastructure concerns.
-
-Developers work almost entirely at the **Node** layer.
-
----
-
-# Development Flow
+### Example topology
 
 ```text
-Visual Designer
-        ↓
-Topology Definition
-        ↓
-Code Generator
-        ↓
-Generated Typed Stubs
-        ↓
-Your Business Logic
-        ↓
-Runtime Execution
+HTTP Input  →  ValidateUser  →  EnrichProfile  →  PublishKafkaEvent  →  HTTP Response
 ```
 
----
-
-# Example
-
-## Visual Topology
-
-```text
-HTTP Input
-    → ValidateUser
-    → EnrichProfile
-    → PublishKafkaEvent
-    → HTTP Response
-```
-
----
-
-## Generated Stub
+### What you implement
 
 ```go
 type ValidateUser struct{}
 
 func (v *ValidateUser) Process(
-    ctx context.Context,
-    input CreateUserRequest,
+    ctx    context.Context,
+    input  CreateUserRequest,
     collect runtime.Collect[ValidatedUser],
 ) error {
-
     if input.Email == "" {
         return errors.New("email required")
     }
-
-    collect.Out(ctx, ValidatedUser{
-        Email: input.Email,
-    })
-
+    collect.Out(ctx, ValidatedUser{Email: input.Email})
     return nil
 }
 ```
 
-No framework boilerplate.
-
-No HTTP routing.
-
-No transport handling.
-
-No serialization code.
-
-Only business logic.
+No HTTP routing. No transport handling. No serialization code. Only business logic.
 
 ---
 
-# Typed Operator Model
+## Operators
 
-The runtime provides a minimal set of strongly-typed operators.
-
-| Operator    | Purpose                                 |
-| ----------- | --------------------------------------- |
-| `Input`     | Receive data from external systems      |
-| `Sink`      | Send data to external systems           |
-| `Map`       | Transform one value into another        |
-| `Filter`    | Conditionally pass values               |
-| `FlatMap`   | Expand one value into many              |
-| `Process`   | Transform with side-output error stream |
-| `KeyBy`     | Partition stream by key                 |
-| `Join`      | Combine two keyed streams               |
-| `MultiJoin` | Combine multiple keyed streams          |
-| `Merge`     | Merge streams                           |
-| `Split`     | Duplicate streams                       |
-| `Case`      | Branch by condition                     |
-| `Delay`     | Deferred delivery                       |
-| `CycleLink` | Feedback loops                          |
-
-This operator algebra is sufficient to model:
-
-* CRUD services
-* event-driven systems
-* stream processing
-* orchestration flows
-* distributed service interactions
-
-using a single consistent abstraction.
+| Operator | Purpose |
+|---|---|
+| `Input` | Receive data from external systems |
+| `Sink` | Send data to external systems |
+| `Map` | Transform one value into another |
+| `Filter` | Conditionally pass values |
+| `FlatMap` | Expand one value into many |
+| `Process` | Transform with side-output error stream |
+| `KeyBy` | Partition stream by key |
+| `Join` | Combine two keyed streams |
+| `MultiJoin` | Combine multiple keyed streams |
+| `Merge` | Merge streams |
+| `Split` | Duplicate streams |
+| `Case` | Branch by condition |
+| `Delay` | Deferred delivery |
+| `CycleLink` | Feedback loops |
 
 ---
 
-# Connectors
+## Connectors
 
-## Supported Data Sources
+**Data Sources** — HTTP · gRPC (unary, client-streaming, server-streaming, bidi) · Kafka · Local in-process
 
-* HTTP
-* gRPC
-* Kafka
-* Local in-process sources
+**Data Sinks** — HTTP · gRPC · Kafka · Local in-process
 
-## Supported Data Sinks
+Every connector follows the same lifecycle:
 
-* HTTP
-* gRPC
-* Kafka
-* Local in-process sinks
-
-Every connector follows the same lifecycle model:
-
-```text
-BeginRequest
-    ↓
-ConsumeMessage
-    ↓
-HandleResponse
-    ↓
-EndRequest
+```
+BeginRequest  →  ConsumeMessage  →  HandleResponse  →  EndRequest
 ```
 
 ---
 
-# Runtime Features
+## Observability — Built In
 
-* Typed execution graph
-* Automatic connector wiring
-* Stream routing
-* Async result correlation
-* Error propagation
-* Service lifecycle management
-* Structured concurrency
-* Metrics hooks
-* Logging hooks
-* Real-time topology visualization
+No opt-in required. Every service gets full observability from day one.
 
----
+### Distributed Tracing (OpenTelemetry)
 
-# Live Runtime Topology
+Automatic spans at every layer of the request path:
 
-The running service can expose its own topology.
+```
+grpc.server              ← transport-level, via otelgrpc
+  └─ grpc.input          ← endpoint span  {stream, endpoint, stream_id}
+       └─ stream.call    ← per-operator span  {stream}
+            └─ stream.call
+                 └─ grpc.output    ← sink span  {stream, endpoint}
+                      └─ grpc.client   ← transport-level, via otelgrpc
+```
 
-The runtime visualization shows:
+Per-request sampling via `X-Trace: 1` header (HTTP) or `x-trace` metadata (gRPC) — no global flag needed.
 
-* nodes
-* edges
-* stream types
-* service boundaries
-* live call counts
+### Metrics (Prometheus)
 
-The runtime graph is the same graph used for generation and execution.
+**Datasource endpoint metrics** (`datasource_endpoint_*`):
 
-Architecture diagrams cannot drift from reality.
+| Metric | Type | Description |
+|---|---|---|
+| `messages_total` | counter | Successfully processed messages |
+| `request_duration_seconds` | histogram | Request duration |
+| `active_requests` | gauge | Requests currently in flight |
+| `pending_requests` | gauge | Requests awaiting a pipeline result |
+| `pending_oldest_age_seconds` | gauge (observable) | Age of the oldest stuck pending request |
+| `events_total{event=...}` | counter | `request_error` · `late_result` · `missing_stream_id` · `unknown_message_id` · `duplicate_message_id` · `begin_request_failed` |
 
----
+`pending_oldest_age_seconds` is computed at scrape time — it never goes stale even under zero traffic.
 
-# AI-Agent Friendly by Design
+### Grafana Dashboards
 
-Generated code is intentionally designed for AI-assisted implementation.
+Pre-built Jsonnet dashboards for every subsystem:
 
-Every generated stub includes:
-
-* explicit named types
-* clear lifecycle documentation
-* compile-time interface validation
-* TODO implementation points
-
-An AI coding agent can implement a node with minimal context because:
-
-* the architecture is explicit
-* the contracts are typed
-* responsibilities are isolated
-
-The topology constrains the problem space.
-
----
-
-# Why This Is Different
-
-| System                   | Primary Goal                    |
-| ------------------------ | ------------------------------- |
-| Kafka / Flink            | Stream processing               |
-| Temporal                 | Durable workflows               |
-| Node-RED                 | Visual automation               |
-| Traditional frameworks   | Request handling                |
-| Service Topology Runtime | Executable service architecture |
-
-Streaming is an implementation detail.
-
-The primary abstraction is:
-
-> **service topology as executable architecture**
-
----
-
-# Architectural Properties
-
-## Architecture Cannot Drift
-
-The topology definition drives:
-
-* generation
-* runtime behavior
-* visualization
-
-The graph is the source of truth.
-
----
-
-## Onboarding Is Visual
-
-New engineers can inspect the topology and immediately understand:
-
-* data flow
-* integrations
-* branching
-* dependencies
-* error routing
-
-without tracing call chains through the codebase.
-
----
-
-## Changes Are Localized
-
-Adding functionality means:
-
-1. Add a node
-2. Regenerate stubs
-3. Implement business logic
-
-The impact boundary is explicit.
-
----
-
-## Consistency Is Structural
-
-All generated integrations follow the same patterns.
-
-Consistency is enforced by the topology and runtime — not by team discipline.
-
----
-
-# Service Boundary Awareness
-
-A topology may span multiple services.
-
-Cross-service interactions become explicit edges in the graph.
-
-This makes distributed coupling:
-
-* visible
-* reviewable
-* analyzable
-
-before deployment.
-
----
-
-# Project Structure
-
-```text
-Designer
-    → topology definition
-
-Generator
-    → typed Go stubs
-
-Runtime
-    → execution engine
-
-Business Logic
-    → your implementation
+```
+01_service.jsonnet       Service health overview
+02_streams.jsonnet       Stream processing metrics
+03_datasource.jsonnet    Datasource endpoints + pending visibility
+04_datasink.jsonnet      Datasink endpoints
+05_pools.jsonnet         Worker pool utilization
+06_storage.jsonnet       Storage layer
+07_http_server.jsonnet   HTTP server transport
+08_http_client.jsonnet   HTTP client transport
+09_grpc_server.jsonnet   gRPC server transport
+10_grpc_client.jsonnet   gRPC client transport
+11_runtime.jsonnet       Go runtime (GC, goroutines, memory)
 ```
 
 ---
 
-# Current Status
+## Live Topology Visualization
 
-The project currently includes:
+The running service can expose its own topology graph showing nodes, edges, stream types, service boundaries, and live call counts.
 
-* runtime engine
-* visual topology designer
-* typed operators
-* HTTP/gRPC/Kafka connectors
-* live topology visualization
-* code generation system (in progress)
+**Architecture diagrams cannot drift from reality** — the runtime graph is the same graph used for generation and execution.
 
 ---
 
-# Goals
+## AI-Agent Friendly by Design
 
-* Make backend architecture explicit
-* Eliminate infrastructure boilerplate
-* Keep business logic isolated
-* Enable topology-driven development
-* Make distributed systems understandable
-* Improve AI-assisted implementation workflows
+Generated stubs are intentionally designed for AI-assisted implementation:
 
----
+- Explicit named types with clear lifecycle documentation
+- Compile-time interface validation
+- `TODO` implementation points with full context
 
-# Non-Goals
-
-This project intentionally does NOT try to become:
-
-* a BPM engine
-* a drag-and-drop automation platform
-* a general workflow DSL
-* a replacement for Kubernetes
-* a visual programming language
-
-The focus is intentionally narrow:
-
-> typed executable architecture for Go services
+An AI coding agent can implement a node with minimal context because the architecture is explicit, the contracts are typed, and responsibilities are isolated. The topology constrains the problem space.
 
 ---
 
-# License
+## Why This Is Different
+
+| | Traditional | Service Topology Runtime |
+|---|---|---|
+| Architecture docs | Drift from reality | Graph *is* the source of truth |
+| Service wiring | Written by hand | Generated automatically |
+| Observability | Added later — or never | Built in from day one |
+| AI code generation | Generates entire uncontrolled apps | AI implements focused functions |
+| Debugging | Reading logs | Execution graph + full traces |
+
+---
+
+## Mental Model
+
+```
+┌─────────────┬───────────────────────────────────────┐
+│ Graph       │ Architecture and topology              │
+├─────────────┼───────────────────────────────────────┤
+│ Nodes       │ Business logic  ← you work here        │
+├─────────────┼───────────────────────────────────────┤
+│ Runtime     │ Execution, lifecycle, concurrency      │
+├─────────────┼───────────────────────────────────────┤
+│ Connectors  │ External integration                   │
+└─────────────┴───────────────────────────────────────┘
+```
+
+Business logic is isolated from infrastructure concerns. Developers work almost entirely at the **Node** layer.
+
+---
+
+## Non-Goals
+
+This project intentionally does **not** try to become:
+
+- a BPM engine or workflow DSL
+- a drag-and-drop automation platform
+- a replacement for Kubernetes
+- a visual programming language
+
+The focus is intentionally narrow: **typed executable architecture for Go services**.
+
+---
+
+## Current Status
+
+- ✅ Runtime engine
+- ✅ Visual topology designer
+- ✅ Typed operators
+- ✅ HTTP / gRPC / Kafka connectors
+- ✅ Full OpenTelemetry tracing + Prometheus metrics
+- ✅ Live topology visualization
+- 🔧 Code generation system (in progress)
+
+---
+
+## License
 
 MIT
 
-# Contacts
-- Email: serlex777@gmail.com
-- Telegram: https://t.me/+31qMliw-DeI3M2M6
-- Site:  https://www.gorundebug.com
+---
+
+## Contacts
+
+| | |
+|---|---|
+| 🌐 Site | [gorundebug.com](https://www.gorundebug.com) |
+| ✉️ Email | [serlex777@gmail.com](mailto:serlex777@gmail.com) |
+| ✈️ Telegram | [t.me/+31qMliw-DeI3M2M6](https://t.me/+31qMliw-DeI3M2M6) |
