@@ -231,7 +231,7 @@ The focus is intentionally narrow: **typed executable architecture for Go servic
 - ✅ HTTP / gRPC / Kafka connectors
 - ✅ Full OpenTelemetry tracing + Prometheus metrics
 - ✅ Live topology visualization
-- 🅱️ Code generation system (beta)
+- 🧪 Code generation system (beta)
 
 ---
 
