@@ -165,7 +165,8 @@ func (app *ServiceApp) ServiceContext() interface{} {
 	return app.environment
 }
 
-func (app *ServiceApp) initRuntime(name string,
+func (app *ServiceApp) initRuntime(ctx context.Context,
+	name string,
 	env RuntimeEnvironment,
 	dep environment.ServiceDependencies,
 	loader ServiceLoader,
@@ -190,15 +191,15 @@ func (app *ServiceApp) initRuntime(name string,
 	}
 
 	if dep != nil {
-		app.logsEngine, err = dep.LogsEngine(env)
+		app.logsEngine, err = dep.LogsEngine(ctx, env)
 		if err != nil {
 			return err
 		}
-		app.metricsEngine, err = dep.MetricsEngine(env)
+		app.metricsEngine, err = dep.MetricsEngine(ctx, env)
 		if err != nil {
 			return err
 		}
-		app.tracingEngine, err = dep.TracingEngine(env)
+		app.tracingEngine, err = dep.TracingEngine(ctx, env)
 		if err != nil {
 			return err
 		}
@@ -229,7 +230,7 @@ func (app *ServiceApp) initRuntime(name string,
 
 	infoGauge, err := app.metrics.Scope("service", metrics.Labels{
 		"service":     serviceConfig.Name,
-		"environment": serviceConfig.Environment,
+		"environment": string(serviceConfig.Environment),
 	}).Gauge("info", "Service information (value is always 1)", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create service_info gauge: %w", err)

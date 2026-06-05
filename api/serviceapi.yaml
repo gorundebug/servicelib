@@ -296,8 +296,7 @@ components:
         logLevel:
           $ref: '#/components/schemas/LogLevel'
         environment:
-          type: string
-          description: Deployment environment identifier (e.g. `production`, `staging`). Available in generated code as a config value.
+          $ref: '#/components/schemas/Environment'
         delayExecutors:
           type: integer
           description: Number of goroutines dedicated to processing Delay operator timers.
@@ -468,6 +467,23 @@ components:
         - WARNING
         - INFO
         - DEBUG
+
+    Environment:
+      type: string
+      description: |
+        Deployment environment for the service. Controls which observability engines
+        are selected in the generated bootstrap code.
+        - `local`: local developer machine; human-readable logs and tracing, Prometheus metrics
+        - `debug`: same as local but with verbose/debug-level output
+        - `staging`: pre-production; structured logs and tracing exported via OTLP, Prometheus metrics
+        - `production`: live traffic; structured logs and tracing exported via OTLP, Prometheus metrics
+      enum: [ '', 'local', 'debug', 'staging', 'production' ]
+      x-enum-varnames:
+        - Undefined
+        - Local
+        - Debug
+        - Staging
+        - Production
 
     Pool:
       type: object

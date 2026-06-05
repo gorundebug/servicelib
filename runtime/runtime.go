@@ -47,6 +47,7 @@ type ServiceLoader interface {
 type ServiceExecutionRuntime interface {
 	updateConfig(config *config.RuntimeConfig)
 	initRuntime(
+		ctx context.Context,
 		name string,
 		env RuntimeEnvironment,
 		dep environment.ServiceDependencies,
@@ -130,7 +131,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 			return fmt.Errorf("create runtime config error: %w", err)
 		}
 
-		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+		if err := l.service.GetRuntime().initRuntime(ctx, name, l.service, dep, l, runtimeCfg); err != nil {
 			return fmt.Errorf("service init error: %w", err)
 		}
 		l.createConfigReloadCounters(ctx)
@@ -211,7 +212,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 			return fmt.Errorf("create runtime config error: %w", err)
 		}
 
-		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+		if err := l.service.GetRuntime().initRuntime(ctx, name, l.service, dep, l, runtimeCfg); err != nil {
 			return fmt.Errorf("service init error: %w", err)
 		}
 
@@ -342,7 +343,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 			return fmt.Errorf("create runtime config error: %w", err)
 		}
 
-		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
+		if err := l.service.GetRuntime().initRuntime(ctx, name, l.service, dep, l, runtimeCfg); err != nil {
 			return fmt.Errorf("service init error: %w", err)
 		}
 		l.createConfigReloadCounters(ctx)

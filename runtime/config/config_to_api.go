@@ -26,11 +26,14 @@ func ConfigToStreamApp(config Config) *api.StreamApp {
 		app.Endpoints = append(app.Endpoints, EndpointConfigToAPI(ep))
 	}
 	for _, p := range config.GetPools() {
-		app.Pools = append(app.Pools, api.Pool{
+		pool := api.Pool{
 			Name:           p.Name,
 			ExecutorsCount: p.ExecutorsCount,
-			QueueCapacity:  p.QueueCapacity,
-		})
+		}
+		if p.QueueCapacity > 0 {
+			pool.QueueCapacity = &p.QueueCapacity
+		}
+		app.Pools = append(app.Pools, pool)
 	}
 	for _, l := range config.GetLinks() {
 		app.Links = append(app.Links, LinkConfigToAPI(l))

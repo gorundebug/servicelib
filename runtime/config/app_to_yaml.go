@@ -209,8 +209,8 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				"name":           p.Name,
 				"executorsCount": p.ExecutorsCount,
 			}
-			if p.QueueCapacity > 0 {
-				poolNode["queueCapacity"] = p.QueueCapacity
+			if p.QueueCapacity != nil && *p.QueueCapacity > 0 {
+				poolNode["queueCapacity"] = *p.QueueCapacity
 			}
 			poolsNode[ToCamelCaseFirstLower(p.Name)] = poolNode
 		}

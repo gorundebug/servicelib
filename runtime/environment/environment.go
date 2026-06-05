@@ -17,9 +17,9 @@ import (
 )
 
 type ServiceDependencies interface {
-	MetricsEngine(env ServiceEnvironment) (metrics.MetricsEngine, error)
-	TracingEngine(env ServiceEnvironment) (tracing.TracingEngine, error)
-	LogsEngine(env ServiceEnvironment) (log.LogsEngine, error)
+	MetricsEngine(ctx context.Context, env ServiceEnvironment) (metrics.MetricsEngine, error)
+	TracingEngine(ctx context.Context, env ServiceEnvironment) (tracing.TracingEngine, error)
+	LogsEngine(ctx context.Context, env ServiceEnvironment) (log.LogsEngine, error)
 }
 
 type Lifecycle interface {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/serde"
@@ -111,7 +112,7 @@ func mockService(environment string) *MockService {
 				HttpPort:       9000,
 				MetricsHandler: "metrics",
 				StatusHandler:  "status",
-				Environment:    environment,
+				Environment:    api.Environment(environment),
 				DelayExecutors: 1,
 			},
 		},
@@ -126,7 +127,7 @@ func mockService(environment string) *MockService {
 	if runtimeCfg, err := config.NewRuntimeConfig(&cfg); err != nil {
 		panic(err)
 	} else {
-		if err := service.initRuntime("MockService", &service, nil, &MockServiceLoader{}, runtimeCfg); err != nil {
+		if err := service.initRuntime(context.Background(), "MockService", &service, nil, &MockServiceLoader{}, runtimeCfg); err != nil {
 			panic(err)
 		}
 	}

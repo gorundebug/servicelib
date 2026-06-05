@@ -66,6 +66,15 @@ const (
 	DataTypeUnicodeString DataType = "unicode string"
 )
 
+// Defines values for Environment.
+const (
+	EnvironmentDebug      Environment = "debug"
+	EnvironmentLocal      Environment = "local"
+	EnvironmentProduction Environment = "production"
+	EnvironmentStaging    Environment = "staging"
+	EnvironmentUndefined  Environment = ""
+)
+
 // Defines values for GrpcMethodType.
 const (
 	GrpcMethodTypeBidirectionalStreaming GrpcMethodType = 5
@@ -159,7 +168,7 @@ const (
 
 // Defines values for UndefinedEnum.
 const (
-	UndefinedEnumUndefined UndefinedEnum = 0
+	Undefined UndefinedEnum = 0
 )
 
 // CallSemantics Delivery semantics for a stream link — controls how messages are passed between nodes.
@@ -318,6 +327,14 @@ type Endpoint struct {
 	Topic *string `json:"topic,omitempty"`
 }
 
+// Environment Deployment environment for the service. Controls which observability engines
+// are selected in the generated bootstrap code.
+// - `local`: local developer machine; human-readable logs and tracing, Prometheus metrics
+// - `debug`: same as local but with verbose/debug-level output
+// - `staging`: pre-production; structured logs and tracing exported via OTLP, Prometheus metrics
+// - `production`: live traffic; structured logs and tracing exported via OTLP, Prometheus metrics
+type Environment string
+
 // GrpcMethodType gRPC streaming mode for a gRPC endpoint. Determines the generated handler signature
 // and the streaming behavior of the connector.
 // - `NoStreaming` (1): unary RPC
@@ -390,7 +407,7 @@ type Pool struct {
 	Name string `json:"name"`
 
 	// QueueCapacity Initial capacity of the task queue. Defaults to 256 if not set.
-	QueueCapacity int `json:"queueCapacity,omitempty"`
+	QueueCapacity *int `json:"queueCapacity,omitempty"`
 }
 
 // ProcessPattern Execution pattern for the Process operator — controls how the handler interacts
@@ -434,8 +451,13 @@ type Service struct {
 	// DelayExecutors Number of goroutines dedicated to processing Delay operator timers.
 	DelayExecutors int `json:"delayExecutors"`
 
-	// Environment Deployment environment identifier (e.g. `production`, `staging`). Available in generated code as a config value.
-	Environment string `json:"environment"`
+	// Environment Deployment environment for the service. Controls which observability engines
+	// are selected in the generated bootstrap code.
+	// - `local`: local developer machine; human-readable logs and tracing, Prometheus metrics
+	// - `debug`: same as local but with verbose/debug-level output
+	// - `staging`: pre-production; structured logs and tracing exported via OTLP, Prometheus metrics
+	// - `production`: live traffic; structured logs and tracing exported via OTLP, Prometheus metrics
+	Environment Environment `json:"environment"`
 
 	// GolangVersion Minimum Go version required for the generated module (e.g. `1.22`).
 	GolangVersion *string `json:"golangVersion,omitempty"`

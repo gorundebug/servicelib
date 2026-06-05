@@ -240,15 +240,15 @@ type testDeps struct {
 	logs    *testlog.TestLog
 }
 
-func (d *testDeps) MetricsEngine(_ environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+func (d *testDeps) MetricsEngine(_ context.Context, _ environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
 	return d.metrics, nil
 }
 
-func (d *testDeps) TracingEngine(_ environment.ServiceEnvironment) (tracing.TracingEngine, error) {
+func (d *testDeps) TracingEngine(_ context.Context, _ environment.ServiceEnvironment) (tracing.TracingEngine, error) {
 	return d.tracing, nil
 }
 
-func (d *testDeps) LogsEngine(_ environment.ServiceEnvironment) (log.LogsEngine, error) {
+func (d *testDeps) LogsEngine(_ context.Context, _ environment.ServiceEnvironment) (log.LogsEngine, error) {
 	return d.logs, nil
 }
 
