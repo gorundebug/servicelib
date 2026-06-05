@@ -55,7 +55,9 @@ func MakeProcessStream[T, R, E any](streamConfig *config.ProcessStreamConfig, st
 	processStream.downstreamCollector = processStream.Emit
 	processStream.errorCollector = processStream.errorConsumer.Consume
 
-	stream.SetConsumer(processStream)
+	if err := stream.SetConsumer(processStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(processStream)
 	return processStream, nil
 }
@@ -85,8 +87,8 @@ func (s *ProcessStream[T, R, E]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *ProcessStream[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *ProcessStream[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *ProcessStream[T, R, E]) GetConsumers() []runtime.Stream {

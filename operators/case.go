@@ -51,9 +51,14 @@ func (s *WhenStream[T, R]) GetName() string {
 	return s.caseStream.GetName() + "CaseLink" + strconv.Itoa(s.index)
 }
 
-func (s *WhenStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
+func (s *WhenStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	caller, err := runtime.MakeCaller[R](s)
+	if err != nil {
+		return err
+	}
 	s.consumer = consumer
-	s.caller = runtime.MakeCaller[R](s)
+	s.caller = caller
+	return nil
 }
 
 func (s *WhenStream[T, R]) GetSerde() serde.StreamSerde[R] {
@@ -158,7 +163,9 @@ func MakeCaseStream[T any](streamConfig *config.CaseStreamConfig, stream runtime
 		whenFunc:       func(T) int { panic("when function not implemented") },
 	}
 	env.RegisterStream(caseStream)
-	stream.SetConsumer(caseStream)
+	if err := stream.SetConsumer(caseStream); err != nil {
+		return nil, err
+	}
 	return caseStream, nil
 }
 
@@ -183,8 +190,8 @@ func (s *CaseStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *CaseStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *CaseStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *CaseStream[T]) AddStream(stream runtime.WhenStream) error {

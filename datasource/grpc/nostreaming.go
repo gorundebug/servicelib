@@ -76,6 +76,15 @@ func (r *noStreamingResult[HandlerState, T, ResR, R, E]) SetResultCallback(
 func (r *noStreamingResult[HandlerState, T, ResR, R, E]) Done() {
 }
 
+// noopResultContext is a zero-size ResultContext used when the stream has no result path.
+// SetResultCallback is accepted but never fired; Done is a no-op.
+type noopResultContext[HandlerState, T, ResR, R, E any] struct{}
+
+func (noopResultContext[HandlerState, T, ResR, R, E]) SetResultCallback(_ string, _ ResultCallback[HandlerState, T, ResR, R, E]) {
+}
+
+func (noopResultContext[HandlerState, T, ResR, R, E]) Done() {}
+
 // noStreamingEndpointConsumer handles unary gRPC calls via a user-supplied handler.
 // The client sends one request; the handler processes it via a single ConsumeMessage call
 // followed by an immediate Eof, then waits for a single response via replyCh.
@@ -199,13 +208,24 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	if span != nil {
 		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID), tracing.BoolAttr("has_result", ec.hasResult))
 	}
-	result := makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
+	var result *noStreamingResult[HandlerState, T, ResR, R, E]
+	var resultCtx ResultContext[HandlerState, T, ResR, R, E]
 	if ec.hasResult {
-		ec.pending.Set(streamID, result)
+		result = makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
+		if err := ec.pending.Set(streamID, result); err != nil {
+			tracing.SpanError(span, err)
+			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+			var zeroRes ResR
+			return zeroRes, err
+		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
+		resultCtx = result
+	} else {
+		resultCtx = noopResultContext[HandlerState, T, ResR, R, E]{}
 	}
 
-	if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, result, sender); err != nil {
+	if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, resultCtx, sender); err != nil {
 		if ec.hasResult {
 			result.mu.Lock()
 			defer result.mu.Unlock()

@@ -346,7 +346,7 @@ func (ds *netHTTPDataSource) Stop(ctx context.Context) {
 
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
-			ds.GetEnvironment().Log().Warnf("netHTTPDataSource.Stop server shutdown: %s", err.Error())
+			ds.GetEnvironment().Log().Warnf(ctx, "netHTTPDataSource.Stop server shutdown: %s", err.Error())
 		}
 	}()
 	select {
@@ -447,7 +447,12 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 		messageCallbackMap: make(map[string]ResultCallback[HandlerState, ReqT, ResR, T, R, E]),
 	}
 	if ec.hasResult {
-		ec.pending.Set(streamID, result)
+		if err = ec.pending.Set(streamID, result); err != nil {
+			tracing.SpanError(span, err)
+			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState, data)
+			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+			return
+		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 

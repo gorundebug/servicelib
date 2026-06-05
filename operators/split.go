@@ -32,9 +32,14 @@ func (s *SplitLink[T]) GetName() string {
 	return s.splitStream.GetName() + "SplitLink" + strconv.Itoa(s.index)
 }
 
-func (s *SplitLink[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
+func (s *SplitLink[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	caller, err := runtime.MakeCaller[T](s)
+	if err != nil {
+		return err
+	}
 	s.consumer = consumer
-	s.caller = runtime.MakeCaller[T](s)
+	s.caller = caller
+	return nil
 }
 
 func (s *SplitLink[T]) GetSerde() serde.StreamSerde[T] {
@@ -106,7 +111,9 @@ func MakeSplitStream[T any](streamConfig *config.SplitStreamConfig, stream runti
 		links:          make([]*SplitLink[T], 0, 2),
 	}
 	env.RegisterStream(splitStream)
-	stream.SetConsumer(splitStream)
+	if err := stream.SetConsumer(splitStream); err != nil {
+		return nil, err
+	}
 	return splitStream, nil
 }
 
@@ -138,8 +145,8 @@ func (s *SplitStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *SplitStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *SplitStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *SplitStream[T]) Consume(ctx context.Context, value T) {

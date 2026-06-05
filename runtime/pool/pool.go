@@ -19,10 +19,10 @@ type Pool interface {
 	Stop(ctx context.Context)
 }
 
-func runTask(env environment.ServiceEnvironment, poolName string, fn func()) {
+func runTask(ctx context.Context, env environment.ServiceEnvironment, poolName string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
-			env.Log().Errorf("panic in pool %q worker: %v", poolName, r)
+			env.Log().Errorf(ctx, "panic in pool %q worker: %v", poolName, r)
 			panic(r)
 		}
 	}()

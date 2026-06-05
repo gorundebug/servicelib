@@ -41,7 +41,9 @@ func MakeFlatMapIterableStream[T, R any](streamConfig *config.FlatMapIterableStr
 
 		ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
 	}
-	stream.SetConsumer(flatMapStreamIterable)
+	if err := stream.SetConsumer(flatMapStreamIterable); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(flatMapStreamIterable)
 	return flatMapStreamIterable, nil
 }
@@ -75,8 +77,8 @@ func (s *FlatMapIterableStream[T, R]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *FlatMapIterableStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *FlatMapIterableStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *FlatMapIterableStream[T, R]) Consume(ctx context.Context, value T) {

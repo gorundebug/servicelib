@@ -185,7 +185,7 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 
     // Links: only non-default call semantics; topology is in IdSource/IdSources.
     // Semantics come from runtime callers (resolved in MakeCaller), not from config.
-    var defaultCS api.CallSemantics = api.CallSemanticsInherited
+    defaultCS := api.CallSemanticsInherited
     if svcCfg := app.ServiceConfig(); svcCfg != nil && svcCfg.DefaultCallSemantics != nil {
         if cs := svcCfg.DefaultCallSemantics.Get(); cs != nil {
             defaultCS = cs.GetType()

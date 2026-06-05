@@ -41,14 +41,16 @@ type JoinLink[K comparable, T1, T2, R any] struct {
 	source     runtime.TypedStream[datastruct.KeyValue[K, T2]]
 }
 
-func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R], stream runtime.TypedStream[datastruct.KeyValue[K, T2]]) *JoinLink[K, T1, T2, R] {
+func joinLink[K comparable, T1, T2, R any](joinStream *JoinStream[K, T1, T2, R], stream runtime.TypedStream[datastruct.KeyValue[K, T2]]) (*JoinLink[K, T1, T2, R], error) {
 	joinLink := &JoinLink[K, T1, T2, R]{
 		streamLink: streamLink{stream: joinStream},
 		joinStream: joinStream,
 		source:     stream,
 	}
-	stream.SetConsumer(joinLink)
-	return joinLink
+	if err := stream.SetConsumer(joinLink); err != nil {
+		return nil, err
+	}
+	return joinLink, nil
 }
 
 func (s *JoinLink[K, T1, T2, R]) Consume(ctx context.Context, value datastruct.KeyValue[K, T2]) {
@@ -124,8 +126,8 @@ func (s *JoinStream[K, T1, T2, R]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *JoinStream[K, T1, T2, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *JoinStream[K, T1, T2, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *JoinStream[K, T1, T2, R]) Consume(ctx context.Context, value datastruct.KeyValue[K, T1]) {
@@ -196,9 +198,15 @@ func MakeJoinStream[K comparable, T1, T2, R any](streamConfig *config.JoinStream
 	}
 	env.RegisterStorage(joinStream.joinStorage)
 	joinStream.f.stream = joinStream
-	stream.SetConsumer(joinStream)
+	if err := stream.SetConsumer(joinStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(joinStream)
 
-	joinStream.joinLink = joinLink[K, T1, T2, R](joinStream, streamRight)
+	var jlErr error
+	joinStream.joinLink, jlErr = joinLink[K, T1, T2, R](joinStream, streamRight)
+	if jlErr != nil {
+		return nil, jlErr
+	}
 	return joinStream, nil
 }

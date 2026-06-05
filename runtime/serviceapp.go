@@ -436,7 +436,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 		go func() {
-			app.environment.Log().Infof("Http service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
+			app.environment.Log().Infof(ctx, "Http service %q listening at %v", serviceConfig.Name, app.httpServer.Addr)
 			err := app.httpServer.Serve(ln)
 			if !errors.Is(err, http.ErrServerClosed) {
 				panic(err)
@@ -459,7 +459,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		app.loader.Stop()
+		app.loader.Stop(ctx)
 	}()
 
 	wg.Add(1)
@@ -506,13 +506,13 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 			defer wg.Done()
 			go func() {
 				if err := app.httpServer.Shutdown(ctx); err != nil {
-					app.environment.Log().Warnf("server shutdown: %s", err.Error())
+					app.environment.Log().Warnf(ctx, "server shutdown: %s", err.Error())
 				}
 			}()
 			select {
 			case <-app.httpServerDone:
 			case <-ctx.Done():
-				app.environment.Log().Warnf("Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
+				app.environment.Log().Warnf(ctx, "Monitoring server stop timeout for service %q. %s", serviceConfig.Name, ctx.Err().Error())
 			}
 		}()
 	}
@@ -529,7 +529,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		timeout = true
-		app.environment.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+		app.environment.Log().Warnf(ctx, "ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 	}
 
 	if !timeout {
@@ -552,15 +552,18 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			app.environment.Log().Warnf("ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
+			app.environment.Log().Warnf(ctx, "ServiceApp %q stop timeout: %s", serviceConfig.Name, ctx.Err().Error())
 		}
 	}
 
 	if err := app.metricsEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warnf("metrics engine shutdown: %s", err.Error())
+		app.environment.Log().Warnf(ctx, "metrics engine shutdown: %s", err.Error())
 	}
 	if err := app.tracingEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warnf("tracing engine shutdown: %s", err.Error())
+		app.environment.Log().Warnf(ctx, "tracing engine shutdown: %s", err.Error())
+	}
+	if err := app.logsEngine.Shutdown(ctx); err != nil {
+		app.environment.Log().Warnf(ctx, "logs engine shutdown: %s", err.Error())
 	}
 }
 

@@ -11,6 +11,7 @@ import (
     "context"
 
     "github.com/gorundebug/servicelib/runtime/environment"
+    envlog "github.com/gorundebug/servicelib/runtime/environment/log"
     "github.com/gorundebug/servicelib/runtime/environment/metrics"
     "github.com/gorundebug/servicelib/runtime/environment/tracing"
     "github.com/gorundebug/servicelib/runtime/telemetry/opentelemetry"
@@ -38,4 +39,12 @@ func CreateOTLPTracingEngine(ctx context.Context, env environment.ServiceEnviron
 
 func CreatePrettyTracingEngine(env environment.ServiceEnvironment, opts ...opentelemetry.TracingOption) (tracing.TracingEngine, error) {
     return opentelemetry.CreatePrettyTracingEngine(env, opts...)
+}
+
+func CreateStdoutLogsEngine(env environment.ServiceEnvironment) (envlog.LogsEngine, error) {
+    return opentelemetry.CreateStdoutLogsEngine(env)
+}
+
+func CreateOTLPLogsEngine(ctx context.Context, env environment.ServiceEnvironment) (envlog.LogsEngine, error) {
+    return opentelemetry.CreateOTLPLogsEngine(ctx, env)
 }

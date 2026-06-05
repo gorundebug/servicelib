@@ -33,7 +33,9 @@ func MakeSinkStream[T, E any](streamConfig *config.SinkStreamConfig, stream runt
 		source:        stream,
 		errorConsumer: MakeErrorStream[E](streamConfig.ID, env),
 	}
-	stream.SetConsumer(sinkStream)
+	if err := stream.SetConsumer(sinkStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(sinkStream)
 	return sinkStream, nil
 }
@@ -106,7 +108,9 @@ func MakeSinkStreamWithResult[T, R, E any](streamConfig *config.SinkStreamConfig
 		source:         stream,
 		errorConsumer:  MakeErrorStream[E](streamConfig.ID, env),
 	}
-	stream.SetConsumer(sinkStream)
+	if err := stream.SetConsumer(sinkStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(sinkStream)
 	return sinkStream, nil
 }
@@ -148,8 +152,8 @@ func (s *SinkStreamWithResult[T, R, E]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *SinkStreamWithResult[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *SinkStreamWithResult[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *SinkStreamWithResult[T, R, E]) GetConsumers() []runtime.Stream {

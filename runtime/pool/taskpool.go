@@ -136,7 +136,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				p.lock.Unlock()
 				p.gaugeQueueLength.Dec()
 				startTime := time.Now()
-				runTask(p.environment, p.name, task.fn)
+				runTask(ctx, p.environment, p.name, task.fn)
 				task.fn = nil
 				p.tasksTotal.Inc(ctx)
 				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
@@ -163,7 +163,7 @@ func (p *TaskPoolImpl) Stop(ctx context.Context) {
 		p.lock.Lock()
 		tasksCount := p.count
 		p.lock.Unlock()
-		p.environment.Log().Warnf("task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+		p.environment.Log().Warnf(ctx, "task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
 		p.stopTimeoutCounter.Inc(ctx)
 	}
 }

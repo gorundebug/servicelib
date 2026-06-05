@@ -8,6 +8,7 @@
 package runtime
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"testing"
@@ -92,7 +93,7 @@ type MockService struct {
 type MockServiceLoader struct {
 }
 
-func (s *MockServiceLoader) Stop() {
+func (s *MockServiceLoader) Stop(_ context.Context) {
 }
 
 func (s *MockService) GetSerde(valueType reflect.Type) (serde.Serializer, error) {

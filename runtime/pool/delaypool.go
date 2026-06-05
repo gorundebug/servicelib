@@ -197,7 +197,7 @@ func (p *DelayPoolImpl) Start(ctx context.Context) error {
 				p.gaugeExecuteQueueLength.Dec()
 				p.tasksLock.Unlock()
 				startTime := time.Now()
-				runTask(p.environment, "delay", task.fn)
+				runTask(ctx, p.environment, "delay", task.fn)
 				task.fn = nil
 				p.tasksTotal.Inc(ctx)
 				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
@@ -217,7 +217,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			case <-p.stopCh:
 			case <-ctx.Done():
 				p.lock.Lock()
-				p.environment.Log().Warnf("delay task pool stopped by timeout and was not empty (waiting tasks count=%d), %s",
+				p.environment.Log().Warnf(ctx, "delay task pool stopped by timeout and was not empty (waiting tasks count=%d), %s",
 					p.pq.Len(), ctx.Err())
 				p.lock.Unlock()
 				p.stopTimeoutCounter.Inc(ctx)
@@ -244,7 +244,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			p.tasksLock.Lock()
 			tasksCount := p.count
 			p.tasksLock.Unlock()
-			p.environment.Log().Warnf("delay task pool stopped by timeout: %s (executing tasks count=%d)", ctx.Err(), tasksCount)
+			p.environment.Log().Warnf(ctx, "delay task pool stopped by timeout: %s (executing tasks count=%d)", ctx.Err(), tasksCount)
 			p.stopTimeoutCounter.Inc(ctx)
 		}
 	} else {

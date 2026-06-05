@@ -46,7 +46,9 @@ func MakeMapStream[T, R any](streamConfig *config.MapStreamConfig, stream runtim
 		},
 	}
 	mapStream.f.stream = mapStream
-	stream.SetConsumer(mapStream)
+	if err := stream.SetConsumer(mapStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(mapStream)
 	return mapStream, nil
 }
@@ -72,8 +74,8 @@ func (s *MapStream[T, R]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *MapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *MapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *MapStream[T, R]) Consume(ctx context.Context, value T) {

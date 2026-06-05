@@ -29,15 +29,17 @@ type MergeLink[T any] struct {
 	index       int
 }
 
-func mergeLink[T any](index int, mergeStream *MergeStream[T], stream runtime.TypedStream[T]) *MergeLink[T] {
+func mergeLink[T any](index int, mergeStream *MergeStream[T], stream runtime.TypedStream[T]) (*MergeLink[T], error) {
 	link := &MergeLink[T]{
 		streamLink:  streamLink{stream: mergeStream},
 		mergeStream: mergeStream,
 		source:      stream,
 		index:       index,
 	}
-	stream.SetConsumer(link)
-	return link
+	if err := stream.SetConsumer(link); err != nil {
+		return nil, err
+	}
+	return link, nil
 }
 
 func (s *MergeLink[T]) Consume(ctx context.Context, value T) {
@@ -53,9 +55,16 @@ func MakeMergeStream[T any](streamConfig *config.MergeStreamConfig, stream runti
 	}
 	env.RegisterStream(mergeStream)
 	mergeStream.links = make([]*MergeLink[T], len(streams)+1)
-	mergeStream.links[0] = mergeLink[T](0, mergeStream, stream)
+	var err error
+	mergeStream.links[0], err = mergeLink[T](0, mergeStream, stream)
+	if err != nil {
+		return nil, err
+	}
 	for i, s := range streams {
-		mergeStream.links[i+1] = mergeLink[T](i+1, mergeStream, s)
+		mergeStream.links[i+1], err = mergeLink[T](i+1, mergeStream, s)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return mergeStream, nil
 }
@@ -81,8 +90,8 @@ func (s *MergeStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *MergeStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *MergeStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *MergeStream[T]) Consume(ctx context.Context, value T) {

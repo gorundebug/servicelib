@@ -79,31 +79,10 @@ func (c *mockCounter) Add(_ context.Context, _ int64) {}
 
 type mockLogger struct{}
 
-func (l *mockLogger) Debugf(_ string, _ ...interface{})   {}
-func (l *mockLogger) Infof(_ string, _ ...interface{})    {}
-func (l *mockLogger) Printf(_ string, _ ...interface{})   {}
-func (l *mockLogger) Warnf(_ string, _ ...interface{})    {}
-func (l *mockLogger) Warningf(_ string, _ ...interface{}) {}
-func (l *mockLogger) Errorf(_ string, _ ...interface{})   {}
-func (l *mockLogger) Fatalf(_ string, _ ...interface{})   {}
-func (l *mockLogger) Panicf(_ string, _ ...interface{})   {}
-func (l *mockLogger) Debug(_ ...interface{})              {}
-func (l *mockLogger) Info(_ ...interface{})               {}
-func (l *mockLogger) Print(_ ...interface{})              {}
-func (l *mockLogger) Warn(_ ...interface{})               {}
-func (l *mockLogger) Warning(_ ...interface{})            {}
-func (l *mockLogger) Error(_ ...interface{})              {}
-func (l *mockLogger) Fatal(_ ...interface{})              {}
-func (l *mockLogger) Panic(_ ...interface{})              {}
-func (l *mockLogger) Debugln(_ ...interface{})            {}
-func (l *mockLogger) Infoln(_ ...interface{})             {}
-func (l *mockLogger) Println(_ ...interface{})            {}
-func (l *mockLogger) Warnln(_ ...interface{})             {}
-func (l *mockLogger) Warningln(_ ...interface{})          {}
-func (l *mockLogger) Errorln(_ ...interface{})            {}
-func (l *mockLogger) Fatalln(_ ...interface{})            {}
-func (l *mockLogger) Panicln(_ ...interface{})            {}
-func (l *mockLogger) NativeLogger() interface{}           { return nil }
+func (l *mockLogger) Debugf(_ context.Context, _ string, _ ...interface{}) {}
+func (l *mockLogger) Infof(_ context.Context, _ string, _ ...interface{})  {}
+func (l *mockLogger) Warnf(_ context.Context, _ string, _ ...interface{})  {}
+func (l *mockLogger) Errorf(_ context.Context, _ string, _ ...interface{}) {}
 
 type mockServiceEnvironment struct {
 	serviceCfg *config.ServiceConfig

@@ -53,8 +53,8 @@ func (s *LinkStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *LinkStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *LinkStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *LinkStream[T]) GetSerde() serde.StreamSerde[T] {
@@ -67,8 +67,8 @@ func (s *LinkStream[T]) Consume(ctx context.Context, value T) {
 	s.Emit(ctx, value)
 }
 
-func (s *LinkStream[T]) SetSource(stream runtime.TypedConsumedStream[T]) {
+func (s *LinkStream[T]) SetSource(stream runtime.TypedConsumedStream[T]) error {
 	s.source = stream
 	s.serde = stream.GetSerde()
-	stream.SetConsumer(s)
+	return stream.SetConsumer(s)
 }

@@ -9,6 +9,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -45,16 +46,17 @@ func (m *RotatingMap[K, V]) Stop(_ context.Context) {
 	}
 }
 
-func (m *RotatingMap[K, V]) Set(key K, value V) {
+func (m *RotatingMap[K, V]) Set(key K, value V) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.current[key]; exists {
-		panic("RotatingMap.Set: key already exists in current")
+		return fmt.Errorf("duplicate stream ID %v", key)
 	}
 	if _, exists := m.prev[key]; exists {
-		panic("RotatingMap.Set: key already exists in prev")
+		return fmt.Errorf("duplicate stream ID %v", key)
 	}
 	m.current[key] = value
+	return nil
 }
 
 // Get retrieves the value without deleting it. Returns false if not found.

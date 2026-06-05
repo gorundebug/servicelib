@@ -136,7 +136,16 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		result = makeClientStreamingResult[HandlerState, ReqT, ResR, T, R](
 			handlerCtx, handlerState, &grpcSender[ReqT]{sendFn: grpcStream.Send, span: outputSpan}, outputSpan, doneCh,
 		)
-		ec.pending.Set(streamID, result)
+		if err := ec.pending.Set(streamID, result); err != nil {
+			ec.mu.Unlock()
+			tracing.SpanError(outputSpan, err)
+			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
+			if outputSpan != nil {
+				outputSpan.End()
+			}
+			return
+		}
 		ec.mu.Unlock()
 
 		// Wait for Done() or context cancellation, then close and receive the response.

@@ -48,7 +48,9 @@ func MakeKeyByStream[T any, K comparable, V any](streamConfig *config.KeyByStrea
 		},
 	}
 	keyByStream.f.stream = keyByStream
-	stream.SetConsumer(keyByStream)
+	if err := stream.SetConsumer(keyByStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(keyByStream)
 	return keyByStream, nil
 }
@@ -75,8 +77,8 @@ func (s *KeyByStream[T, K, V]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *KeyByStream[T, K, V]) SetConsumer(consumer runtime.TypedStreamConsumer[datastruct.KeyValue[K, V]]) {
-	s.SetDownstream(consumer, s)
+func (s *KeyByStream[T, K, V]) SetConsumer(consumer runtime.TypedStreamConsumer[datastruct.KeyValue[K, V]]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *KeyByStream[T, K, V]) Consume(ctx context.Context, value T) {

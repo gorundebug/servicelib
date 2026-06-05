@@ -139,7 +139,16 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		result = makeBidiStreamingResult[HandlerState, ReqT, ResR, T, R](
 			handlerCtx, handlerState, &grpcSender[ReqT]{sendFn: grpcStream.Send, span: outputSpan}, outputSpan, doneCh,
 		)
-		ec.pending.Set(streamID, result)
+		if err := ec.pending.Set(streamID, result); err != nil {
+			ec.mu.Unlock()
+			tracing.SpanError(outputSpan, err)
+			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
+			if outputSpan != nil {
+				outputSpan.End()
+			}
+			return
+		}
 		ec.mu.Unlock()
 
 		// Close the send side when Done() is called or the context is cancelled.

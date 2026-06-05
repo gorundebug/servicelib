@@ -73,7 +73,7 @@ func (ds *OutputDataSink) GetEnvironment() environment.ServiceEnvironment {
 }
 
 func (ds *OutputDataSink) OnStopTimeout(ctx context.Context) {
-	ds.environment.Log().Warnf("Data sink %q stopped by timeout.", ds.GetName())
+	ds.environment.Log().Warnf(ctx, "Data sink %q stopped by timeout.", ds.GetName())
 	ds.stopTimeoutCounter.Inc(ctx)
 }
 
@@ -179,12 +179,12 @@ func (ep *DataSinkEndpoint) GetDataConnector() DataConnector {
 }
 
 func (ep *DataSinkEndpoint) OnBeginRequestFailed(ctx context.Context, err error) {
-	ep.environment.Log().Errorf("BeginRequest failed for sink endpoint %q: %v", ep.GetName(), err)
+	ep.environment.Log().Errorf(ctx, "BeginRequest failed for sink endpoint %q: %v", ep.GetName(), err)
 	ep.beginRequestFailedCounter.Inc(ctx)
 }
 
 func (ep *DataSinkEndpoint) OnLateResult(ctx context.Context, streamID string) {
-	ep.environment.Log().Warnf("late result for sink endpoint %q streamID=%s", ep.GetName(), streamID)
+	ep.environment.Log().Warnf(ctx, "late result for sink endpoint %q streamID=%s", ep.GetName(), streamID)
 	ep.lateResultCounter.Inc(ctx)
 }
 

@@ -116,7 +116,7 @@ type TypedSerializedRuntimeStream[T any] interface {
 type TypedStream[T any] interface {
 	TypedSerializedRuntimeStream[T]
 	GetConsumer() TypedStreamConsumer[T]
-	SetConsumer(TypedStreamConsumer[T])
+	SetConsumer(TypedStreamConsumer[T]) error
 }
 
 type Consumer[T any] interface {
@@ -154,7 +154,7 @@ type TypedMultiJoinConsumedStream[K comparable, T, R any] interface {
 
 type TypedLinkStream[T any] interface {
 	TypedConsumedStream[T]
-	SetSource(TypedConsumedStream[T])
+	SetSource(TypedConsumedStream[T]) error
 }
 
 type TypedSplitStream[T any] interface {
@@ -190,7 +190,7 @@ type TypedInputStream[T, R, E any] interface {
 	GetEndpointId() int
 	SetResultConsumer(resultConsumer Consumer[R])
 	GetResultStream() TypedSerializedStream[R]
-	SetSource(TypedStream[R])
+	SetSource(TypedStream[R]) error
 }
 
 type TypedSinkStream[T, E any] interface {

@@ -47,8 +47,8 @@ func (s *ErrorStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *ErrorStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *ErrorStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *ErrorStream[T]) Consume(ctx context.Context, value T) {

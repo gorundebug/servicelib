@@ -8,79 +8,81 @@
 package operators
 
 import (
-	"context"
-	"reflect"
+    "context"
+    "reflect"
 
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/config"
+    "github.com/gorundebug/servicelib/runtime"
+    "github.com/gorundebug/servicelib/runtime/config"
 )
 
 var _ runtime.TypedConsumedStream[any] = (*FilterStream[any])(nil)
 
 type FilterFunctionContext[T any] struct {
-	runtime.StreamFunction[T]
-	stream runtime.TypedStream[T]
-	f      FilterFunction[T]
+    runtime.StreamFunction[T]
+    stream runtime.TypedStream[T]
+    f      FilterFunction[T]
 }
 
 func (f *FilterFunctionContext[T]) call(ctx context.Context, value T) bool {
-	f.BeforeCall()
-	defer f.AfterCall()
-	result := f.f.Filter(ctx, f.stream, value)
-	return result
+    f.BeforeCall()
+    defer f.AfterCall()
+    result := f.f.Filter(ctx, f.stream, value)
+    return result
 }
 
 type FilterStream[T any] struct {
-	runtime.ConsumedStream[T]
-	source runtime.TypedStream[T]
-	f      FilterFunctionContext[T]
+    runtime.ConsumedStream[T]
+    source runtime.TypedStream[T]
+    f      FilterFunctionContext[T]
 }
 
 func MakeFilterStream[T any](streamConfig *config.FilterStreamConfig, stream runtime.TypedStream[T], f FilterFunction[T]) (runtime.TypedConsumedStream[T], error) {
-	env := stream.GetRuntimeEnvironment()
-	filterStream := &FilterStream[T]{
-		ConsumedStream: runtime.MakeConsumedStream[T](streamConfig.ID, env, stream.GetSerde()),
-		source:         stream,
-		f: FilterFunctionContext[T]{
-			stream: nil,
-			f:      f,
-		},
-	}
-	filterStream.f.stream = filterStream
-	stream.SetConsumer(filterStream)
-	env.RegisterStream(filterStream)
-	return filterStream, nil
+    env := stream.GetRuntimeEnvironment()
+    filterStream := &FilterStream[T]{
+        ConsumedStream: runtime.MakeConsumedStream[T](streamConfig.ID, env, stream.GetSerde()),
+        source:         stream,
+        f: FilterFunctionContext[T]{
+            stream: nil,
+            f:      f,
+        },
+    }
+    filterStream.f.stream = filterStream
+    if err := stream.SetConsumer(filterStream); err != nil {
+        return nil, err
+    }
+    env.RegisterStream(filterStream)
+    return filterStream, nil
 }
 
 func (s *FilterStream[T]) FunctionImplementation() interface{} {
-	return s.f.f
+    return s.f.f
 }
 
 func (s *FilterStream[T]) GetErrorConsumer() runtime.RuntimeStream {
-	return nil
+    return nil
 }
 
 func (s *FilterStream[T]) GetValueType() reflect.Type {
-	var t T
-	return reflect.TypeOf(&t).Elem()
+    var t T
+    return reflect.TypeOf(&t).Elem()
 }
 
 func (s *FilterStream[T]) GetKeyType() reflect.Type {
-	return nil
+    return nil
 }
 
 func (s *FilterStream[T]) Stream() runtime.Stream {
-	return s
+    return s
 }
 
-func (s *FilterStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *FilterStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+    return s.SetDownstream(consumer, s)
 }
 
 func (s *FilterStream[T]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.filter")
-	defer span.End()
-	if s.f.call(ctx, value) {
-		s.Emit(ctx, value)
-	}
+    ctx, span := s.StartSpan(ctx, "stream.filter")
+    defer span.End()
+    if s.f.call(ctx, value) {
+        s.Emit(ctx, value)
+    }
 }

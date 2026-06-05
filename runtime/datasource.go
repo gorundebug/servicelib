@@ -80,7 +80,7 @@ func (ds *InputDataSource) GetEnvironment() environment.ServiceEnvironment {
 }
 
 func (ds *InputDataSource) OnStopTimeout(ctx context.Context) {
-	ds.environment.Log().Warnf("Data source %q stopped by timeout.", ds.GetName())
+	ds.environment.Log().Warnf(ctx, "Data source %q stopped by timeout.", ds.GetName())
 	ds.stopTimeoutCounter.Inc(ctx)
 }
 
@@ -216,28 +216,28 @@ func (ep *DataSourceEndpoint) GetDataConnector() DataConnector {
 }
 
 func (ep *DataSourceEndpoint) OnMissingStreamID(ctx context.Context) {
-	ep.environment.Log().Errorf(
+	ep.environment.Log().Errorf(ctx,
 		"consumeResult called for endpoint %q without streamID",
 		ep.GetName())
 	ep.missingStreamIDCounter.Inc(ctx)
 }
 
 func (ep *DataSourceEndpoint) OnLateResult(ctx context.Context, sessionID string) {
-	ep.environment.Log().Warnf(
+	ep.environment.Log().Warnf(ctx,
 		"consumeResult called for endpoint %q: session %s not found in pending (result arrived after Done)",
 		ep.GetName(), sessionID)
 	ep.lateResultCounter.Inc(ctx)
 }
 
 func (ep *DataSourceEndpoint) OnUnknownMessageID(ctx context.Context, sessionID string, messageID string) {
-	ep.environment.Log().Warnf(
+	ep.environment.Log().Warnf(ctx,
 		"consumeResult called for endpoint %q: unknown messageID %s (session: %s)",
 		ep.GetName(), messageID, sessionID)
 	ep.unknownMessageIDCounter.Inc(ctx)
 }
 
 func (ep *DataSourceEndpoint) OnDuplicateMessageID(ctx context.Context, sessionID string, messageID string) {
-	ep.environment.Log().Warnf(
+	ep.environment.Log().Warnf(ctx,
 		"consumeResult called for endpoint %q: duplicate messageID %s (session: %s)",
 		ep.GetName(), messageID, sessionID)
 	ep.duplicateMessageIDCounter.Inc(ctx)
@@ -277,14 +277,14 @@ func (ep *DataSourceEndpoint) OnInvalidHTTPMethod(ctx context.Context, method st
 	if cfg, ok := ep.GetConfig().(*config.HttpEndpointConfig); ok {
 		path = cfg.Path
 	}
-	ep.environment.Log().Warnf(
+	ep.environment.Log().Warnf(ctx,
 		"invalid HTTP method %q for endpoint %q with path %q",
 		method, ep.GetName(), path)
 	ep.invalidHTTPMethodCounter.Inc(ctx)
 }
 
 func (ep *DataSourceEndpoint) OnBeginRequestFailed(ctx context.Context, err error) {
-	ep.environment.Log().Errorf("BeginRequest failed for endpoint %q: %v", ep.GetName(), err)
+	ep.environment.Log().Errorf(ctx, "BeginRequest failed for endpoint %q: %v", ep.GetName(), err)
 	ep.beginRequestFailedCounter.Inc(ctx)
 }
 

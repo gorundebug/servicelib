@@ -179,7 +179,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		)
 		defer span.End()
 	}
-	doneCh := make(chan struct{})
+	var doneCh chan struct{}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
 		tracing.SpanError(span, err)
@@ -206,12 +206,23 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		sendAndClose: server.SendAndClose,
 		span:         span,
 	}
-	result := makeClientStreamingResult[HandlerState, T, ResR, R, E](handlerState, doneCh, sender, span)
-	sender.done = result.Done
-
+	var result *clientStreamingResult[HandlerState, T, ResR, R, E]
+	var resultCtx ResultContext[HandlerState, T, ResR, R, E]
 	if ec.hasResult {
-		ec.pending.Set(streamID, result)
+		doneCh = make(chan struct{})
+		result = makeClientStreamingResult[HandlerState, T, ResR, R, E](handlerState, doneCh, sender, span)
+		sender.done = result.Done
+		if err := ec.pending.Set(streamID, result); err != nil {
+			tracing.SpanError(span, err)
+			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+			return err
+		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
+		resultCtx = result
+	} else {
+		sender.done = func() {}
+		resultCtx = noopResultContext[HandlerState, T, ResR, R, E]{}
 	}
 
 	msgCount := 0
@@ -242,7 +253,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 			return endErr
 		}
-		if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, result, sender); err != nil {
+		if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, resultCtx, sender); err != nil {
 			if ec.hasResult {
 				result.mu.Lock()
 				defer result.mu.Unlock()

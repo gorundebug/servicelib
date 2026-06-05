@@ -72,7 +72,9 @@ func MakeMultiJoinLink[K comparable, T1, T2, R any](
 		source:          rightStream,
 		serdeValue:      valueSerializer,
 	}
-	rightStream.SetConsumer(link)
+	if err := rightStream.SetConsumer(link); err != nil {
+		return err
+	}
 	link.index = multiJoin.addLink(link)
 	return nil
 }
@@ -153,7 +155,9 @@ func MakeMultiJoinStream[K comparable, T, R any](
 	}
 	env.RegisterStorage(multiJoinStream.joinStorage)
 	multiJoinStream.f.stream = multiJoinStream
-	leftStream.SetConsumer(multiJoinStream)
+	if err := leftStream.SetConsumer(multiJoinStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(multiJoinStream)
 
 	return multiJoinStream, nil
@@ -196,8 +200,8 @@ func (s *MultiJoinStream[K, T, R]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *MultiJoinStream[K, T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *MultiJoinStream[K, T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *MultiJoinStream[K, T, R]) Consume(ctx context.Context, value datastruct.KeyValue[K, T]) {

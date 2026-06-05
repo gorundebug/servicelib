@@ -77,14 +77,14 @@ func (s *InputStream[T, R, E]) GetResultStream() runtime.TypedSerializedStream[R
 	return nil
 }
 
-func (s *InputStream[T, R, E]) SetSource(source runtime.TypedStream[R]) {
+func (s *InputStream[T, R, E]) SetSource(source runtime.TypedStream[R]) error {
 	link := &resultLink[T, R, E]{
 		streamLink:   streamLink{stream: s},
 		inputStream:  s,
 		resultSource: source,
 	}
 	s.resultLink = link
-	source.SetConsumer(link)
+	return source.SetConsumer(link)
 }
 
 func (s *InputStream[T, R, E]) GetErrorStream() runtime.TypedConsumedStream[E] {
@@ -112,8 +112,8 @@ func (s *InputStream[T, R, E]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *InputStream[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *InputStream[T, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *InputStream[T, R, E]) GetConsumers() []runtime.Stream {
@@ -163,14 +163,14 @@ func (s *InputKVStream[K, V, R, E]) SetResultConsumer(consumer runtime.Consumer[
 	s.resultConsumer = consumer
 }
 
-func (s *InputKVStream[K, V, R, E]) SetSource(source runtime.TypedStream[R]) {
+func (s *InputKVStream[K, V, R, E]) SetSource(source runtime.TypedStream[R]) error {
 	link := &resultLinkKV[K, V, R, E]{
 		streamLink:   streamLink{stream: s},
 		inputStream:  s,
 		resultSource: source,
 	}
 	s.resultLink = link
-	source.SetConsumer(link)
+	return source.SetConsumer(link)
 }
 
 func (s *InputKVStream[K, V, R, E]) GetResultStream() runtime.TypedSerializedStream[R] {
@@ -212,8 +212,8 @@ func (s *InputKVStream[K, V, R, E]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *InputKVStream[K, V, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[datastruct.KeyValue[K, V]]) {
-	s.SetDownstream(consumer, s)
+func (s *InputKVStream[K, V, R, E]) SetConsumer(consumer runtime.TypedStreamConsumer[datastruct.KeyValue[K, V]]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *InputKVStream[K, V, R, E]) GetConsumers() []runtime.Stream {

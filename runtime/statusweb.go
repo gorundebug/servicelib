@@ -245,7 +245,7 @@ func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(statusHtml); err != nil {
-		app.environment.Log().Warnf("statusHandler write error: %s", err.Error())
+		app.environment.Log().Warnf(r.Context(), "statusHandler write error: %s", err.Error())
 	}
 }
 
@@ -258,7 +258,7 @@ func (app *ServiceApp) visJSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(visMinJS); err != nil {
-		app.environment.Log().Warnf("visJSHandler write error: %s", err.Error())
+		app.environment.Log().Warnf(r.Context(), "visJSHandler write error: %s", err.Error())
 	}
 }
 
@@ -271,7 +271,7 @@ func (app *ServiceApp) visCSSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(visMinCSS); err != nil {
-		app.environment.Log().Warnf("visCSSHandler write error: %s", err.Error())
+		app.environment.Log().Warnf(r.Context(), "visCSSHandler write error: %s", err.Error())
 	}
 }
 
@@ -299,7 +299,7 @@ func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(jsonData); err != nil {
-		app.environment.Log().Warnf("dataHandler write error: %s", err.Error())
+		app.environment.Log().Warnf(r.Context(), "dataHandler write error: %s", err.Error())
 	}
 }
 
@@ -317,6 +317,6 @@ func (app *ServiceApp) graphHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(data); err != nil {
-		app.environment.Log().Warnf("graphHandler write error: %s", err.Error())
+		app.environment.Log().Warnf(r.Context(), "graphHandler write error: %s", err.Error())
 	}
 }

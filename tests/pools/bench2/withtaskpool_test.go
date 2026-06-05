@@ -50,7 +50,7 @@ func BenchmarkWithTaskPool(b *testing.B) {
 				defer wg.Done()
 				for j := 0; j < 1000000; j++ {
 					wg.Add(1)
-					taskPool.AddTask(context.Background(), task)
+					_ = taskPool.AddTask(context.Background(), task)
 				}
 			}()
 		}

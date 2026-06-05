@@ -374,7 +374,7 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		topics := []string{cfg.Topic}
 		for {
 			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
-				ep.GetRuntimeEnvironment().Log().Errorf(
+				ep.GetRuntimeEnvironment().Log().Errorf(cancelCtx,
 					"consumer group consume error for kafka source endpoint %q: %v",
 					ep.GetName(), err)
 			}
@@ -398,12 +398,12 @@ func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
 	select {
 	case <-c:
 		if err := ep.consumerGroup.Close(); err != nil {
-			ep.GetRuntimeEnvironment().Log().Warnf(
+			ep.GetRuntimeEnvironment().Log().Warnf(ctx,
 				"close consumer group failed for kafka source endpoint %q: %v",
 				ep.GetName(), err)
 		}
 	case <-ctx.Done():
-		ep.GetRuntimeEnvironment().Log().Warnf(
+		ep.GetRuntimeEnvironment().Log().Warnf(ctx,
 			"Kafka source endpoint %q stopped by timeout.", ep.GetName())
 	}
 }
@@ -502,7 +502,12 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 		messageCallbackMap: make(map[string]ResultCallback[HandlerState, T, R, E]),
 	}
 	if ec.hasResult {
-		ec.pending.Set(streamID, result)
+		if err = ec.pending.Set(streamID, result); err != nil {
+			tracing.SpanError(span, err)
+			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+			return
+		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 

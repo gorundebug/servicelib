@@ -189,7 +189,7 @@ func (ep *customEndpoint[T]) Start(ctx context.Context) error {
 	go func() {
 		defer ep.wg.Done()
 		if err := ep.dataProducer.Start(cancelCtx, ep); err != nil {
-			ep.GetRuntimeEnvironment().Log().Errorf("data producer error in endpoint %q: %v",
+			ep.GetRuntimeEnvironment().Log().Errorf(cancelCtx, "data producer error in endpoint %q: %v",
 				ep.GetName(), err)
 		}
 	}()
@@ -208,7 +208,7 @@ func (ep *customEndpoint[T]) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ep.GetRuntimeEnvironment().Log().Warnf("Custom source endpoint %q stopped by timeout.", ep.GetName())
+		ep.GetRuntimeEnvironment().Log().Warnf(ctx, "Custom source endpoint %q stopped by timeout.", ep.GetName())
 	}
 }
 
@@ -318,7 +318,12 @@ func (ec *customEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(ctx con
 		messageCallbackMap: make(map[string]ResultCallback[HandlerState, T, R, E]),
 	}
 	if ec.hasResult {
-		ec.pending.Set(streamID, result)
+		if err = ec.pending.Set(streamID, result); err != nil {
+			tracing.SpanError(span, err)
+			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+			return
+		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 	}
 

@@ -57,7 +57,9 @@ func MakeDelayStream[T any](streamConfig *config.DelayStreamConfig, stream runti
 	}
 	delayStream.f.stream = delayStream
 	delayStream.downstreamCollector = delayStream.Emit
-	stream.SetConsumer(delayStream)
+	if err := stream.SetConsumer(delayStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(delayStream)
 	return delayStream, nil
 }
@@ -83,8 +85,8 @@ func (s *DelayStream[T]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *DelayStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
-	s.SetDownstream(consumer, s)
+func (s *DelayStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
+	return s.SetDownstream(consumer, s)
 }
 
 func (s *DelayStream[T]) Consume(ctx context.Context, value T) {

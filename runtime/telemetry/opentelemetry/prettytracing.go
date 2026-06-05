@@ -73,7 +73,7 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 			statusMark = "✖ "
 		}
 
-		fmt.Fprintf(e.w, "[%s][%-16s]  %s  %8s  %-28s%s",
+		_, _ = fmt.Fprintf(e.w, "[%s][%-16s]  %s  %8s  %-28s%s",
 			traceID,
 			svcName,
 			s.StartTime().Format("15:04:05.000"),
@@ -83,7 +83,7 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 		)
 
 		for _, attr := range s.Attributes() {
-			fmt.Fprintf(e.w, " %s=%q", string(attr.Key), attr.Value.AsString())
+			_, _ = fmt.Fprintf(e.w, " %s=%q", string(attr.Key), attr.Value.AsString())
 		}
 
 		if evs := s.Events(); len(evs) > 0 {
@@ -91,10 +91,10 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 			for i, ev := range evs {
 				names[i] = ev.Name
 			}
-			fmt.Fprintf(e.w, "  » %s", strings.Join(names, " "))
+			_, _ = fmt.Fprintf(e.w, "  » %s", strings.Join(names, " "))
 		}
 
-		fmt.Fprintln(e.w)
+		_, _ = fmt.Fprintln(e.w)
 	}
 	return nil
 }

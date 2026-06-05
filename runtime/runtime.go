@@ -40,7 +40,7 @@ type ConsumeStatistics interface {
 }
 
 type ServiceLoader interface {
-	Stop()
+	Stop(ctx context.Context)
 }
 
 type ServiceExecutionRuntime interface {
@@ -82,24 +82,24 @@ type serviceLoader[Environment RuntimeEnvironment, Cfg config.Config] struct {
 	configReloadErrorCounter   metrics.Int64Counter
 }
 
-func (l *serviceLoader[Environment, Cfg]) createConfigReloadCounters() {
+func (l *serviceLoader[Environment, Cfg]) createConfigReloadCounters(ctx context.Context) {
 	scope := l.service.Metrics().Scope("service", metrics.Labels{
 		"service": l.service.ServiceConfig().Name,
 	})
 	var err error
 	l.configReloadSuccessCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "success"})
 	if err != nil {
-		l.service.Log().Errorf("failed to create config_reloads_total counter: %v", err)
+		l.service.Log().Errorf(ctx, "failed to create config_reloads_total counter: %v", err)
 	}
 	l.configReloadErrorCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "error"})
 	if err != nil {
-		l.service.Log().Errorf("failed to create config_reloads_total counter: %v", err)
+		l.service.Log().Errorf(ctx, "failed to create config_reloads_total counter: %v", err)
 	}
 }
 
-func (l *serviceLoader[Environment, Cfg]) Stop() {
+func (l *serviceLoader[Environment, Cfg]) Stop(ctx context.Context) {
 	if err := l.watcher.Close(); err != nil {
-		l.service.Log().Warnf("watcher close error: %s", err)
+		l.service.Log().Warnf(ctx, "watcher close error: %s", err)
 	}
 }
 
@@ -132,7 +132,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
 			return fmt.Errorf("service init error: %w", err)
 		}
-		l.createConfigReloadCounters()
+		l.createConfigReloadCounters(ctx)
 		return nil
 	}
 
@@ -214,7 +214,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 			return fmt.Errorf("service init error: %w", err)
 		}
 
-		l.createConfigReloadCounters()
+		l.createConfigReloadCounters(ctx)
 		closeWatcher = false
 
 		l.wg.Add(1)
@@ -229,12 +229,12 @@ func (l *serviceLoader[Environment, Cfg]) init(
 					}
 					currentOverrideConfigFile, err := filepath.EvalSymlinks(overrideConfigFileName)
 					if err != nil {
-						l.service.Log().Errorf("error evaluating override config file path: %s", err)
+						l.service.Log().Errorf(ctx, "error evaluating override config file path: %s", err)
 						continue
 					}
 					eventPath, err := filepath.EvalSymlinks(event.Name)
 					if err != nil {
-						l.service.Log().Errorf("error evaluating override config file path: %s", err)
+						l.service.Log().Errorf(ctx, "error evaluating override config file path: %s", err)
 						continue
 					}
 					// we only care about the config file with the following cases:
@@ -247,7 +247,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newOverrideData, err := os.ReadFile(realOverrideConfigFile)
 						if err != nil {
-							l.service.Log().Errorf("error reading override config file: %s", err)
+							l.service.Log().Errorf(ctx, "error reading override config file: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -256,7 +256,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newConfigData, err := os.ReadFile(baseConfigFileName)
 						if err != nil {
-							l.service.Log().Errorf("error reading config file: %s", err)
+							l.service.Log().Errorf(ctx, "error reading config file: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -267,7 +267,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						newViper.SetConfigType("yaml")
 
 						if err := newViper.ReadConfig(bytes.NewReader(newConfigData)); err != nil {
-							l.service.Log().Errorf("viper read config error: %s", err)
+							l.service.Log().Errorf(ctx, "viper read config error: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -275,7 +275,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						}
 
 						if err := newViper.MergeConfig(bytes.NewReader(newOverrideData)); err != nil {
-							l.service.Log().Errorf("viper merge config error: %s", err)
+							l.service.Log().Errorf(ctx, "viper merge config error: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -285,7 +285,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						newCfg := configMaker()
 
 						if err := newViper.Unmarshal(newCfg); err != nil {
-							l.service.Log().Errorf("Viper unmarshal config error: %s", err)
+							l.service.Log().Errorf(ctx, "Viper unmarshal config error: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -293,7 +293,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						}
 
 						if err := newCfg.ApplyEnvironment(); err != nil {
-							l.service.Log().Errorf("apply environment error: %s", err)
+							l.service.Log().Errorf(ctx, "apply environment error: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -304,7 +304,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newRuntimeCfg, err := config.NewRuntimeConfig(newCfg)
 						if err != nil {
-							l.service.Log().Errorf("create runtime config error: %s", err)
+							l.service.Log().Errorf(ctx, "create runtime config error: %s", err)
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -317,7 +317,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 					}
 				case err, ok := <-l.watcher.Errors:
 					if ok {
-						l.service.Log().Errorf("watcher error: %s", err)
+						l.service.Log().Errorf(ctx, "watcher error: %s", err)
 					}
 				}
 			}
@@ -344,7 +344,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 		if err := l.service.GetRuntime().initRuntime(name, l.service, dep, l, runtimeCfg); err != nil {
 			return fmt.Errorf("service init error: %w", err)
 		}
-		l.createConfigReloadCounters()
+		l.createConfigReloadCounters(ctx)
 	}
 
 	return nil
@@ -524,7 +524,7 @@ func IsKeyValueType[T any]() bool {
 
 var defaultCallSemantic = config.FunctionCallSemanticsConfig{}
 
-func MakeCaller[T any](source TypedStream[T]) Caller[T] {
+func MakeCaller[T any](source TypedStream[T]) (Caller[T], error) {
 	env := source.GetRuntimeEnvironment()
 	cfg := env.RuntimeConfig()
 	serviceConfig := env.ServiceConfig()
@@ -553,7 +553,7 @@ func MakeCaller[T any](source TypedStream[T]) Caller[T] {
 	})
 	messagesCounter, err := scope.Counter("messages_total", "Total number of messages processed by stream link", nil)
 	if err != nil {
-		env.Log().Errorf("failed to create stream_messages_total counter: %v", err)
+		return nil, fmt.Errorf("failed to create stream_messages_total counter: %w", err)
 	}
 
 	var tr tracing.Tracer
@@ -606,13 +606,13 @@ func MakeCaller[T any](source TypedStream[T]) Caller[T] {
 		streamCaller = c
 
 	default:
-		panic(fmt.Sprintf("undefined callSemantics type [%T] ", callSemantics))
+		return nil, fmt.Errorf("undefined callSemantics type [%T]", callSemantics)
 	}
 
 	linkID := config.LinkID{From: source.GetID(), To: consumer.GetID()}
 	env.GetRuntime().registerConsumeStatistics(linkID, consumeStat)
 	env.GetRuntime().registerLinkInfo(linkID, callSemantics)
-	return streamCaller
+	return streamCaller, nil
 }
 
 type consumeStatistics struct {
@@ -693,7 +693,7 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		if err := c.pool.AddTask(ctx, func() {
 			c.consumer.Consume(ctx, value)
 		}); err != nil {
-			c.source.GetEnvironment().Log().Warnf("task pool %q rejected task: %s", c.pool.GetName(), err)
+			c.source.GetEnvironment().Log().Warnf(ctx, "task pool %q rejected task: %s", c.pool.GetName(), err)
 		}
 	}
 }
@@ -727,7 +727,7 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		if err := c.pool.AddTask(ctx, c.priority, func() {
 			c.consumer.Consume(ctx, value)
 		}); err != nil {
-			c.source.GetEnvironment().Log().Warnf("priority task pool %q rejected task: %s", c.pool.GetName(), err)
+			c.source.GetEnvironment().Log().Warnf(ctx, "priority task pool %q rejected task: %s", c.pool.GetName(), err)
 		}
 	}
 }
@@ -817,12 +817,17 @@ func (s *ConsumedStream[T]) GetRuntimeEnvironment() RuntimeEnvironment {
 	return s.environment
 }
 
-func (s *ConsumedStream[T]) SetDownstream(consumer TypedStreamConsumer[T], stream TypedStream[T]) {
+func (s *ConsumedStream[T]) SetDownstream(consumer TypedStreamConsumer[T], stream TypedStream[T]) error {
 	if s.consumer != nil {
-		panic(fmt.Sprintf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().GetName()))
+		return fmt.Errorf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().GetName())
+	}
+	caller, err := MakeCaller[T](stream)
+	if err != nil {
+		return err
 	}
 	s.consumer = consumer
-	s.downstream = MakeCaller[T](stream)
+	s.downstream = caller
+	return nil
 }
 
 func (s *ConsumedStream[T]) GetConsumer() TypedStreamConsumer[T] {

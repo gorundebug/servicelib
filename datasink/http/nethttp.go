@@ -199,7 +199,7 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			ec.endpoint.GetRuntimeEnvironment().Log().Error(err)
+			ec.endpoint.GetRuntimeEnvironment().Log().Errorf(handlerCtx, "http response body close error: %v", err)
 		}
 	}(httpResp.Body)
 

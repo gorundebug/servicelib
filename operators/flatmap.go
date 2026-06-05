@@ -49,7 +49,9 @@ func MakeFlatMapStream[T, R any](streamConfig *config.FlatMapStreamConfig, strea
 		collector: runtime.MakeCollector[R](nil),
 	}
 	flatMapStream.f.stream = flatMapStream
-	stream.SetConsumer(flatMapStream)
+	if err := stream.SetConsumer(flatMapStream); err != nil {
+		return nil, err
+	}
 	env.RegisterStream(flatMapStream)
 	return flatMapStream, nil
 }
@@ -75,9 +77,12 @@ func (s *FlatMapStream[T, R]) Stream() runtime.Stream {
 	return s
 }
 
-func (s *FlatMapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) {
-	s.SetDownstream(consumer, s)
+func (s *FlatMapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
+	if err := s.SetDownstream(consumer, s); err != nil {
+		return err
+	}
 	s.collector = s.Collector()
+	return nil
 }
 
 func (s *FlatMapStream[T, R]) Consume(ctx context.Context, value T) {

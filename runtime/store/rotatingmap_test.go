@@ -71,7 +71,9 @@ func TestRotatingMap_Stop_IdempotentDoubleCalls(t *testing.T) {
 
 func TestRotatingMap_Get_ExistingKey(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 42)
+	if err := m.Set("k", 42); err != nil {
+		t.Fatal(err)
+	}
 
 	v, ok := m.Get("k")
 	if !ok {
@@ -94,34 +96,34 @@ func TestRotatingMap_Get_MissingKey_ReturnsFalse(t *testing.T) {
 	}
 }
 
-func TestRotatingMap_Set_DuplicateKeyInCurrent_Panics(t *testing.T) {
+func TestRotatingMap_Set_DuplicateKeyInCurrent_ReturnsError(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 1)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate key in current")
-		}
-	}()
-	m.Set("k", 2)
+	if err := m.Set("k", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Set("k", 2); err == nil {
+		t.Fatal("expected error on duplicate key in current")
+	}
 }
 
-func TestRotatingMap_Set_DuplicateKeyInPrev_Panics(t *testing.T) {
+func TestRotatingMap_Set_DuplicateKeyInPrev_ReturnsError(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 1)
+	if err := m.Set("k", 1); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate() // k moves to prev
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate key in prev")
-		}
-	}()
-	m.Set("k", 2)
+	if err := m.Set("k", 2); err == nil {
+		t.Fatal("expected error on duplicate key in prev")
+	}
 }
 
 // ---------- Pop ----------
 
 func TestRotatingMap_Pop_ExistingKey(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 7)
+	if err := m.Set("k", 7); err != nil {
+		t.Fatal(err)
+	}
 
 	v, ok := m.Pop("k")
 	if !ok || v != 7 {
@@ -147,7 +149,9 @@ func TestRotatingMap_Pop_MissingKey_ReturnsFalse(t *testing.T) {
 
 func TestRotatingMap_Pop_TwiceOnSameKey(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 5)
+	if err := m.Set("k", 5); err != nil {
+		t.Fatal(err)
+	}
 
 	m.Pop("k")
 	_, ok := m.Pop("k")
@@ -162,7 +166,9 @@ func TestRotatingMap_Pop_TwiceOnSameKey(t *testing.T) {
 // current moves to prev and is still accessible via Get.
 func TestRotatingMap_Rotate_ItemMovesToPrev(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 10)
+	if err := m.Set("k", 10); err != nil {
+		t.Fatal(err)
+	}
 
 	m.rotate()
 
@@ -183,7 +189,9 @@ func TestRotatingMap_Rotate_ItemMovesToPrev(t *testing.T) {
 // moved to prev by a rotation.
 func TestRotatingMap_Rotate_PopFromPrev(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 20)
+	if err := m.Set("k", 20); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate()
 
 	v, ok := m.Pop("k")
@@ -201,7 +209,9 @@ func TestRotatingMap_Rotate_PopFromPrev(t *testing.T) {
 // before swapping, so items persist across the rotation boundary.
 func TestRotatingMap_Rotate_TwoRotations_ItemSurvives(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("k", 5)
+	if err := m.Set("k", 5); err != nil {
+		t.Fatal(err)
+	}
 
 	m.rotate() // current={} prev={k:5}
 	m.rotate() // prev merged into current → current={k:5}; prev={k:5}; current={}
@@ -217,7 +227,9 @@ func TestRotatingMap_Rotate_TwoRotations_ItemSurvives(t *testing.T) {
 func TestRotatingMap_Rotate_GetSearchesCurrentThenPrev(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
 
-	m.Set("a", 1)
+	if err := m.Set("a", 1); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate() // a is in prev; current is empty
 
 	// "a" must be found via prev.
@@ -227,7 +239,9 @@ func TestRotatingMap_Rotate_GetSearchesCurrentThenPrev(t *testing.T) {
 	}
 
 	// A new key only in current is also found.
-	m.Set("b", 2)
+	if err := m.Set("b", 2); err != nil {
+		t.Fatal(err)
+	}
 	v, ok = m.Get("b")
 	if !ok || v != 2 {
 		t.Fatalf("expected b=2 from current, got ok=%v v=%d", ok, v)
@@ -239,7 +253,9 @@ func TestRotatingMap_Rotate_GetSearchesCurrentThenPrev(t *testing.T) {
 func TestRotatingMap_Rotate_PopSearchesCurrentThenPrev(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
 
-	m.Set("a", 1)
+	if err := m.Set("a", 1); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate() // a is now in prev
 
 	// Pop must find and remove "a" from prev.
@@ -253,7 +269,9 @@ func TestRotatingMap_Rotate_PopSearchesCurrentThenPrev(t *testing.T) {
 	}
 
 	// A key only in current is also popped correctly.
-	m.Set("b", 2)
+	if err := m.Set("b", 2); err != nil {
+		t.Fatal(err)
+	}
 	v, ok = m.Pop("b")
 	if !ok || v != 2 {
 		t.Fatalf("expected (2, true) from current, got (%d, %v)", v, ok)
@@ -264,10 +282,14 @@ func TestRotatingMap_Rotate_PopSearchesCurrentThenPrev(t *testing.T) {
 // new (empty) current, not into prev.
 func TestRotatingMap_Rotate_SetAfterRotate(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
-	m.Set("a", 1)
+	if err := m.Set("a", 1); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate()
 
-	m.Set("b", 2)
+	if err := m.Set("b", 2); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, ok := m.current["b"]; !ok {
 		t.Fatal("key set after rotate must be in current")
@@ -284,10 +306,14 @@ func TestRotatingMap_Rotate_SetAfterRotate(t *testing.T) {
 func TestRotatingMap_Rotate_MergePreservesItemsFromBothGenerations(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Hour)
 
-	m.Set("a", 1)
+	if err := m.Set("a", 1); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate() // a moves to prev; current={}
 
-	m.Set("b", 2)
+	if err := m.Set("b", 2); err != nil {
+		t.Fatal(err)
+	}
 	m.rotate() // merge prev{a:1} into current{b:2} → prev={a:1,b:2}; current={}
 
 	va, oka := m.Get("a")
@@ -302,10 +328,9 @@ func TestRotatingMap_Rotate_MergePreservesItemsFromBothGenerations(t *testing.T)
 
 // ---------- timer-based rotation ----------
 
-// NOTE: TestRotatingMap_TimerFiresRotation is omitted because Start() assigns
-// m.timer without holding m.mu, while rotate() reads m.timer under m.mu —
-// a data race in the production code that the race detector flags.
-// The rotation logic itself is fully exercised via direct rotate() calls above.
+// NOTE: TestRotatingMap_TimerFiresRotation is omitted to avoid timing-sensitive
+// tests in CI. The rotation logic itself is fully exercised via direct rotate()
+// calls above.
 
 // ---------- concurrency ----------
 
@@ -318,7 +343,7 @@ func TestRotatingMap_Concurrent_SetGet(t *testing.T) {
 
 	for i := 0; i < goroutines; i++ {
 		i := i
-		go func() { defer wg.Done(); m.Set(i, i*10) }()
+		go func() { defer wg.Done(); _ = m.Set(i, i*10) }()
 		go func() { defer wg.Done(); m.Get(i) }()
 	}
 	wg.Wait()
@@ -333,7 +358,7 @@ func TestRotatingMap_Concurrent_SetPopRotate(t *testing.T) {
 
 	for i := 0; i < goroutines; i++ {
 		i := i
-		go func() { defer wg.Done(); m.Set(i, i) }()
+		go func() { defer wg.Done(); _ = m.Set(i, i) }()
 		go func() { defer wg.Done(); m.Pop(i) }()
 		go func() { defer wg.Done(); m.rotate() }()
 	}
