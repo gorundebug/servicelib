@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
@@ -217,8 +218,8 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			case <-p.stopCh:
 			case <-ctx.Done():
 				p.lock.Lock()
-				p.environment.Log().Warnf(ctx, "delay task pool stopped by timeout and was not empty (waiting tasks count=%d), %s",
-					p.pq.Len(), ctx.Err())
+				p.environment.Log().Warn(ctx, "delay task pool stopped by timeout with waiting tasks",
+					log.Int("waiting_count", p.pq.Len()), log.Err(ctx.Err()))
 				p.lock.Unlock()
 				p.stopTimeoutCounter.Inc(ctx)
 			}
@@ -244,7 +245,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 			p.tasksLock.Lock()
 			tasksCount := p.count
 			p.tasksLock.Unlock()
-			p.environment.Log().Warnf(ctx, "delay task pool stopped by timeout: %s (executing tasks count=%d)", ctx.Err(), tasksCount)
+			p.environment.Log().Warn(ctx, "delay task pool stopped by timeout", log.Err(ctx.Err()), log.Int("executing_count", tasksCount))
 			p.stopTimeoutCounter.Inc(ctx)
 		}
 	} else {

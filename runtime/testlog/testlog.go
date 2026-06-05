@@ -17,47 +17,22 @@
 //	doWork(ctx)
 //
 //	entries := engine.Entries()
-//	require.Equal(t, testlog.LevelError, entries[0].Level)
+//	require.Equal(t, log.LevelError, entries[0].Level)
 //	require.Contains(t, entries[0].Message, "connection refused")
 package testlog
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 )
 
-// Level mirrors logrus levels as a simple enum.
-type Level int
-
-const (
-	LevelDebug Level = iota
-	LevelInfo
-	LevelWarn
-	LevelError
-)
-
-func (l Level) String() string {
-	switch l {
-	case LevelDebug:
-		return "debug"
-	case LevelInfo:
-		return "info"
-	case LevelWarn:
-		return "warn"
-	case LevelError:
-		return "error"
-	default:
-		return "unknown"
-	}
-}
-
 // Entry holds one captured log call.
 type Entry struct {
-	Level   Level
+	Level   log.Level
 	Message string
+	Fields  []log.Field
 }
 
 // ── testLogger ────────────────────────────────────────────────────────────────
@@ -66,21 +41,23 @@ type testLogger struct {
 	engine *TestLog
 }
 
-func (l *testLogger) record(level Level, msg string) {
-	l.engine.record(Entry{Level: level, Message: msg})
+func (l *testLogger) record(level log.Level, msg string, fields []log.Field) {
+	cp := make([]log.Field, len(fields))
+	copy(cp, fields)
+	l.engine.record(Entry{Level: level, Message: msg, Fields: cp})
 }
 
-func (l *testLogger) Debugf(_ context.Context, format string, args ...interface{}) {
-	l.record(LevelDebug, fmt.Sprintf(format, args...))
+func (l *testLogger) Debug(_ context.Context, msg string, fields ...log.Field) {
+	l.record(log.LevelDebug, msg, fields)
 }
-func (l *testLogger) Infof(_ context.Context, format string, args ...interface{}) {
-	l.record(LevelInfo, fmt.Sprintf(format, args...))
+func (l *testLogger) Info(_ context.Context, msg string, fields ...log.Field) {
+	l.record(log.LevelInfo, msg, fields)
 }
-func (l *testLogger) Warnf(_ context.Context, format string, args ...interface{}) {
-	l.record(LevelWarn, fmt.Sprintf(format, args...))
+func (l *testLogger) Warn(_ context.Context, msg string, fields ...log.Field) {
+	l.record(log.LevelWarn, msg, fields)
 }
-func (l *testLogger) Errorf(_ context.Context, format string, args ...interface{}) {
-	l.record(LevelError, fmt.Sprintf(format, args...))
+func (l *testLogger) Error(_ context.Context, msg string, fields ...log.Field) {
+	l.record(log.LevelError, msg, fields)
 }
 
 // ── TestLog ───────────────────────────────────────────────────────────────────
@@ -112,7 +89,7 @@ func (l *TestLog) Entries() []Entry {
 }
 
 // EntriesAtLevel returns a snapshot filtered to a specific level.
-func (l *TestLog) EntriesAtLevel(level Level) []Entry {
+func (l *TestLog) EntriesAtLevel(level log.Level) []Entry {
 	all := l.Entries()
 	var out []Entry
 	for _, e := range all {

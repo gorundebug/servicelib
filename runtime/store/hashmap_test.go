@@ -79,10 +79,10 @@ func (c *mockCounter) Add(_ context.Context, _ int64) {}
 
 type mockLogger struct{}
 
-func (l *mockLogger) Debugf(_ context.Context, _ string, _ ...interface{}) {}
-func (l *mockLogger) Infof(_ context.Context, _ string, _ ...interface{})  {}
-func (l *mockLogger) Warnf(_ context.Context, _ string, _ ...interface{})  {}
-func (l *mockLogger) Errorf(_ context.Context, _ string, _ ...interface{}) {}
+func (l *mockLogger) Debug(_ context.Context, _ string, _ ...log.Field) {}
+func (l *mockLogger) Info(_ context.Context, _ string, _ ...log.Field)  {}
+func (l *mockLogger) Warn(_ context.Context, _ string, _ ...log.Field)  {}
+func (l *mockLogger) Error(_ context.Context, _ string, _ ...log.Field) {}
 
 type mockServiceEnvironment struct {
 	serviceCfg *config.ServiceConfig

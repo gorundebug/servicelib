@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
@@ -163,7 +164,7 @@ func (p *TaskPoolImpl) Stop(ctx context.Context) {
 		p.lock.Lock()
 		tasksCount := p.count
 		p.lock.Unlock()
-		p.environment.Log().Warnf(ctx, "task pool %q stopped by timeout: %s (tasks count=%d)", p.name, ctx.Err(), tasksCount)
+		p.environment.Log().Warn(ctx, "task pool stopped by timeout", log.Str("pool", p.name), log.Err(ctx.Err()), log.Int("tasks_count", tasksCount))
 		p.stopTimeoutCounter.Inc(ctx)
 	}
 }

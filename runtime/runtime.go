@@ -25,6 +25,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/pool"
@@ -89,17 +90,17 @@ func (l *serviceLoader[Environment, Cfg]) createConfigReloadCounters(ctx context
 	var err error
 	l.configReloadSuccessCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "success"})
 	if err != nil {
-		l.service.Log().Errorf(ctx, "failed to create config_reloads_total counter: %v", err)
+		l.service.Log().Error(ctx, "failed to create config_reloads_total counter", log.Err(err))
 	}
 	l.configReloadErrorCounter, err = scope.Counter("config_reloads_total", "Total number of config reload attempts", metrics.Labels{"event": "error"})
 	if err != nil {
-		l.service.Log().Errorf(ctx, "failed to create config_reloads_total counter: %v", err)
+		l.service.Log().Error(ctx, "failed to create config_reloads_total counter", log.Err(err))
 	}
 }
 
 func (l *serviceLoader[Environment, Cfg]) Stop(ctx context.Context) {
 	if err := l.watcher.Close(); err != nil {
-		l.service.Log().Warnf(ctx, "watcher close error: %s", err)
+		l.service.Log().Warn(ctx, "watcher close error", log.Err(err))
 	}
 }
 
@@ -229,12 +230,12 @@ func (l *serviceLoader[Environment, Cfg]) init(
 					}
 					currentOverrideConfigFile, err := filepath.EvalSymlinks(overrideConfigFileName)
 					if err != nil {
-						l.service.Log().Errorf(ctx, "error evaluating override config file path: %s", err)
+						l.service.Log().Error(ctx, "error evaluating override config file path", log.Err(err))
 						continue
 					}
 					eventPath, err := filepath.EvalSymlinks(event.Name)
 					if err != nil {
-						l.service.Log().Errorf(ctx, "error evaluating override config file path: %s", err)
+						l.service.Log().Error(ctx, "error evaluating override config file path", log.Err(err))
 						continue
 					}
 					// we only care about the config file with the following cases:
@@ -247,7 +248,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newOverrideData, err := os.ReadFile(realOverrideConfigFile)
 						if err != nil {
-							l.service.Log().Errorf(ctx, "error reading override config file: %s", err)
+							l.service.Log().Error(ctx, "error reading override config file", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -256,7 +257,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newConfigData, err := os.ReadFile(baseConfigFileName)
 						if err != nil {
-							l.service.Log().Errorf(ctx, "error reading config file: %s", err)
+							l.service.Log().Error(ctx, "error reading config file", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -267,7 +268,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						newViper.SetConfigType("yaml")
 
 						if err := newViper.ReadConfig(bytes.NewReader(newConfigData)); err != nil {
-							l.service.Log().Errorf(ctx, "viper read config error: %s", err)
+							l.service.Log().Error(ctx, "viper read config error", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -275,7 +276,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						}
 
 						if err := newViper.MergeConfig(bytes.NewReader(newOverrideData)); err != nil {
-							l.service.Log().Errorf(ctx, "viper merge config error: %s", err)
+							l.service.Log().Error(ctx, "viper merge config error", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -285,7 +286,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						newCfg := configMaker()
 
 						if err := newViper.Unmarshal(newCfg); err != nil {
-							l.service.Log().Errorf(ctx, "Viper unmarshal config error: %s", err)
+							l.service.Log().Error(ctx, "viper unmarshal config error", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -293,7 +294,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 						}
 
 						if err := newCfg.ApplyEnvironment(); err != nil {
-							l.service.Log().Errorf(ctx, "apply environment error: %s", err)
+							l.service.Log().Error(ctx, "apply environment error", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -304,7 +305,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 
 						newRuntimeCfg, err := config.NewRuntimeConfig(newCfg)
 						if err != nil {
-							l.service.Log().Errorf(ctx, "create runtime config error: %s", err)
+							l.service.Log().Error(ctx, "create runtime config error", log.Err(err))
 							if l.configReloadErrorCounter != nil {
 								l.configReloadErrorCounter.Inc(ctx)
 							}
@@ -317,7 +318,7 @@ func (l *serviceLoader[Environment, Cfg]) init(
 					}
 				case err, ok := <-l.watcher.Errors:
 					if ok {
-						l.service.Log().Errorf(ctx, "watcher error: %s", err)
+						l.service.Log().Error(ctx, "watcher error", log.Err(err))
 					}
 				}
 			}
@@ -693,7 +694,7 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		if err := c.pool.AddTask(ctx, func() {
 			c.consumer.Consume(ctx, value)
 		}); err != nil {
-			c.source.GetEnvironment().Log().Warnf(ctx, "task pool %q rejected task: %s", c.pool.GetName(), err)
+			c.source.GetEnvironment().Log().Warn(ctx, "task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
 		}
 	}
 }
@@ -727,7 +728,7 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		if err := c.pool.AddTask(ctx, c.priority, func() {
 			c.consumer.Consume(ctx, value)
 		}); err != nil {
-			c.source.GetEnvironment().Log().Warnf(ctx, "priority task pool %q rejected task: %s", c.pool.GetName(), err)
+			c.source.GetEnvironment().Log().Warn(ctx, "priority task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
 		}
 	}
 }

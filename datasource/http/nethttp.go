@@ -19,6 +19,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/store"
@@ -346,7 +347,7 @@ func (ds *netHTTPDataSource) Stop(ctx context.Context) {
 
 	go func() {
 		if err := ds.server.Shutdown(ctx); err != nil {
-			ds.GetEnvironment().Log().Warnf(ctx, "netHTTPDataSource.Stop server shutdown: %s", err.Error())
+			ds.GetEnvironment().Log().Warn(ctx, "netHTTPDataSource.Stop server shutdown", log.Err(err))
 		}
 	}()
 	select {

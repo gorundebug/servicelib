@@ -17,6 +17,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
@@ -199,7 +200,7 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			ec.endpoint.GetRuntimeEnvironment().Log().Errorf(handlerCtx, "http response body close error: %v", err)
+			ec.endpoint.GetRuntimeEnvironment().Log().Error(handlerCtx, "HTTP response body close error", log.Err(err))
 		}
 	}(httpResp.Body)
 

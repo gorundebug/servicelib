@@ -39,20 +39,42 @@ func (l *Logger) withTraceFields(ctx context.Context) *logrus.Entry {
 	return logrus.NewEntry(l.Logger)
 }
 
-func (l *Logger) Debugf(ctx context.Context, format string, args ...interface{}) {
-	l.withTraceFields(ctx).Debugf(format, args...)
+func fieldsToLogrus(fields []log.Field) logrus.Fields {
+	if len(fields) == 0 {
+		return nil
+	}
+	lf := make(logrus.Fields, len(fields))
+	for _, f := range fields {
+		lf[f.Key] = f.Value()
+	}
+	return lf
 }
 
-func (l *Logger) Infof(ctx context.Context, format string, args ...interface{}) {
-	l.withTraceFields(ctx).Infof(format, args...)
+func (l *Logger) emit(ctx context.Context, level logrus.Level, msg string, fields []log.Field) {
+	if !l.IsLevelEnabled(level) {
+		return
+	}
+	entry := l.withTraceFields(ctx)
+	if lf := fieldsToLogrus(fields); lf != nil {
+		entry = entry.WithFields(lf)
+	}
+	entry.Log(level, msg)
 }
 
-func (l *Logger) Warnf(ctx context.Context, format string, args ...interface{}) {
-	l.withTraceFields(ctx).Warnf(format, args...)
+func (l *Logger) Debug(ctx context.Context, msg string, fields ...log.Field) {
+	l.emit(ctx, logrus.DebugLevel, msg, fields)
 }
 
-func (l *Logger) Errorf(ctx context.Context, format string, args ...interface{}) {
-	l.withTraceFields(ctx).Errorf(format, args...)
+func (l *Logger) Info(ctx context.Context, msg string, fields ...log.Field) {
+	l.emit(ctx, logrus.InfoLevel, msg, fields)
+}
+
+func (l *Logger) Warn(ctx context.Context, msg string, fields ...log.Field) {
+	l.emit(ctx, logrus.WarnLevel, msg, fields)
+}
+
+func (l *Logger) Error(ctx context.Context, msg string, fields ...log.Field) {
+	l.emit(ctx, logrus.ErrorLevel, msg, fields)
 }
 
 func (e *LogEngine) DefaultLogger(_ *log.Config) log.Logger {

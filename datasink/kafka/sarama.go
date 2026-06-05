@@ -21,6 +21,7 @@ import (
     "github.com/gorundebug/servicelib/api"
     "github.com/gorundebug/servicelib/runtime"
     "github.com/gorundebug/servicelib/runtime/config"
+    "github.com/gorundebug/servicelib/runtime/environment/log"
     "github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
@@ -209,8 +210,8 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
     }
     defer func() {
         if err := admin.Close(); err != nil {
-            ds.GetEnvironment().Log().Warnf(ctx, "close kafka admin failed for data connector %q: %v",
-                ds.GetName(), err)
+            ds.GetEnvironment().Log().Warn(ctx, "close kafka admin failed",
+                log.Str("connector", ds.GetName()), log.Err(err))
         }
     }()
 
@@ -235,9 +236,9 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
             func() {
                 defer ds.sendWG.Done()
                 if msg.Metadata == nil {
-                    ds.GetEnvironment().Log().Errorf(ctx,
-                        "metadata is nil inside ProducerMessage for success channel in data sink %q",
-                        ds.GetName())
+                    ds.GetEnvironment().Log().Error(ctx,
+                        "metadata is nil inside ProducerMessage for success channel",
+                        log.Str("connector", ds.GetName()))
                     return
                 }
                 meta := msg.Metadata.(*messageMetadata)
@@ -255,9 +256,9 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
             func() {
                 defer ds.sendWG.Done()
                 if errMsg.Msg.Metadata == nil {
-                    ds.GetEnvironment().Log().Errorf(ctx,
-                        "metadata is nil inside ProducerMessage for errors channel in data sink %q",
-                        ds.GetName())
+                    ds.GetEnvironment().Log().Error(ctx,
+                        "metadata is nil inside ProducerMessage for errors channel",
+                        log.Str("connector", ds.GetName()))
                     return
                 }
                 meta := errMsg.Msg.Metadata.(*messageMetadata)

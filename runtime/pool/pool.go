@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 )
 
 type Pool interface {
@@ -22,7 +23,7 @@ type Pool interface {
 func runTask(ctx context.Context, env environment.ServiceEnvironment, poolName string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
-			env.Log().Errorf(ctx, "panic in pool %q worker: %v", poolName, r)
+			env.Log().Error(ctx, "panic in pool worker", log.Str("pool", poolName), log.Any("panic", r))
 			panic(r)
 		}
 	}()

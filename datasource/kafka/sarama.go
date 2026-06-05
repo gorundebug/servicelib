@@ -20,6 +20,7 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/store"
 )
@@ -374,9 +375,9 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		topics := []string{cfg.Topic}
 		for {
 			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
-				ep.GetRuntimeEnvironment().Log().Errorf(cancelCtx,
-					"consumer group consume error for kafka source endpoint %q: %v",
-					ep.GetName(), err)
+				ep.GetRuntimeEnvironment().Log().Error(cancelCtx,
+					"consumer group consume error",
+					log.Str("endpoint", ep.GetName()), log.Err(err))
 			}
 			if cancelCtx.Err() != nil {
 				break
@@ -398,13 +399,13 @@ func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
 	select {
 	case <-c:
 		if err := ep.consumerGroup.Close(); err != nil {
-			ep.GetRuntimeEnvironment().Log().Warnf(ctx,
-				"close consumer group failed for kafka source endpoint %q: %v",
-				ep.GetName(), err)
+			ep.GetRuntimeEnvironment().Log().Warn(ctx,
+				"close consumer group failed",
+				log.Str("endpoint", ep.GetName()), log.Err(err))
 		}
 	case <-ctx.Done():
-		ep.GetRuntimeEnvironment().Log().Warnf(ctx,
-			"Kafka source endpoint %q stopped by timeout.", ep.GetName())
+		ep.GetRuntimeEnvironment().Log().Warn(ctx,
+			"kafka source endpoint stopped by timeout", log.Str("endpoint", ep.GetName()))
 	}
 }
 

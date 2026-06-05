@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/store"
 )
@@ -189,8 +190,8 @@ func (ep *customEndpoint[T]) Start(ctx context.Context) error {
 	go func() {
 		defer ep.wg.Done()
 		if err := ep.dataProducer.Start(cancelCtx, ep); err != nil {
-			ep.GetRuntimeEnvironment().Log().Errorf(cancelCtx, "data producer error in endpoint %q: %v",
-				ep.GetName(), err)
+			ep.GetRuntimeEnvironment().Log().Error(cancelCtx, "data producer error",
+				log.Str("endpoint", ep.GetName()), log.Err(err))
 		}
 	}()
 	return nil
@@ -208,7 +209,7 @@ func (ep *customEndpoint[T]) Stop(ctx context.Context) {
 	select {
 	case <-c:
 	case <-ctx.Done():
-		ep.GetRuntimeEnvironment().Log().Warnf(ctx, "Custom source endpoint %q stopped by timeout.", ep.GetName())
+		ep.GetRuntimeEnvironment().Log().Warn(ctx, "custom source endpoint stopped by timeout", log.Str("endpoint", ep.GetName()))
 	}
 }
 
