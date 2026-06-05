@@ -48,7 +48,7 @@ type RuntimeEnvironment interface {
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
 
-	Delay(duration time.Duration, f func())
+	Delay(ctx context.Context, duration time.Duration, f func()) error
 
 	GetSerde(valueType reflect.Type) (serde.Serializer, error)
 	RegisterHTTPHandler(path string, handler http.Handler)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 var _ runtime.TypedConsumedStream[any] = (*DelayStream[any])(nil)
@@ -27,14 +28,20 @@ type DelayFunctionContext[T any] struct {
 func (f *DelayFunctionContext[T]) call(ctx context.Context, value T) time.Duration {
 	f.BeforeCall()
 	defer f.AfterCall()
-	result := f.f.Duration(ctx, f.stream, value)
-	return result
+	return f.f.Duration(ctx, f.stream, value)
+}
+
+func (f *DelayFunctionContext[T]) callError(ctx context.Context, value T, err error, out runtime.Collect[T]) {
+	f.BeforeCall()
+	defer f.AfterCall()
+	f.f.DelayError(ctx, f.stream, value, err, out)
 }
 
 type DelayStream[T any] struct {
 	runtime.ConsumedStream[T]
-	source runtime.TypedStream[T]
-	f      DelayFunctionContext[T]
+	source              runtime.TypedStream[T]
+	f                   DelayFunctionContext[T]
+	downstreamCollector runtime.CollectFunc[T]
 }
 
 func MakeDelayStream[T any](streamConfig *config.DelayStreamConfig, stream runtime.TypedStream[T], f DelayFunction[T]) (runtime.TypedConsumedStream[T], error) {
@@ -49,6 +56,7 @@ func MakeDelayStream[T any](streamConfig *config.DelayStreamConfig, stream runti
 		},
 	}
 	delayStream.f.stream = delayStream
+	delayStream.downstreamCollector = delayStream.Emit
 	stream.SetConsumer(delayStream)
 	env.RegisterStream(delayStream)
 	return delayStream, nil
@@ -81,13 +89,22 @@ func (s *DelayStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) {
 
 func (s *DelayStream[T]) Consume(ctx context.Context, value T) {
 	ctx, span := s.StartSpan(ctx, "stream.delay")
-	defer span.End()
 	duration := s.f.call(ctx, value)
 	if duration > 0 {
-		s.GetRuntimeEnvironment().Delay(duration, func() {
-			s.Emit(ctx, value)
-		})
-	} else {
-		s.Emit(ctx, value)
+		if err := s.GetRuntimeEnvironment().Delay(ctx, duration, func() {
+			defer span.End()
+			if err := ctx.Err(); err != nil {
+				tracing.SpanError(span, err)
+				s.f.callError(ctx, value, err, s.downstreamCollector)
+				return
+			}
+			s.downstreamCollector.Out(ctx, value)
+		}); err != nil {
+			tracing.SpanError(span, err)
+			span.End()
+		}
+		return
 	}
+	defer span.End()
+	s.downstreamCollector.Out(ctx, value)
 }

@@ -388,6 +388,9 @@ type Pool struct {
 
 	// Name Pool name. Referenced in Link.poolName.
 	Name string `json:"name"`
+
+	// QueueCapacity Initial capacity of the task queue. Defaults to 256 if not set.
+	QueueCapacity int `json:"queueCapacity,omitempty"`
 }
 
 // ProcessPattern Execution pattern for the Process operator — controls how the handler interacts

@@ -6,13 +6,13 @@
 //     task_pool_queue_length{service, name}                       gauge
 //     task_pool_tasks_total{service, name}                        counter
 //     task_pool_task_execution_duration_seconds{service, name}    histogram
-//     task_pool_events_total{service, name, event}                counter  event=stop_timeout
+//     task_pool_events_total{service, name, event}                counter  event=stop_timeout | task_rejected
 //
 //   priority_task_pool (labels: service, name)
 //     priority_task_pool_queue_length{service, name}              gauge
 //     priority_task_pool_tasks_total{service, name}               counter
 //     priority_task_pool_task_execution_duration_seconds{...}     histogram
-//     priority_task_pool_events_total{service, name, event}       counter  event=stop_timeout
+//     priority_task_pool_events_total{service, name, event}       counter  event=stop_timeout | task_rejected
 //
 //   delay_pool (labels: service)
 //     delay_pool_wait_queue_length{service}                       gauge
@@ -127,6 +127,19 @@ lib.dashboard(
       unit='ops',
     ),
 
+    lib.ts(
+      title='Task Pool — Rejected Tasks Rate',
+      targets=[
+        lib.rate(
+          'task_pool_events_total',
+          '%s, event="task_rejected"' % poolFilter,
+          '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=6,
+      unit='ops',
+    ),
+
     // =========================================================================
     // Row: Priority Task Pool
     // =========================================================================
@@ -208,6 +221,19 @@ lib.dashboard(
         lib.rate(
           'priority_task_pool_events_total',
           '%s, event="stop_timeout"' % priPoolFilter,
+          '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=6,
+      unit='ops',
+    ),
+
+    lib.ts(
+      title='Priority Task Pool — Rejected Tasks Rate',
+      targets=[
+        lib.rate(
+          'priority_task_pool_events_total',
+          '%s, event="task_rejected"' % priPoolFilter,
           '{{service}} / {{name}}'
         ),
       ],

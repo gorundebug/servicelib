@@ -483,6 +483,10 @@ components:
           type: integer
           description: Number of worker goroutines in the pool.
           minimum: 1
+        queueCapacity:
+          type: integer
+          description: Initial capacity of the task queue. Defaults to 256 if not set.
+          minimum: 1
       required:
         - name
         - executorsCount

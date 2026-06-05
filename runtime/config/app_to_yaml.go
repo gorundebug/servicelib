@@ -205,10 +205,14 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 	if len(app.Pools) > 0 {
 		poolsNode := make(map[string]interface{})
 		for _, p := range app.Pools {
-			poolsNode[ToCamelCaseFirstLower(p.Name)] = map[string]interface{}{
+			poolNode := map[string]interface{}{
 				"name":           p.Name,
 				"executorsCount": p.ExecutorsCount,
 			}
+			if p.QueueCapacity > 0 {
+				poolNode["queueCapacity"] = p.QueueCapacity
+			}
+			poolsNode[ToCamelCaseFirstLower(p.Name)] = poolNode
 		}
 		doc["pools"] = poolsNode
 	}

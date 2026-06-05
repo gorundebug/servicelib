@@ -682,14 +682,19 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 			tracing.StringAttr("to", c.consumer.GetName()),
 			tracing.StringAttr("type", "taskpool"),
 		)
-		c.pool.AddTask(ctx, func() {
+		if err := c.pool.AddTask(ctx, func() {
 			defer span.End()
 			c.consumer.Consume(ctx, value)
-		})
+		}); err != nil {
+			tracing.SpanError(span, err)
+			span.End()
+		}
 	} else {
-		c.pool.AddTask(ctx, func() {
+		if err := c.pool.AddTask(ctx, func() {
 			c.consumer.Consume(ctx, value)
-		})
+		}); err != nil {
+			c.source.GetEnvironment().Log().Warnf("task pool %q rejected task: %s", c.pool.GetName(), err)
+		}
 	}
 }
 
@@ -711,14 +716,19 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 			tracing.StringAttr("to", c.consumer.GetName()),
 			tracing.StringAttr("type", "prioritytaskpool"),
 		)
-		c.pool.AddTask(ctx, c.priority, func() {
+		if err := c.pool.AddTask(ctx, c.priority, func() {
 			defer span.End()
 			c.consumer.Consume(ctx, value)
-		})
+		}); err != nil {
+			tracing.SpanError(span, err)
+			span.End()
+		}
 	} else {
-		c.pool.AddTask(ctx, c.priority, func() {
+		if err := c.pool.AddTask(ctx, c.priority, func() {
 			c.consumer.Consume(ctx, value)
-		})
+		}); err != nil {
+			c.source.GetEnvironment().Log().Warnf("priority task pool %q rejected task: %s", c.pool.GetName(), err)
+		}
 	}
 }
 

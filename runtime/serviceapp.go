@@ -564,8 +564,8 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	}
 }
 
-func (app *ServiceApp) Delay(duration time.Duration, f func()) {
-	_ = app.delayPool.Delay(duration, f)
+func (app *ServiceApp) Delay(ctx context.Context, duration time.Duration, f func()) error {
+	return app.delayPool.Delay(ctx, duration, f)
 }
 
 func (app *ServiceApp) GetTaskPool(name string) pool.TaskPool {

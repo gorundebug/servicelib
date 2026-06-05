@@ -89,12 +89,7 @@ func (f ProcessHandler[T, R, E]) Process(ctx context.Context, s runtime.Stream, 
 
 type DelayFunction[T any] interface {
 	Duration(context.Context, runtime.Stream, T) time.Duration
-}
-
-type DelayHandler[T any] func(context.Context, runtime.Stream, T) time.Duration
-
-func (f DelayHandler[T]) Duration(ctx context.Context, s runtime.Stream, v T) time.Duration {
-	return f(ctx, s, v)
+	DelayError(context.Context, runtime.Stream, T, error, runtime.Collect[T])
 }
 
 type When interface {

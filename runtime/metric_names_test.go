@@ -81,26 +81,26 @@ func (e *mockRuntimeEnv) ServiceContext() interface{}                          {
 
 // Satisfy remaining RuntimeEnvironment methods that the compiler requires but
 // that are never called during metric registration.
-func (e *mockRuntimeEnv) ServiceInit() error                               { return nil }
-func (e *mockRuntimeEnv) Start(context.Context) error                      { return nil }
-func (e *mockRuntimeEnv) ReloadConfig()                                    {}
-func (e *mockRuntimeEnv) Stop(context.Context)                             {}
-func (e *mockRuntimeEnv) Release()                                         {}
-func (e *mockRuntimeEnv) GetRuntime() ServiceExecutionRuntime              { return nil }
-func (e *mockRuntimeEnv) MetricsEngine() metrics.MetricsEngine             { return nil }
-func (e *mockRuntimeEnv) TracingEngine() tracing.TracingEngine             { return nil }
-func (e *mockRuntimeEnv) HasCustomHTTPServer() bool                        { return false }
-func (e *mockRuntimeEnv) GetTaskPool(string) pool.TaskPool                 { return nil }
-func (e *mockRuntimeEnv) GetPriorityTaskPool(string) pool.PriorityTaskPool { return nil }
-func (e *mockRuntimeEnv) AddDataSource(DataSource)                         {}
-func (e *mockRuntimeEnv) GetDataSource(int) DataSource                     { return nil }
-func (e *mockRuntimeEnv) AddDataSink(DataSink)                             {}
-func (e *mockRuntimeEnv) GetDataSink(int) DataSink                         { return nil }
-func (e *mockRuntimeEnv) Delay(time.Duration, func())                      {}
-func (e *mockRuntimeEnv) GetSerde(reflect.Type) (serde.Serializer, error)  { return nil, nil }
-func (e *mockRuntimeEnv) RegisterHTTPHandler(string, http.Handler)         {}
-func (e *mockRuntimeEnv) RegisterStream(RuntimeStream)                     {}
-func (e *mockRuntimeEnv) RegisterStorage(store.Storage)                    {}
+func (e *mockRuntimeEnv) ServiceInit() error                                 { return nil }
+func (e *mockRuntimeEnv) Start(context.Context) error                        { return nil }
+func (e *mockRuntimeEnv) ReloadConfig()                                      {}
+func (e *mockRuntimeEnv) Stop(context.Context)                               {}
+func (e *mockRuntimeEnv) Release()                                           {}
+func (e *mockRuntimeEnv) GetRuntime() ServiceExecutionRuntime                { return nil }
+func (e *mockRuntimeEnv) MetricsEngine() metrics.MetricsEngine               { return nil }
+func (e *mockRuntimeEnv) TracingEngine() tracing.TracingEngine               { return nil }
+func (e *mockRuntimeEnv) HasCustomHTTPServer() bool                          { return false }
+func (e *mockRuntimeEnv) GetTaskPool(string) pool.TaskPool                   { return nil }
+func (e *mockRuntimeEnv) GetPriorityTaskPool(string) pool.PriorityTaskPool   { return nil }
+func (e *mockRuntimeEnv) AddDataSource(DataSource)                           {}
+func (e *mockRuntimeEnv) GetDataSource(int) DataSource                       { return nil }
+func (e *mockRuntimeEnv) AddDataSink(DataSink)                               {}
+func (e *mockRuntimeEnv) GetDataSink(int) DataSink                           { return nil }
+func (e *mockRuntimeEnv) Delay(context.Context, time.Duration, func()) error { return nil }
+func (e *mockRuntimeEnv) GetSerde(reflect.Type) (serde.Serializer, error)    { return nil, nil }
+func (e *mockRuntimeEnv) RegisterHTTPHandler(string, http.Handler)           {}
+func (e *mockRuntimeEnv) RegisterStream(RuntimeStream)                       {}
+func (e *mockRuntimeEnv) RegisterStorage(store.Storage)                      {}
 func (e *mockRuntimeEnv) CreateKeyValueJoinStorage(api.JoinStorageType, store.JoinStorageConfig, Stream) store.Storage {
 	return nil
 }

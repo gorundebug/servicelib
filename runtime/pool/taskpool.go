@@ -21,30 +21,30 @@ import (
 type Task struct {
 	fn   func()
 	next *Task
-	prev *Task
 }
 
 type TaskPool interface {
 	Pool
-	AddTask(ctx context.Context, fn func()) *Task
+	AddTask(ctx context.Context, fn func()) error
 	GetName() string
 	GetExecutorsCount() int
 }
 
 type TaskPoolImpl struct {
-	head               *Task
-	tail               *Task
-	lock               sync.Mutex
-	name               string
-	gaugeQueueLength   metrics.Int64Gauge
-	tasksTotal         metrics.Int64Counter
-	executionDuration  metrics.Float64Histogram
-	stopTimeoutCounter metrics.Int64Counter
-	wg                 sync.WaitGroup
-	done               bool
-	cond               *sync.Cond
-	count              int
-	environment        environment.ServiceEnvironment
+	head                *Task
+	tail                *Task
+	lock                sync.Mutex
+	name                string
+	gaugeQueueLength    metrics.Int64Gauge
+	tasksTotal          metrics.Int64Counter
+	executionDuration   metrics.Float64Histogram
+	stopTimeoutCounter  metrics.Int64Counter
+	taskRejectedCounter metrics.Int64Counter
+	wg                  sync.WaitGroup
+	done                bool
+	cond                *sync.Cond
+	count               int
+	environment         environment.ServiceEnvironment
 }
 
 func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
@@ -73,6 +73,10 @@ func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolCon
 	if err != nil {
 		return nil, err
 	}
+	pool.taskRejectedCounter, err = scope.Counter("events_total", "Total number of events in task pool", metrics.Labels{"event": "task_rejected"})
+	if err != nil {
+		return nil, err
+	}
 	pool.cond = sync.NewCond(&pool.lock)
 	return pool, nil
 }
@@ -83,11 +87,14 @@ func (p *TaskPoolImpl) GetExecutorsCount() int {
 	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
 }
 
-func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) *Task {
+func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) error {
+	if err := ctx.Err(); err != nil {
+		p.taskRejectedCounter.Inc(ctx)
+		return err
+	}
 	task := &Task{fn: fn}
 	p.lock.Lock()
 	if p.tail != nil {
-		task.prev = p.tail
 		p.tail.next = task
 	} else {
 		p.head = task
@@ -97,7 +104,7 @@ func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) *Task {
 	p.lock.Unlock()
 	p.cond.Signal()
 	p.gaugeQueueLength.Inc()
-	return task
+	return nil
 }
 
 func (p *TaskPoolImpl) Start(ctx context.Context) error {
@@ -123,15 +130,13 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				p.head = p.head.next
 				if p.head == nil {
 					p.tail = nil
-				} else {
-					p.head.prev = nil
 				}
 				task.next = nil
 				p.count--
 				p.lock.Unlock()
 				p.gaugeQueueLength.Dec()
 				startTime := time.Now()
-				task.fn()
+				runTask(p.environment, p.name, task.fn)
 				task.fn = nil
 				p.tasksTotal.Inc(ctx)
 				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())

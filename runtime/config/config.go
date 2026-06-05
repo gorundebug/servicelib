@@ -28,6 +28,7 @@ type Config interface {
 
 type PoolConfig struct {
 	ExecutorsCount int                    `yaml:"executorsCount" mapstructure:"executorsCount"`
+	QueueCapacity  int                    `yaml:"queueCapacity" mapstructure:"queueCapacity"`
 	Name           string                 `yaml:"name" mapstructure:"name"`
 	Properties     map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }

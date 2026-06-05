@@ -20,7 +20,7 @@ import (
 
 type DelayPool interface {
 	Pool
-	Delay(deadline time.Duration, fn func()) *DelayTask
+	Delay(ctx context.Context, deadline time.Duration, fn func()) error
 }
 
 type DelayTask struct {
@@ -28,7 +28,6 @@ type DelayTask struct {
 	fn       func()
 	index    int
 	next     *DelayTask
-	prev     *DelayTask
 }
 
 type DelayTaskPriorityQueue []*DelayTask
@@ -123,7 +122,6 @@ func (p *DelayPoolImpl) processTimer() {
 		task := heap.Pop(p.pq).(*DelayTask)
 		p.tasksLock.Lock()
 		if p.tail != nil {
-			task.prev = p.tail
 			p.tail.next = task
 		} else {
 			p.head = task
@@ -143,7 +141,15 @@ func (p *DelayPoolImpl) processTimer() {
 	}
 }
 
-func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
+func (p *DelayPoolImpl) Delay(ctx context.Context, deadline time.Duration, fn func()) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(ctxDeadline); remaining < deadline {
+			deadline = remaining
+		}
+	}
 	task := &DelayTask{
 		fn:    fn,
 		index: -1,
@@ -160,7 +166,7 @@ func (p *DelayPoolImpl) Delay(deadline time.Duration, fn func()) *DelayTask {
 	}
 	heap.Push(p.pq, task)
 	p.gaugeWaitQueueLength.Inc()
-	return task
+	return nil
 }
 
 func (p *DelayPoolImpl) Start(ctx context.Context) error {
@@ -185,15 +191,14 @@ func (p *DelayPoolImpl) Start(ctx context.Context) error {
 				p.head = p.head.next
 				if p.head == nil {
 					p.tail = nil
-				} else {
-					p.head.prev = nil
 				}
 				task.next = nil
 				p.count--
 				p.gaugeExecuteQueueLength.Dec()
 				p.tasksLock.Unlock()
 				startTime := time.Now()
-				task.fn()
+				runTask(p.environment, "delay", task.fn)
+				task.fn = nil
 				p.tasksTotal.Inc(ctx)
 				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
 			}

@@ -210,6 +210,7 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	}
 
 	if err := ec.handler.ConsumeMessage(result.handlerCtx, ec.sc, result.handlerState, value, result.sender, result); err != nil {
+		tracing.SpanError(result.span, err)
 		if result.span != nil {
 			tracing.SpanEvent(result.span, "consume_message.error", tracing.StringAttr("error", err.Error()))
 		}

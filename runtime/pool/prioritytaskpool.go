@@ -19,6 +19,8 @@ import (
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
+const defaultPriorityQueueCapacity = 256
+
 type PriorityTask struct {
 	fn       func()
 	priority int
@@ -27,29 +29,35 @@ type PriorityTask struct {
 
 type PriorityTaskPool interface {
 	Pool
-	AddTask(ctx context.Context, priority int, fn func()) *PriorityTask
+	AddTask(ctx context.Context, priority int, fn func()) error
 	GetName() string
 	GetExecutorsCount() int
 }
 
 type PriorityTaskPoolImpl struct {
-	lock               sync.Mutex
-	name               string
-	pq                 *TaskPriorityQueue
-	gaugeQueueLength   metrics.Int64Gauge
-	tasksTotal         metrics.Int64Counter
-	executionDuration  metrics.Float64Histogram
-	stopTimeoutCounter metrics.Int64Counter
-	wg                 sync.WaitGroup
-	done               bool
-	cond               *sync.Cond
-	environment        environment.ServiceEnvironment
+	lock                sync.Mutex
+	name                string
+	pq                  *TaskPriorityQueue
+	gaugeQueueLength    metrics.Int64Gauge
+	tasksTotal          metrics.Int64Counter
+	executionDuration   metrics.Float64Histogram
+	stopTimeoutCounter  metrics.Int64Counter
+	taskRejectedCounter metrics.Int64Counter
+	wg                  sync.WaitGroup
+	done                bool
+	cond                *sync.Cond
+	environment         environment.ServiceEnvironment
 }
 
 func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
+	capacity := poolConfig.QueueCapacity
+	if capacity == 0 {
+		capacity = defaultPriorityQueueCapacity
+	}
+	pq := make(TaskPriorityQueue, 0, capacity)
 	pool := &PriorityTaskPoolImpl{
 		name:        poolConfig.Name,
-		pq:          &TaskPriorityQueue{},
+		pq:          &pq,
 		environment: env,
 	}
 	scope := env.Metrics().Scope("priority_task_pool", metrics.Labels{
@@ -70,6 +78,10 @@ func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config
 		return nil, err
 	}
 	pool.stopTimeoutCounter, err = scope.Counter("events_total", "Total number of events in priority task pool", metrics.Labels{"event": "stop_timeout"})
+	if err != nil {
+		return nil, err
+	}
+	pool.taskRejectedCounter, err = scope.Counter("events_total", "Total number of events in priority task pool", metrics.Labels{"event": "task_rejected"})
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +126,11 @@ func (p *PriorityTaskPoolImpl) GetExecutorsCount() int {
 	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
 }
 
-func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) *PriorityTask {
+func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) error {
+	if err := ctx.Err(); err != nil {
+		p.taskRejectedCounter.Inc(ctx)
+		return err
+	}
 	task := &PriorityTask{
 		fn:       fn,
 		index:    -1,
@@ -123,9 +139,9 @@ func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn fun
 	p.lock.Lock()
 	heap.Push(p.pq, task)
 	p.lock.Unlock()
-	p.gaugeQueueLength.Inc()
 	p.cond.Signal()
-	return task
+	p.gaugeQueueLength.Inc()
+	return nil
 }
 
 func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
@@ -148,10 +164,10 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 					break
 				}
 				task := heap.Pop(p.pq).(*PriorityTask)
-				p.gaugeQueueLength.Dec()
 				p.lock.Unlock()
+				p.gaugeQueueLength.Dec()
 				startTime := time.Now()
-				task.fn()
+				runTask(p.environment, p.name, task.fn)
 				task.fn = nil
 				p.tasksTotal.Inc(ctx)
 				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())

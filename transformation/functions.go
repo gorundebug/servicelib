@@ -31,7 +31,6 @@ type ProcessFunction[T, R, E any] = operators.ProcessFunction[T, R, E]
 type ProcessHandler[T, R, E any] = operators.ProcessHandler[T, R, E]
 
 type DelayFunction[T any] = operators.DelayFunction[T]
-type DelayHandler[T any] = operators.DelayHandler[T]
 
 type When = operators.When
 type BuildSwitchFunction[T any] = operators.BuildSwitchFunction[T]
