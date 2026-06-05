@@ -33,7 +33,7 @@ func (s *SplitLink[T]) GetName() string {
 }
 
 func (s *SplitLink[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) error {
-	caller, err := runtime.MakeCaller[T](s)
+	caller, err := runtime.MakeCaller[T](s, consumer)
 	if err != nil {
 		return err
 	}

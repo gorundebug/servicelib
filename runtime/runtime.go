@@ -525,11 +525,10 @@ func IsKeyValueType[T any]() bool {
 
 var defaultCallSemantic = config.FunctionCallSemanticsConfig{}
 
-func MakeCaller[T any](source TypedStream[T]) (Caller[T], error) {
+func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (Caller[T], error) {
 	env := source.GetRuntimeEnvironment()
 	cfg := env.RuntimeConfig()
 	serviceConfig := env.ServiceConfig()
-	consumer := source.GetConsumer()
 	link := cfg.GetLink(source.GetID(), consumer.GetID())
 
 	var callSemantics config.CallSemanticsConfig
@@ -822,7 +821,7 @@ func (s *ConsumedStream[T]) SetDownstream(consumer TypedStreamConsumer[T], strea
 	if s.consumer != nil {
 		return fmt.Errorf("consumer already assigned to the stream %s", s.ServiceStream.GetConfig().GetName())
 	}
-	caller, err := MakeCaller[T](stream)
+	caller, err := MakeCaller[T](stream, consumer)
 	if err != nil {
 		return err
 	}

@@ -52,7 +52,7 @@ func (s *WhenStream[T, R]) GetName() string {
 }
 
 func (s *WhenStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) error {
-	caller, err := runtime.MakeCaller[R](s)
+	caller, err := runtime.MakeCaller[R](s, consumer)
 	if err != nil {
 		return err
 	}
