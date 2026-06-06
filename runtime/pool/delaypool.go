@@ -68,6 +68,7 @@ type DelayPoolImpl struct {
 	timer                   *time.Timer
 	lock                    sync.Mutex
 	stopCh                  chan struct{}
+	workerStop              chan struct{}
 	cond                    *sync.Cond
 	tasksLock               sync.Mutex
 	done                    bool
@@ -87,6 +88,7 @@ func makeDelayPool(env environment.ServiceEnvironment) (DelayPool, error) {
 	pool := &DelayPoolImpl{
 		pq:          &DelayTaskPriorityQueue{},
 		environment: env,
+		workerStop:  make(chan struct{}),
 	}
 	scope := env.Metrics().Scope("delay_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -171,40 +173,85 @@ func (p *DelayPoolImpl) Delay(ctx context.Context, deadline time.Duration, fn fu
 }
 
 func (p *DelayPoolImpl) Start(ctx context.Context) error {
-	executorsCount := p.environment.ServiceConfig().DelayExecutors
-	if executorsCount == 0 {
-		executorsCount = runtime.NumCPU()
-	}
-	for i := 0; i < executorsCount; i++ {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			for {
-				p.tasksLock.Lock()
-				for p.count == 0 && !p.done {
-					p.cond.Wait()
-				}
-				if p.count == 0 && p.done {
-					p.tasksLock.Unlock()
-					break
-				}
-				task := p.head
-				p.head = p.head.next
-				if p.head == nil {
-					p.tail = nil
-				}
-				task.next = nil
-				p.count--
-				p.gaugeExecuteQueueLength.Dec()
-				p.tasksLock.Unlock()
-				startTime := time.Now()
-				runTask(ctx, p.environment, "delay", task.fn)
-				task.fn = nil
-				p.tasksTotal.Inc(ctx)
-				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+	started := make(chan struct{})
+
+	go func() {
+		executorsCount := 0
+		var pRestart *bool
+		for {
+			executorsCountNew := p.environment.ServiceConfig().DelayExecutors
+			if executorsCountNew == 0 {
+				executorsCountNew = runtime.NumCPU()
 			}
-		}()
-	}
+			if executorsCount == executorsCountNew {
+				select {
+				case <-ctx.Done():
+					return
+				case <-p.workerStop:
+					return
+				case <-time.After(time.Second):
+					continue
+				}
+			}
+			if pRestart != nil {
+				p.tasksLock.Lock()
+				*pRestart = true
+				p.cond.Broadcast()
+				p.tasksLock.Unlock()
+			}
+			pRestart = new(bool)
+			executorsCount = executorsCountNew
+
+			p.tasksLock.Lock()
+			select {
+			case <-p.workerStop:
+				p.tasksLock.Unlock()
+				return
+			default:
+			}
+			for i := 0; i < executorsCount; i++ {
+				p.wg.Add(1)
+				go func(restart *bool) {
+					defer p.wg.Done()
+					for {
+						p.tasksLock.Lock()
+						if *restart {
+							p.tasksLock.Unlock()
+							p.cond.Signal()
+							break
+						}
+						for p.count == 0 && !p.done {
+							p.cond.Wait()
+						}
+						if p.count == 0 && p.done {
+							p.tasksLock.Unlock()
+							break
+						}
+						task := p.head
+						p.head = p.head.next
+						if p.head == nil {
+							p.tail = nil
+						}
+						task.next = nil
+						p.count--
+						p.gaugeExecuteQueueLength.Dec()
+						p.tasksLock.Unlock()
+						startTime := time.Now()
+						runTask(ctx, p.environment, "delay", task.fn)
+						task.fn = nil
+						p.tasksTotal.Inc(ctx)
+						p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+					}
+				}(pRestart)
+			}
+			p.tasksLock.Unlock()
+			if started != nil {
+				close(started)
+				started = nil
+			}
+		}
+	}()
+	<-started
 	return nil
 }
 
@@ -230,6 +277,7 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 	p.lock.Lock()
 	if p.pq.Len() == 0 {
 		p.lock.Unlock()
+		close(p.workerStop)
 		p.tasksLock.Lock()
 		p.done = true
 		p.cond.Broadcast()

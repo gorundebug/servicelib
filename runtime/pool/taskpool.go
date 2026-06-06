@@ -43,6 +43,7 @@ type TaskPoolImpl struct {
 	taskRejectedCounter metrics.Int64Counter
 	wg                  sync.WaitGroup
 	done                bool
+	stop                chan struct{}
 	cond                *sync.Cond
 	count               int
 	environment         environment.ServiceEnvironment
@@ -52,6 +53,7 @@ func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolCon
 	pool := &TaskPoolImpl{
 		name:        poolConfig.Name,
 		environment: env,
+		stop:        make(chan struct{}),
 	}
 	scope := env.Metrics().Scope("task_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -109,45 +111,92 @@ func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) error {
 }
 
 func (p *TaskPoolImpl) Start(ctx context.Context) error {
-	poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
-	executorsCount := poolConfig.ExecutorsCount
-	if executorsCount == 0 {
-		executorsCount = runtime.NumCPU()
-	}
-	for i := 0; i < executorsCount; i++ {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			for {
-				p.lock.Lock()
-				for p.count == 0 && !p.done {
-					p.cond.Wait()
-				}
-				if p.count == 0 && p.done {
-					p.lock.Unlock()
-					break
-				}
-				task := p.head
-				p.head = p.head.next
-				if p.head == nil {
-					p.tail = nil
-				}
-				task.next = nil
-				p.count--
-				p.lock.Unlock()
-				p.gaugeQueueLength.Dec()
-				startTime := time.Now()
-				runTask(ctx, p.environment, p.name, task.fn)
-				task.fn = nil
-				p.tasksTotal.Inc(ctx)
-				p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+	started := make(chan struct{})
+
+	go func() {
+		executorsCount := 0
+		var pRestart *bool
+		for {
+			poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+			executorsCountNew := poolConfig.ExecutorsCount
+			if executorsCountNew == 0 {
+				executorsCountNew = runtime.NumCPU()
 			}
-		}()
-	}
+			if executorsCount == executorsCountNew {
+				select {
+				case <-ctx.Done():
+					return
+				case <-p.stop:
+					return
+				case <-time.After(time.Second):
+					continue
+				}
+			}
+			if pRestart != nil {
+				p.lock.Lock()
+				*pRestart = true
+				p.cond.Broadcast()
+				p.lock.Unlock()
+			}
+			pRestart = new(bool)
+			executorsCount = executorsCountNew
+
+			p.lock.Lock()
+			select {
+			case <-p.stop:
+				p.lock.Unlock()
+				return
+			default:
+			}
+			for i := 0; i < executorsCount; i++ {
+				p.wg.Add(1)
+				go func(restart *bool) {
+					defer p.wg.Done()
+					for {
+						p.lock.Lock()
+						if *restart {
+							p.lock.Unlock()
+							p.cond.Signal()
+							break
+						}
+						for p.count == 0 && !p.done {
+							p.cond.Wait()
+						}
+						if p.count == 0 && p.done {
+							p.lock.Unlock()
+							break
+						}
+						task := p.head
+						p.head = p.head.next
+						if p.head == nil {
+							p.tail = nil
+						}
+						task.next = nil
+						p.count--
+						p.lock.Unlock()
+						p.gaugeQueueLength.Dec()
+						startTime := time.Now()
+						runTask(ctx, p.environment, p.name, task.fn)
+						task.fn = nil
+						p.tasksTotal.Inc(ctx)
+						p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+					}
+				}(pRestart)
+			}
+			p.lock.Unlock()
+			if started != nil {
+				close(started)
+				started = nil
+			}
+		}
+	}()
+	<-started
 	return nil
 }
 
 func (p *TaskPoolImpl) Stop(ctx context.Context) {
+	close(p.stop)
+
 	p.lock.Lock()
 	p.done = true
 	p.cond.Broadcast()
