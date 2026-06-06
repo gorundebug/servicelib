@@ -9,10 +9,16 @@ package pool
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
+)
+
+var (
+	ErrPoolStopped        = errors.New("pool stopped")
+	ErrPoolAlreadyStarted = errors.New("pool already started")
 )
 
 type Pool interface {

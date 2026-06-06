@@ -161,8 +161,14 @@ func TestMakeHashMapJoinStorage_WithTTL(t *testing.T) {
 // ---------- lifecycle tests ----------
 
 func TestStart_ReturnsNil(t *testing.T) {
-	s, _ := makeStorage(t, 0, false)
-	if err := s.Start(context.Background()); err != nil {
+	m := newMockMetrics()
+	env := newMockEnv("test-service", m)
+	cfg := &mockJoinStorageConfig{name: "test-join", ttl: 0, renewTTL: false}
+	storage, err := MakeHashMapJoinStorage[string](env, cfg)
+	if err != nil {
+		t.Fatalf("MakeHashMapJoinStorage: %v", err)
+	}
+	if err := storage.Start(context.Background()); err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
 }

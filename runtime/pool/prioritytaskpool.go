@@ -47,6 +47,8 @@ type PriorityTaskPoolImpl struct {
     wg                  sync.WaitGroup
     done                bool
     stop                chan struct{}
+    stopOnce            sync.Once
+    startOnce           sync.Once
     cond                *sync.Cond
     environment         environment.ServiceEnvironment
 }
@@ -140,6 +142,11 @@ func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn fun
         priority: priority,
     }
     p.lock.Lock()
+    if p.done {
+        p.lock.Unlock()
+        p.taskRejectedCounter.Inc(ctx)
+        return ErrPoolStopped
+    }
     heap.Push(p.pq, task)
     p.lock.Unlock()
     p.cond.Signal()
@@ -148,105 +155,127 @@ func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn fun
 }
 
 func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
-    started := make(chan struct{})
+	var called bool
+	p.startOnce.Do(func() {
+		p.lock.Lock()
+		isDone := p.done
+		p.lock.Unlock()
+		if isDone {
+			return
+		}
+		called = true
+		started := make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			executorsCount := 0
+			var pRestart *bool
+			for {
+				poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+				executorsCountNew := poolConfig.ExecutorsCount
+				if executorsCountNew == 0 {
+					executorsCountNew = runtime.NumCPU()
+				}
+				if executorsCount == executorsCountNew {
+					select {
+					case <-ctx.Done():
+						return
+					case <-p.stop:
+						return
+					case <-ticker.C:
+						continue
+					}
+				}
+				if pRestart != nil {
+					p.lock.Lock()
+					*pRestart = true
+					p.cond.Broadcast()
+					p.lock.Unlock()
+				}
+				pRestart = new(bool)
+				executorsCount = executorsCountNew
 
-    go func() {
-        executorsCount := 0
-        var pRestart *bool
-        for {
-            poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
-            executorsCountNew := poolConfig.ExecutorsCount
-            if executorsCountNew == 0 {
-                executorsCountNew = runtime.NumCPU()
-            }
-            if executorsCount == executorsCountNew {
-                select {
-                case <-ctx.Done():
-                    return
-                case <-p.stop:
-                    return
-                case <-time.After(time.Second):
-                    continue
-                }
-            }
-            if pRestart != nil {
-                p.lock.Lock()
-                *pRestart = true
-                p.cond.Broadcast()
-                p.lock.Unlock()
-            }
-            pRestart = new(bool)
-            executorsCount = executorsCountNew
+				p.lock.Lock()
 
-            p.lock.Lock()
+				select {
+				case <-p.stop:
+					p.lock.Unlock()
+					return
+				default:
+				}
 
-            select {
-            case <-p.stop:
-                p.lock.Unlock()
-                return
-            default:
-            }
+				for i := 0; i < executorsCount; i++ {
+					p.wg.Add(1)
 
-            for i := 0; i < executorsCount; i++ {
-                p.wg.Add(1)
-
-                go func(restart *bool) {
-                    defer p.wg.Done()
-                    for {
-                        p.lock.Lock()
-                        if *restart {
-                            p.lock.Unlock()
-                            p.cond.Signal()
-                            break
-                        }
-                        for p.pq.Len() == 0 && !p.done {
-                            p.cond.Wait()
-                        }
-                        if p.pq.Len() == 0 && p.done {
-                            p.lock.Unlock()
-                            break
-                        }
-                        task := heap.Pop(p.pq).(*PriorityTask)
-                        p.lock.Unlock()
-                        p.gaugeQueueLength.Dec()
-                        startTime := time.Now()
-                        runTask(ctx, p.environment, p.name, task.fn)
-                        task.fn = nil
-                        p.tasksTotal.Inc(ctx)
-                        p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
-                    }
-                }(pRestart)
-            }
-            p.lock.Unlock()
-            if started != nil {
-                close(started)
-                started = nil
-            }
-        }
-    }()
-    <-started
-    return nil
+					go func(restart *bool) {
+						defer p.wg.Done()
+						for {
+							p.lock.Lock()
+							if *restart {
+								p.lock.Unlock()
+								p.cond.Signal()
+								break
+							}
+							for p.pq.Len() == 0 && !p.done {
+								p.cond.Wait()
+							}
+							if p.pq.Len() == 0 && p.done {
+								p.lock.Unlock()
+								break
+							}
+							task := heap.Pop(p.pq).(*PriorityTask)
+							p.lock.Unlock()
+							p.gaugeQueueLength.Dec()
+							startTime := time.Now()
+							runTask(ctx, p.environment, p.name, task.fn)
+							task.fn = nil
+							p.tasksTotal.Inc(ctx)
+							p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+						}
+					}(pRestart)
+				}
+				p.lock.Unlock()
+				if started != nil {
+					close(started)
+					started = nil
+				}
+			}
+		}()
+		<-started
+	})
+	if !called {
+		p.lock.Lock()
+		isDone := p.done
+		p.lock.Unlock()
+		if isDone {
+			return ErrPoolStopped
+		}
+		return ErrPoolAlreadyStarted
+	}
+	return nil
 }
 
 func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
-    p.lock.Lock()
-    close(p.stop)
-    p.done = true
-    p.cond.Broadcast()
-    p.lock.Unlock()
-
-    done := make(chan struct{})
-    go func() {
-        p.wg.Wait()
-        close(done)
-    }()
-    select {
-    case <-done:
-    case <-ctx.Done():
+    p.stopOnce.Do(func() {
         p.lock.Lock()
-        tasksCount := p.pq.Len()
+        close(p.stop)
+        p.done = true
+        p.cond.Broadcast()
         p.lock.Unlock()
-        p.environment.Log().Warn(ctx, "priority task pool stopped by timeout", log.Str("pool", p.name), log.Err(ctx.Err()), log.Int("tasks_count", tasksCount))
-        p.stopTimeoutCounter.Inc(ctx)
-    }
+
+        done := make(chan struct{})
+        go func() {
+            p.wg.Wait()
+            close(done)
+        }()
+        select {
+        case <-done:
+        case <-ctx.Done():
+            p.lock.Lock()
+            tasksCount := p.pq.Len()
+            p.lock.Unlock()
+            p.environment.Log().Warn(ctx, "priority task pool stopped by timeout", log.Str("pool", p.name), log.Err(ctx.Err()), log.Int("tasks_count", tasksCount))
+            p.stopTimeoutCounter.Inc(ctx)
+        }
+    })
 }

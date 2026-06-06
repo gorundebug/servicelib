@@ -9,11 +9,17 @@ package store
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+)
+
+var (
+	ErrStoreAlreadyStarted = errors.New("store already started")
+	ErrStoreStopped        = errors.New("store stopped")
 )
 
 type Item struct {
@@ -33,6 +39,9 @@ type HashMapJoinStorage[K comparable] struct {
 	gaugeCount     metrics.Int64Gauge
 	evictionsTotal metrics.Int64Counter
 	environment    environment.ServiceEnvironment
+	stopped        bool
+	startOnce      sync.Once
+	stopOnce       sync.Once
 }
 
 func MakeHashMapJoinStorage[K comparable](env environment.ServiceEnvironment, cfg JoinStorageConfig) (JoinStorage[K], error) {
@@ -163,16 +172,38 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
 }
 
 func (s *HashMapJoinStorage[K]) Start(ctx context.Context) error {
-	if s.config.GetTTL() > 0 {
-		s.timer = time.AfterFunc(s.config.GetTTL(), func() { s.rotate(ctx) })
+	var called bool
+	s.startOnce.Do(func() {
+		s.rotateLock.RLock()
+		isStopped := s.stopped
+		s.rotateLock.RUnlock()
+		if isStopped {
+			return
+		}
+		called = true
+		if s.config.GetTTL() > 0 {
+			s.timer = time.AfterFunc(s.config.GetTTL(), func() { s.rotate(ctx) })
+		}
+	})
+	if !called {
+		s.rotateLock.RLock()
+		isStopped := s.stopped
+		s.rotateLock.RUnlock()
+		if isStopped {
+			return ErrStoreStopped
+		}
+		return ErrStoreAlreadyStarted
 	}
 	return nil
 }
 
 func (s *HashMapJoinStorage[K]) Stop(ctx context.Context) {
-	s.rotateLock.Lock()
-	defer s.rotateLock.Unlock()
-	if s.timer != nil {
-		s.timer.Stop()
-	}
+	s.stopOnce.Do(func() {
+		s.rotateLock.Lock()
+		defer s.rotateLock.Unlock()
+		s.stopped = true
+		if s.timer != nil {
+			s.timer.Stop()
+		}
+	})
 }
