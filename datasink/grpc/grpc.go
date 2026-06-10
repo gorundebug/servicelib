@@ -26,7 +26,7 @@ const pendingRotationInterval = 30 * time.Second
 // for server streaming and unary it captures the request so the framework
 // can open the stream / make the call after ConsumeMessage returns.
 type Sender[ReqT any] interface {
-	Send(req ReqT) error
+	Send(ctx context.Context, req ReqT) error
 }
 
 // ResultContext is passed to ConsumeMessage for bidi and client streaming sinks.
@@ -117,7 +117,7 @@ type grpcSender[ReqT any] struct {
 	span   tracing.Span
 }
 
-func (s *grpcSender[ReqT]) Send(req ReqT) error {
+func (s *grpcSender[ReqT]) Send(_ context.Context, req ReqT) error {
 	err := s.sendFn(req)
 	if err != nil {
 		tracing.SpanError(s.span, err)
@@ -135,7 +135,7 @@ type requestSender[ReqT any] struct {
 	req ReqT
 }
 
-func (s *requestSender[ReqT]) Send(req ReqT) error {
+func (s *requestSender[ReqT]) Send(_ context.Context, req ReqT) error {
 	s.req = req
 	return nil
 }

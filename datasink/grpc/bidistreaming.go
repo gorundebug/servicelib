@@ -62,7 +62,7 @@ func makeBidiStreamingResult[HandlerState, ReqT, ResR, T, R any](
 
 func (r *bidiStreamingResult[HandlerState, ReqT, ResR, T, R]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }
@@ -194,7 +194,7 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 			defer result.mu.Unlock()
 			ec.pending.Pop(streamID)
 			if recvErr == nil {
-				tracing.SpanEvent(outputSpan, "done")
+				tracing.SpanEvent(outputSpan, "done_received")
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, recvErr, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, recvErr)

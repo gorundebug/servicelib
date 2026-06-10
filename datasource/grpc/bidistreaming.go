@@ -61,7 +61,7 @@ func (r *bidiStreamingResult[HandlerState, T, ResR, R, E]) SetResultCallback(
 
 func (r *bidiStreamingResult[HandlerState, T, ResR, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }
@@ -261,7 +261,7 @@ func (ec *bidiStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) hand
 
 	select {
 	case <-doneCh:
-		tracing.SpanEvent(span, "done")
+		tracing.SpanEvent(span, "done_received")
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)

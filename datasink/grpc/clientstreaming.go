@@ -59,7 +59,7 @@ func makeClientStreamingResult[HandlerState, ReqT, ResR, T, R any](
 
 func (r *clientStreamingResult[HandlerState, ReqT, ResR, T, R]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }

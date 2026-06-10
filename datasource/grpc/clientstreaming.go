@@ -30,7 +30,7 @@ type clientStreamingSender[R, ResR any] struct {
 	span         tracing.Span
 }
 
-func (s *clientStreamingSender[R, ResR]) Send(value ResR) error {
+func (s *clientStreamingSender[R, ResR]) Send(_ context.Context, value ResR) error {
 	var err error
 	s.once.Do(func() {
 		err = s.sendAndClose(value)
@@ -85,7 +85,7 @@ func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) SetResultCallback(
 
 func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }
@@ -276,7 +276,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 
 	if !ec.hasResult {
 		var zero ResR
-		sendErr := sender.Send(zero)
+		sendErr := sender.Send(handlerCtx, zero)
 		endErr := ec.handler.EndRequest(handlerCtx, ec.sc, sendErr, handlerState)
 		if endErr != nil {
 			tracing.SpanError(span, endErr)
@@ -287,7 +287,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 
 	select {
 	case <-doneCh:
-		tracing.SpanEvent(span, "done")
+		tracing.SpanEvent(span, "done_received")
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)

@@ -83,15 +83,23 @@ func (e *prettySpanExporter) ExportSpans(_ context.Context, spans []sdktrace.Rea
 		)
 
 		for _, attr := range s.Attributes() {
-			_, _ = fmt.Fprintf(e.w, " %s=%q", string(attr.Key), attr.Value.AsString())
+			_, _ = fmt.Fprintf(e.w, " %s=%q", string(attr.Key), attr.Value.String())
 		}
 
 		if evs := s.Events(); len(evs) > 0 {
-			names := make([]string, len(evs))
+			parts := make([]string, len(evs))
 			for i, ev := range evs {
-				names[i] = ev.Name
+				if len(ev.Attributes) == 0 {
+					parts[i] = ev.Name
+					continue
+				}
+				attrs := make([]string, len(ev.Attributes))
+				for j, a := range ev.Attributes {
+					attrs[j] = fmt.Sprintf("%s=%q", string(a.Key), a.Value.String())
+				}
+				parts[i] = fmt.Sprintf("%s(%s)", ev.Name, strings.Join(attrs, " "))
 			}
-			_, _ = fmt.Fprintf(e.w, "  » %s", strings.Join(names, " "))
+			_, _ = fmt.Fprintf(e.w, "  » %s", strings.Join(parts, " "))
 		}
 
 		_, _ = fmt.Fprintln(e.w)

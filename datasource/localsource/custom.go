@@ -67,7 +67,7 @@ func (r *customResult[HandlerState, T, R, E]) SetResultCallback(messageID string
 
 func (r *customResult[HandlerState, T, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }
@@ -353,7 +353,7 @@ func (ec *customEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(ctx con
 
 	select {
 	case <-doneCh:
-		tracing.SpanEvent(span, "done")
+		tracing.SpanEvent(span, "done_received")
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)

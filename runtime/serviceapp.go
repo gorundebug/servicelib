@@ -52,7 +52,7 @@ type ServiceApp struct {
 	consumeStatistics map[config.LinkID]ConsumeStatistics
 	runtimeLinks      []RuntimeLinkInfo
 	storages          []store.Storage
-	delayPool         pool.DelayPool
+	delayPool         environment.DelayPool
 	taskPools         map[string]pool.TaskPool
 	priorityTaskPools map[string]pool.PriorityTaskPool
 	loader            ServiceLoader
@@ -245,9 +245,15 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
 
-	app.delayPool, err = pool.MakeDelayTaskPool(env)
+	app.delayPool, err = dep.DelayPool(ctx, env)
 	if err != nil {
 		return err
+	}
+	if app.delayPool == nil {
+		app.delayPool, err = pool.MakeGoroutineDelayTaskPool(env)
+		if err != nil {
+			return err
+		}
 	}
 	app.taskPools = make(map[string]pool.TaskPool)
 	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)

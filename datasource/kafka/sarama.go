@@ -90,7 +90,7 @@ func (r *kafkaResult[HandlerState, T, R, E]) SetResultCallback(messageID string,
 
 func (r *kafkaResult[HandlerState, T, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done")
+		tracing.SpanEvent(r.span, "done_called")
 		close(r.doneCh)
 	})
 }
@@ -261,6 +261,10 @@ func (ds *saramaKafkaDataSource) Start(ctx context.Context) error {
 	length := endpoints.Len()
 	for i := 0; i < length; i++ {
 		if err := endpoints.At(i).(saramaKafkaInputEndpoint).Start(ctx, admin); err != nil {
+			if admin != nil {
+				_ = admin.Close()
+				admin = nil
+			}
 			return err
 		}
 	}
@@ -554,7 +558,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 
 	select {
 	case <-result.doneCh:
-		tracing.SpanEvent(span, "done")
+		tracing.SpanEvent(span, "done_received")
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)

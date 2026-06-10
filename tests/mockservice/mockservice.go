@@ -252,6 +252,10 @@ func (d *testDeps) LogsEngine(_ context.Context, _ environment.ServiceEnvironmen
 	return d.logs, nil
 }
 
+func (d *testDeps) DelayPool(_ context.Context, _ environment.ServiceEnvironment) (environment.DelayPool, error) {
+	return nil, nil
+}
+
 func Main(dir string, run func(*TestEnv) int) int {
 	_ = os.Chdir(path.Join(dir, "mockservice"))
 

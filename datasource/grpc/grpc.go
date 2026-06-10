@@ -81,7 +81,7 @@ func (ec *grpcTypedEndpointConsumer[T, R, E]) Out(ctx context.Context, value T) 
 
 // Sender sends result values back to the gRPC client.
 type Sender[R, ResR any] interface {
-	Send(value ResR) error
+	Send(ctx context.Context, value ResR) error
 }
 
 // ResultContext is passed to ConsumeMessage and allows the handler to register interest
@@ -236,7 +236,7 @@ type streamSender[R, ResR any] struct {
 	span   tracing.Span
 }
 
-func (s *streamSender[R, ResR]) Send(value ResR) error {
+func (s *streamSender[R, ResR]) Send(_ context.Context, value ResR) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.active {

@@ -25,7 +25,7 @@ type unarySender[R, ResR any] struct {
 	span tracing.Span
 }
 
-func (s *unarySender[R, ResR]) Send(value ResR) error {
+func (s *unarySender[R, ResR]) Send(_ context.Context, value ResR) error {
 	select {
 	case s.ch <- value:
 		tracing.SpanEvent(s.span, "send")
