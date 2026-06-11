@@ -135,7 +135,7 @@ func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) SetSinkCallback(callb
 
 func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) Consume(ctx context.Context, value T) {
 	var span tracing.Span
-	if ep.tracer != nil {
+	if ep.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ep.tracer.Start(ctx, "local.output",
 			tracing.StringAttr("stream", ep.Stream().GetName()),
 			tracing.StringAttr("endpoint", ep.Endpoint().GetName()),

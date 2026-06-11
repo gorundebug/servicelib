@@ -201,8 +201,11 @@ func (s *CaseStream[T]) AddStream(stream runtime.WhenStream) error {
 }
 
 func (s *CaseStream[T]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.case")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.case")
+		ctx = newCtx
+		defer span.End()
+	}
 	index := s.whenFunc(value)
 	s.whenStreams[index].ConsumeCase(ctx, value)
 }

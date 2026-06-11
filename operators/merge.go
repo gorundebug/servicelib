@@ -95,7 +95,10 @@ func (s *MergeStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) er
 }
 
 func (s *MergeStream[T]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.merge")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.merge")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.Emit(ctx, value)
 }

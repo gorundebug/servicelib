@@ -14,6 +14,7 @@ import (
 const (
 	CallSemanticsFunctionCall     CallSemantics = 2
 	CallSemanticsInherited        CallSemantics = 1
+	CallSemanticsParallelCall     CallSemantics = 5
 	CallSemanticsPriorityTaskPool CallSemantics = 4
 	CallSemanticsTaskPool         CallSemantics = 3
 	CallSemanticsUndefined        CallSemantics = 0

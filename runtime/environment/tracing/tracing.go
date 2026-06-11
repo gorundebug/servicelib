@@ -67,6 +67,24 @@ type Tracing interface {
     Tracer(name string) Tracer
 }
 
+type noopSpan struct{}
+
+func (noopSpan) End()                                   {}
+func (noopSpan) SetAttributes(_ ...Attribute)           {}
+func (noopSpan) RecordError(_ error)                    {}
+func (noopSpan) SetStatus(_ StatusCode, _ string)       {}
+func (noopSpan) AddEvent(_ string, _ ...Attribute)      {}
+func (noopSpan) SpanContext() SpanContext                { return SpanContext{} }
+
+// StartSpan starts a new span. Safe to call unconditionally; returns a no-op span
+// when tracer is nil or sampling is not requested for this context.
+func StartSpan(ctx context.Context, tracer Tracer, operation string, attrs ...Attribute) (context.Context, Span) {
+	if tracer == nil || !SamplingEnabled(ctx) {
+		return ctx, noopSpan{}
+	}
+	return tracer.Start(ctx, operation, attrs...)
+}
+
 // SpanEvent adds an event to span if it is non-nil.
 func SpanEvent(span Span, name string, attrs ...Attribute) {
     if span != nil {

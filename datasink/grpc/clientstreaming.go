@@ -103,7 +103,7 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		}
 
 		var outputSpan tracing.Span
-		if ec.tracer != nil {
+		if ec.tracer != nil && tracing.SamplingEnabled(handlerCtx) {
 			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output",
 				tracing.StringAttr("stream", ec.stream.GetName()),
 				tracing.StringAttr("endpoint", ec.endpoint.GetName()),

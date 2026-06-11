@@ -96,7 +96,10 @@ func (s *ProcessStream[T, R, E]) GetConsumers() []runtime.Stream {
 }
 
 func (s *ProcessStream[T, R, E]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.process")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.process")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.f.call(ctx, value, s.downstreamCollector, s.errorCollector)
 }

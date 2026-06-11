@@ -25,7 +25,7 @@ type grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
 
 func (ec *grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Consume(ctx context.Context, value T) {
 	var span tracing.Span
-	if ec.tracer != nil {
+	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "grpc.output",
 			tracing.StringAttr("stream", ec.stream.GetName()),
 			tracing.StringAttr("endpoint", ec.endpoint.GetName()),

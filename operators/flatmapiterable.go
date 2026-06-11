@@ -82,8 +82,11 @@ func (s *FlatMapIterableStream[T, R]) SetConsumer(consumer runtime.TypedStreamCo
 }
 
 func (s *FlatMapIterableStream[T, R]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.flatmap_iterable")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.flatmap_iterable")
+		ctx = newCtx
+		defer span.End()
+	}
 	var r R
 	val := reflect.ValueOf(value)
 	if val.Kind() == reflect.String && isRuneType(r) {

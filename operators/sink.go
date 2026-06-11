@@ -42,8 +42,11 @@ func MakeSinkStream[T, E any](streamConfig *config.SinkStreamConfig, stream runt
 
 func (s *SinkStream[T, E]) Consume(ctx context.Context, value T) {
 	if s.sinkConsumer != nil {
-		ctx, span := s.StartSpan(ctx, "stream.sink")
-		defer span.End()
+		if s.TracingEnabled(ctx) {
+			newCtx, span := s.StartSpan(ctx, "stream.sink")
+			ctx = newCtx
+			defer span.End()
+		}
 		s.sinkConsumer.Consume(ctx, value)
 	}
 }
@@ -121,8 +124,11 @@ func (s *SinkStreamWithResult[T, R, E]) ConsumeResult(ctx context.Context, value
 
 func (s *SinkStreamWithResult[T, R, E]) Consume(ctx context.Context, value T) {
 	if s.sinkConsumer != nil {
-		ctx, span := s.StartSpan(ctx, "stream.sink")
-		defer span.End()
+		if s.TracingEnabled(ctx) {
+			newCtx, span := s.StartSpan(ctx, "stream.sink")
+			ctx = newCtx
+			defer span.End()
+		}
 		s.sinkConsumer.Consume(ctx, value)
 	}
 }

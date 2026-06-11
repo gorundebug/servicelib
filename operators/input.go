@@ -55,8 +55,11 @@ func (s *InputStream[T, R, E]) GetEndpointId() int {
 }
 
 func (s *InputStream[T, R, E]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.input")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.input")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.Emit(ctx, value)
 }
 
@@ -154,8 +157,11 @@ func (s *InputKVStream[K, V, R, E]) GetEndpointId() int {
 }
 
 func (s *InputKVStream[K, V, R, E]) Consume(ctx context.Context, value datastruct.KeyValue[K, V]) {
-	ctx, span := s.StartSpan(ctx, "stream.input")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.input")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.Emit(ctx, value)
 }
 

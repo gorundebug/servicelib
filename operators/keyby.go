@@ -82,8 +82,11 @@ func (s *KeyByStream[T, K, V]) SetConsumer(consumer runtime.TypedStreamConsumer[
 }
 
 func (s *KeyByStream[T, K, V]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.keyby")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.keyby")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.f.call(ctx, value, s)
 }
 

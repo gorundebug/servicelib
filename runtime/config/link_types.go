@@ -41,10 +41,18 @@ func (*PriorityTaskPoolCallSemanticsConfig) GetType() api.CallSemantics {
 	return api.CallSemanticsPriorityTaskPool
 }
 
+type ParallelCallSemanticsConfig struct {
+}
+
+func (*ParallelCallSemanticsConfig) GetType() api.CallSemantics {
+	return api.CallSemanticsParallelCall
+}
+
 type CallSemanticsGroup struct {
 	FunctionCall     *FunctionCallSemanticsConfig         `yaml:"function,omitempty" mapstructure:"functionCall"`
 	TaskPool         *TaskPoolCallSemanticsConfig         `yaml:"taskPool,omitempty" mapstructure:"taskPool"`
 	PriorityTaskPool *PriorityTaskPoolCallSemanticsConfig `yaml:"priorityTaskPool,omitempty" mapstructure:"priorityTaskPool"`
+	ParallelCall     *ParallelCallSemanticsConfig         `yaml:"parallelCall,omitempty" mapstructure:"parallelCall"`
 }
 
 func (g *CallSemanticsGroup) Get() CallSemanticsConfig {
@@ -55,6 +63,8 @@ func (g *CallSemanticsGroup) Get() CallSemanticsConfig {
 		return g.TaskPool
 	case g.PriorityTaskPool != nil:
 		return g.PriorityTaskPool
+	case g.ParallelCall != nil:
+		return g.ParallelCall
 	}
 	return nil
 }
@@ -68,6 +78,9 @@ func (g *CallSemanticsGroup) Validate() error {
 		c++
 	}
 	if g.PriorityTaskPool != nil {
+		c++
+	}
+	if g.ParallelCall != nil {
 		c++
 	}
 	if c != 1 {

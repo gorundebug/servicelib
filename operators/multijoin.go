@@ -205,8 +205,11 @@ func (s *MultiJoinStream[K, T, R]) SetConsumer(consumer runtime.TypedStreamConsu
 }
 
 func (s *MultiJoinStream[K, T, R]) Consume(ctx context.Context, value datastruct.KeyValue[K, T]) {
-	ctx, span := s.StartSpan(ctx, "stream.join")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.join")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.consume(ctx, value.Key, 0, value.Value)
 }
 

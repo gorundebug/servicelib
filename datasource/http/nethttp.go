@@ -408,7 +408,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 		}
 	}
 	var span tracing.Span
-	if ec.tracer != nil {
+	if ec.tracer != nil && tracing.SamplingEnabled(reqCtx) {
 		reqCtx, span = ec.tracer.Start(reqCtx, "http.input",
 			tracing.StringAttr("stream", ec.Stream().GetName()),
 			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),

@@ -86,7 +86,10 @@ func (s *FlatMapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R
 }
 
 func (s *FlatMapStream[T, R]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.flatmap")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.flatmap")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.f.call(ctx, value, s.collector)
 }

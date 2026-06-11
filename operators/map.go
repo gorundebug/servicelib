@@ -79,8 +79,11 @@ func (s *MapStream[T, R]) SetConsumer(consumer runtime.TypedStreamConsumer[R]) e
 }
 
 func (s *MapStream[T, R]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.map")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.map")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.f.call(ctx, value, s)
 }
 

@@ -399,7 +399,7 @@ func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) getEndpoint() *sarama
 
 func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.Context, item T) {
     var span tracing.Span
-    if ec.tracer != nil {
+    if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
         ctx, span = ec.tracer.Start(ctx, "kafka.output",
             tracing.StringAttr("stream", ec.Stream().GetName()),
             tracing.StringAttr("endpoint", ec.Endpoint().GetName()),

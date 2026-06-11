@@ -62,8 +62,11 @@ func (s *LinkStream[T]) GetSerde() serde.StreamSerde[T] {
 }
 
 func (s *LinkStream[T]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.link")
-	defer span.End()
+	if s.TracingEnabled(ctx) {
+		newCtx, span := s.StartSpan(ctx, "stream.link")
+		ctx = newCtx
+		defer span.End()
+	}
 	s.Emit(ctx, value)
 }
 

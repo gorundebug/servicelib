@@ -34,6 +34,7 @@ import (
 
 type Caller[T any] interface {
     Consumer[T]
+    IsAsync() bool
 }
 
 type ConsumeStatistics interface {
@@ -606,6 +607,18 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
         }
         streamCaller = c
 
+    case *config.ParallelCallSemanticsConfig:
+        c := &parallelCaller[T]{
+            caller: caller[T]{
+                source:          source,
+                consumer:        consumer,
+                statistics:      consumeStat,
+                messagesCounter: messagesCounter,
+                tracer:          tr,
+            },
+        }
+        streamCaller = c
+
     default:
         return nil, fmt.Errorf("undefined callSemantics type [%T]", callSemantics)
     }
@@ -646,8 +659,22 @@ type caller[T any] struct {
     tracer          tracing.Tracer
 }
 
+func (c *caller[T]) samplingEnabled(ctx context.Context) bool {
+    return c.tracer != nil && tracing.SamplingEnabled(ctx)
+}
+
 type directCaller[T any] struct {
     caller[T]
+}
+
+func (c *directCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
+    if !c.samplingEnabled(ctx) {
+        return ctx, noopSpan{}
+    }
+    return c.tracer.Start(ctx, "stream.call",
+        tracing.StringAttr("from", c.source.GetName()),
+        tracing.StringAttr("to", c.consumer.GetName()),
+    )
 }
 
 func (c *directCaller[T]) Consume(ctx context.Context, value T) {
@@ -655,15 +682,13 @@ func (c *directCaller[T]) Consume(ctx context.Context, value T) {
     if c.messagesCounter != nil {
         c.messagesCounter.Inc(ctx)
     }
-    if c.tracer != nil {
-        var span tracing.Span
-        ctx, span = c.tracer.Start(ctx, "stream.call",
-            tracing.StringAttr("from", c.source.GetName()),
-            tracing.StringAttr("to", c.consumer.GetName()),
-        )
-        defer span.End()
-    }
+    ctx, span := c.startSpan(ctx)
+    defer span.End()
     c.consumer.Consume(ctx, value)
+}
+
+func (c *directCaller[T]) IsAsync() bool {
+    return false
 }
 
 type taskPoolCaller[T any] struct {
@@ -671,33 +696,36 @@ type taskPoolCaller[T any] struct {
     pool pool.TaskPool
 }
 
+func (c *taskPoolCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
+    if !c.samplingEnabled(ctx) {
+        return ctx, noopSpan{}
+    }
+    return c.tracer.Start(ctx, "stream.call",
+        tracing.StringAttr("from", c.source.GetName()),
+        tracing.StringAttr("to", c.consumer.GetName()),
+        tracing.StringAttr("type", "taskpool"),
+        tracing.StringAttr("taskpoolname", c.pool.GetName()),
+    )
+}
+
 func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
     c.statistics.Inc()
     if c.messagesCounter != nil {
         c.messagesCounter.Inc(ctx)
     }
-    if c.tracer != nil {
-        var span tracing.Span
-        ctx, span = c.tracer.Start(ctx, "stream.call",
-            tracing.StringAttr("from", c.source.GetName()),
-            tracing.StringAttr("to", c.consumer.GetName()),
-            tracing.StringAttr("type", "taskpool"),
-            tracing.StringAttr("taskpoolname", c.pool.GetName()),
-        )
-        if err := c.pool.AddTask(ctx, func() {
-            defer span.End()
-            c.consumer.Consume(ctx, value)
-        }); err != nil {
-            tracing.SpanError(span, err)
-            span.End()
-        }
-    } else {
-        if err := c.pool.AddTask(ctx, func() {
-            c.consumer.Consume(ctx, value)
-        }); err != nil {
-            c.source.GetEnvironment().Log().Warn(ctx, "task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
-        }
+    ctx, span := c.startSpan(ctx)
+    if err := c.pool.AddTask(ctx, func() {
+        defer span.End()
+        c.consumer.Consume(ctx, value)
+    }); err != nil {
+        tracing.SpanError(span, err)
+        span.End()
+        c.source.GetEnvironment().Log().Warn(ctx, "task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
     }
+}
+
+func (c *taskPoolCaller[T]) IsAsync() bool {
+    return true
 }
 
 type priorityTaskPoolCaller[T any] struct {
@@ -706,33 +734,67 @@ type priorityTaskPoolCaller[T any] struct {
     priority int
 }
 
+func (c *priorityTaskPoolCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
+    if !c.samplingEnabled(ctx) {
+        return ctx, noopSpan{}
+    }
+    return c.tracer.Start(ctx, "stream.call",
+        tracing.StringAttr("from", c.source.GetName()),
+        tracing.StringAttr("to", c.consumer.GetName()),
+        tracing.StringAttr("type", "prioritytaskpool"),
+        tracing.StringAttr("taskpoolname", c.pool.GetName()),
+    )
+}
+
 func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
     c.statistics.Inc()
     if c.messagesCounter != nil {
         c.messagesCounter.Inc(ctx)
     }
-    if c.tracer != nil {
-        var span tracing.Span
-        ctx, span = c.tracer.Start(ctx, "stream.call",
-            tracing.StringAttr("from", c.source.GetName()),
-            tracing.StringAttr("to", c.consumer.GetName()),
-            tracing.StringAttr("type", "prioritytaskpool"),
-            tracing.StringAttr("taskpoolname", c.pool.GetName()),
-        )
-        if err := c.pool.AddTask(ctx, c.priority, func() {
-            defer span.End()
-            c.consumer.Consume(ctx, value)
-        }); err != nil {
-            tracing.SpanError(span, err)
-            span.End()
-        }
-    } else {
-        if err := c.pool.AddTask(ctx, c.priority, func() {
-            c.consumer.Consume(ctx, value)
-        }); err != nil {
-            c.source.GetEnvironment().Log().Warn(ctx, "priority task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
-        }
+    ctx, span := c.startSpan(ctx)
+    if err := c.pool.AddTask(ctx, c.priority, func() {
+        defer span.End()
+        c.consumer.Consume(ctx, value)
+    }); err != nil {
+        tracing.SpanError(span, err)
+        span.End()
+        c.source.GetEnvironment().Log().Warn(ctx, "priority task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
     }
+}
+
+func (c *priorityTaskPoolCaller[T]) IsAsync() bool {
+    return true
+}
+
+type parallelCaller[T any] struct {
+    caller[T]
+}
+
+func (c *parallelCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
+    if !c.samplingEnabled(ctx) {
+        return ctx, noopSpan{}
+    }
+    return c.tracer.Start(ctx, "stream.call",
+        tracing.StringAttr("from", c.source.GetName()),
+        tracing.StringAttr("to", c.consumer.GetName()),
+        tracing.StringAttr("type", "parallel"),
+    )
+}
+
+func (c *parallelCaller[T]) Consume(ctx context.Context, value T) {
+    c.statistics.Inc()
+    if c.messagesCounter != nil {
+        c.messagesCounter.Inc(ctx)
+    }
+    ctx, span := c.startSpan(ctx)
+    go func() {
+        defer span.End()
+        c.consumer.Consume(ctx, value)
+    }()
+}
+
+func (c *parallelCaller[T]) IsAsync() bool {
+    return true
 }
 
 type ServiceStream[T any] struct {
@@ -777,10 +839,15 @@ func MakeServiceStream[T any](id int, env RuntimeEnvironment) ServiceStream[T] {
     }
 }
 
-// StartSpan starts a new span for this stream's operation.
-// Returns a no-op span when tracing is disabled, so callers never need nil checks.
+// TracingEnabled reports whether a span should be created for this context.
+func (s *ServiceStream[T]) TracingEnabled(ctx context.Context) bool {
+    return s.tracer != nil && tracing.SamplingEnabled(ctx)
+}
+
+// StartSpan starts a new span. Safe to call unconditionally; returns a no-op span
+// when tracing is disabled or sampling not requested.
 func (s *ServiceStream[T]) StartSpan(ctx context.Context, operation string) (context.Context, tracing.Span) {
-    if s.tracer == nil {
+    if s.tracer == nil || !tracing.SamplingEnabled(ctx) {
         return ctx, noopSpan{}
     }
     return s.tracer.Start(ctx, operation, tracing.StringAttr("stream", s.GetName()))

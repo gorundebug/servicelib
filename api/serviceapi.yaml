@@ -418,13 +418,15 @@ components:
         - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
         - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
         - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
-      enum: [ 0, 1, 2, 3, 4 ]
+        - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
+      enum: [ 0, 1, 2, 3, 4, 5 ]
       x-enum-varnames:
         - Undefined
         - Inherited
         - FunctionCall
         - TaskPool
         - PriorityTaskPool
+        - ParallelCall
 
     DataConnectorType:
       type: integer

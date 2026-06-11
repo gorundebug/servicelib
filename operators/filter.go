@@ -80,8 +80,11 @@ func (s *FilterStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) e
 }
 
 func (s *FilterStream[T]) Consume(ctx context.Context, value T) {
-    ctx, span := s.StartSpan(ctx, "stream.filter")
-    defer span.End()
+    if s.TracingEnabled(ctx) {
+        newCtx, span := s.StartSpan(ctx, "stream.filter")
+        ctx = newCtx
+        defer span.End()
+    }
     if s.f.call(ctx, value) {
         s.Emit(ctx, value)
     }
