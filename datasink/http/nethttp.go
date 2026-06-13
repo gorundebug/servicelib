@@ -51,10 +51,15 @@ type Response struct {
 	*http.Response
 }
 
-// StreamContext bundles the result stream, output collector, and error collector
-// that are passed to every EndpointHandler lifecycle method.
-// Stream() provides serde access for the result type R.
-type StreamContext[T, R, E any] = runtime.SinkStreamContext[T, R, E]
+// StreamContext bundles the result stream, output collector, error collector,
+// and runtime config that are passed to every EndpointHandler lifecycle method.
+// EndpointCfg and DataConnectorCfg are available in all handler methods so that
+// ConsumeMessage can build the target URL without hardcoding it.
+type StreamContext[T, R, E any] struct {
+	runtime.SinkStreamContext[T, R, E]
+	EndpointCfg      *config.HttpEndpointConfig
+	DataConnectorCfg *config.HttpDataConnectorConfig
+}
 
 // EndpointHandler handles outgoing HTTP sink calls for a single endpoint.
 //
@@ -336,9 +341,11 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := endpoint.GetConfig().(*config.HttpEndpointConfig); !ok {
+	epCfg, ok := endpoint.GetConfig().(*config.HttpEndpointConfig)
+	if !ok {
 		return nil, fmt.Errorf("invalid endpoint config type for NetHTTPSinkEndpointConsumer for the stream %q", stream.GetName())
 	}
+	dsCfg, _ := env.RuntimeConfig().GetDataConnectorByID(epCfg.IdDataConnector).(*config.HttpDataConnectorConfig)
 	var tr tracing.Tracer
 	if t := env.Tracing(); t != nil {
 		tr = t.Tracer(env.ServiceConfig().Name)
@@ -350,11 +357,15 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		client:   client,
 		tracer:   tr,
 	}
-	ec.sc = runtime.MakeSinkStreamContext[T, R, E](
-		stream,
-		runtime.CollectFunc[R](stream.ConsumeResult),
-		runtime.CollectFunc[E](stream.GetErrorStream().Consume),
-	)
+	ec.sc = StreamContext[T, R, E]{
+		SinkStreamContext: runtime.MakeSinkStreamContext[T, R, E](
+			stream,
+			runtime.CollectFunc[R](stream.ConsumeResult),
+			runtime.CollectFunc[E](stream.GetErrorStream().Consume),
+		),
+		EndpointCfg:      epCfg,
+		DataConnectorCfg: dsCfg,
+	}
 	stream.SetSinkConsumer(ec)
 	endpoint.consumer = ec
 	env.RegisterEndpointConsumer(ec)
