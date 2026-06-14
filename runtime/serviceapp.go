@@ -110,7 +110,6 @@ func (app *ServiceApp) Tracing() tracing.Tracing {
 	return app.tracingEngine.Tracing()
 }
 
-
 func (app *ServiceApp) TracingEngine() tracing.TracingEngine {
 	return app.tracingEngine
 }
@@ -246,9 +245,11 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
 
-	app.delayPool, err = dep.DelayPool(ctx, env)
-	if err != nil {
-		return err
+	if dep != nil {
+		app.delayPool, err = dep.DelayPool(ctx, env)
+		if err != nil {
+			return err
+		}
 	}
 	if app.delayPool == nil {
 		app.delayPool, err = pool.MakeGoroutineDelayTaskPool(env)

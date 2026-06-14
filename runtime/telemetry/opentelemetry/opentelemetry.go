@@ -684,7 +684,75 @@ func (m *MetricsEngine) Shutdown(ctx context.Context) error {
 	return m.provider.Shutdown(ctx)
 }
 
-func CreatePrometheusMetricsEngine(env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+// MetricsEngineOption configures a MetricsEngine at creation time.
+type MetricsEngineOption func(*metricsEngineOptions)
+
+type metricsEngineOptions struct {
+	views []sdkmetric.View
+}
+
+// WithView adds an OTel SDK View to the MeterProvider.
+func WithView(view sdkmetric.View) MetricsEngineOption {
+	return func(o *metricsEngineOptions) {
+		o.views = append(o.views, view)
+	}
+}
+
+// WithHistogramBuckets sets explicit bucket boundaries for a named instrument.
+func WithHistogramBuckets(instrumentName string, boundaries []float64) MetricsEngineOption {
+	return WithView(sdkmetric.NewView(
+		sdkmetric.Instrument{Name: instrumentName},
+		sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+			Boundaries: boundaries,
+		}},
+	))
+}
+
+// GRPCDurationBuckets provides sub-millisecond resolution suitable for fast gRPC calls.
+var GRPCDurationBuckets = []float64{
+	0.0001, 0.0002, 0.0005,
+	0.001, 0.002, 0.005,
+	0.01, 0.025, 0.05,
+	0.1, 0.25, 0.5, 1,
+}
+
+// defaultGRPCViews returns the built-in views for gRPC duration histograms.
+func defaultGRPCViews() []sdkmetric.View {
+	names := []string{
+		"rpc.server.call.duration",
+		"rpc.client.call.duration",
+		"rpc.server.duration",
+		"rpc.client.duration",
+	}
+	views := make([]sdkmetric.View, len(names))
+	for i, name := range names {
+		views[i] = sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: GRPCDurationBuckets,
+			}},
+		)
+	}
+	return views
+}
+
+func buildProviderOptions(readerOpt sdkmetric.Option, userOpts []MetricsEngineOption) []sdkmetric.Option {
+	o := &metricsEngineOptions{}
+	for _, opt := range userOpts {
+		opt(o)
+	}
+	// User views first — they take precedence over defaults (first match wins in OTel SDK).
+	providerOpts := []sdkmetric.Option{readerOpt}
+	for _, v := range o.views {
+		providerOpts = append(providerOpts, sdkmetric.WithView(v))
+	}
+	for _, v := range defaultGRPCViews() {
+		providerOpts = append(providerOpts, sdkmetric.WithView(v))
+	}
+	return providerOpts
+}
+
+func CreatePrometheusMetricsEngine(env environment.ServiceEnvironment, opts ...MetricsEngineOption) (metrics.MetricsEngine, error) {
 	registry := promclient.NewRegistry()
 	registry.MustRegister(collectors.NewGoCollector())
 	registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -692,7 +760,7 @@ func CreatePrometheusMetricsEngine(env environment.ServiceEnvironment) (metrics.
 	if err != nil {
 		return nil, err
 	}
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
+	provider := sdkmetric.NewMeterProvider(buildProviderOptions(sdkmetric.WithReader(exporter), opts)...)
 	meter := provider.Meter("github.com/gorundebug/servicelib")
 	return &MetricsEngine{
 		environment: env,
@@ -702,12 +770,12 @@ func CreatePrometheusMetricsEngine(env environment.ServiceEnvironment) (metrics.
 	}, nil
 }
 
-func CreateOTLPMetricsEngine(ctx context.Context, env environment.ServiceEnvironment) (metrics.MetricsEngine, error) {
+func CreateOTLPMetricsEngine(ctx context.Context, env environment.ServiceEnvironment, opts ...MetricsEngineOption) (metrics.MetricsEngine, error) {
 	exporter, err := otlpmetricgrpc.New(ctx)
 	if err != nil {
 		return nil, err
 	}
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)))
+	provider := sdkmetric.NewMeterProvider(buildProviderOptions(sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)), opts)...)
 	meter := provider.Meter("github.com/gorundebug/servicelib")
 	return &MetricsEngine{
 		environment: env,

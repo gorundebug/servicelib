@@ -53,11 +53,15 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libson
     local expr = 'sum(rate(%s_bucket{%s}[$__rate_interval])) by (le)' % [metric, filters];
     local target = g.query.prometheus.new('$datasource', expr)
       + g.query.prometheus.withLegendFormat('{{le}}')
+      + g.query.prometheus.withFormat('heatmap')
       + g.query.prometheus.withIntervalFactor(2);
     g.panel.heatmap.new(title)
     + g.panel.heatmap.queryOptions.withTargets([target])
     + g.panel.heatmap.options.withCalculate(false)
     + g.panel.heatmap.options.yAxis.withUnit(unit)
+    + g.panel.heatmap.options.color.withMode('scheme')
+    + g.panel.heatmap.options.color.withScheme('Oranges')
+    + g.panel.heatmap.options.color.withSteps(128)
     + g.panel.heatmap.gridPos.withW(w)
     + g.panel.heatmap.gridPos.withH(h),
 
