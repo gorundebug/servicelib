@@ -48,6 +48,19 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libson
   // Panel helpers
   // ---------------------------------------------------------------------------
 
+  // Heatmap panel for pre-bucketed Prometheus histograms.
+  heatmap(title, metric, filters='', unit='s', w=24, h=10)::
+    local expr = 'sum(rate(%s_bucket{%s}[$__rate_interval])) by (le)' % [metric, filters];
+    local target = g.query.prometheus.new('$datasource', expr)
+      + g.query.prometheus.withLegendFormat('{{le}}')
+      + g.query.prometheus.withIntervalFactor(2);
+    g.panel.heatmap.new(title)
+    + g.panel.heatmap.queryOptions.withTargets([target])
+    + g.panel.heatmap.options.withCalculate(false)
+    + g.panel.heatmap.options.yAxis.withUnit(unit)
+    + g.panel.heatmap.gridPos.withW(w)
+    + g.panel.heatmap.gridPos.withH(h),
+
   // Generic time series panel.
   ts(title, targets, w=12, h=8, unit='short')::
     g.panel.timeSeries.new(title)
@@ -88,6 +101,16 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libson
   dsVar::
     g.dashboard.variable.datasource.new('datasource', 'prometheus')
     + g.dashboard.variable.datasource.generalOptions.withLabel('Datasource'),
+
+  // Job variable — pre-filtered to the current service so it auto-selects on load.
+  jobVar(metric)::
+    local q = 'label_values(%s, job)' % metric;
+    g.dashboard.variable.query.new('job', q)
+    + g.dashboard.variable.query.withDatasource('prometheus', '$datasource')
+    + g.dashboard.variable.query.generalOptions.withLabel('Job')
+    + g.dashboard.variable.query.withRegex(self.svc)
+    + g.dashboard.variable.query.selectionOptions.withMulti(false)
+    + g.dashboard.variable.query.selectionOptions.withIncludeAll(false),
 
   // Query variable for service name derived from service_info metric.
   serviceVar::

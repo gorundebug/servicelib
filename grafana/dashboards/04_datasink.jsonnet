@@ -15,7 +15,8 @@
 local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libsonnet';
 local lib = import '_lib.libsonnet';
 
-local connFilter = 'connector=~"$connector"';
+local jobFilter  = 'job=~"$job"';
+local connFilter = '%s, connector=~"$connector"' % jobFilter;
 local epFilter   = '%s, endpoint=~"$endpoint"' % connFilter;
 
 lib.dashboard(
@@ -24,7 +25,8 @@ lib.dashboard(
   tags=['datasink'],
   variables=[
     lib.dsVar,
-    lib.labelVar('connector', 'connector', 'datasink_endpoint_messages_total'),
+    lib.jobVar('datasink_endpoint_messages_total'),
+    lib.labelVar('connector', 'connector', 'datasink_endpoint_messages_total', jobFilter),
     lib.labelVar('endpoint',  'endpoint',  'datasink_endpoint_messages_total', connFilter),
   ],
   panels=[
