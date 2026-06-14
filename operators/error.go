@@ -18,12 +18,18 @@ var _ runtime.TypedConsumedStream[any] = (*ErrorStream[any])(nil)
 
 type ErrorStream[T any] struct {
 	runtime.ConsumedStream[T]
+	virtualID int
 }
 
 func MakeErrorStream[T any](id int, env runtime.RuntimeEnvironment) *ErrorStream[T] {
 	return &ErrorStream[T]{
 		ConsumedStream: runtime.MakeConsumedStream[T](id, env, runtime.MakeSerde[T](env)),
+		virtualID:      -id,
 	}
+}
+
+func (s *ErrorStream[T]) GetID() int {
+	return s.virtualID
 }
 
 func (s *ErrorStream[T]) FunctionImplementation() interface{} {

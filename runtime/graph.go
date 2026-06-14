@@ -37,8 +37,14 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
     for id := range app.streams {
         registeredStreams[id] = true
     }
+    // Also register virtual IDs of error streams (-producerID) so error links pass the registeredStreams check.
+    for _, runtimeStream := range app.streams {
+        if ec := runtimeStream.GetErrorConsumer(); ec != nil && len(ec.GetConsumers()) > 0 {
+            registeredStreams[ec.Stream().GetID()] = true
+        }
+    }
     // errorLinkSources maps (errorStream.GetID(), consumer.GetID()) → virtual error stream Id (-producer.Id).
-    // ErrorStream shares its ID with the producer, so we disambiguate by tracking exact (from, to) pairs.
+    // ErrorStream.GetID() returns -producerID, which matches virtualID = -s.Id computed below.
     errorLinkSources := make(map[config.LinkID]int)
     // consumerOverrideIdSource maps consumer stream ID → virtual error stream ID.
     // Used to patch IdSource for streams that feed from an error stream but have IdSource=0 in config

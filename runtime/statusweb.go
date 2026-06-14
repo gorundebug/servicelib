@@ -220,6 +220,25 @@ func (app *ServiceApp) makeEdge(from Stream, typeName string, consumer Stream, c
 	}
 }
 
+func (app *ServiceApp) makeEdgeFromTo(fromID int, statsFromID int, typeName string, toID int, color string) *Edge {
+	label, _ := strings.CutPrefix(typeName, "*")
+	label, _ = strings.CutPrefix(label, "types.")
+	if stat, ok := app.consumeStatistics[config.LinkID{From: statsFromID, To: toID}]; ok {
+		label += fmt.Sprintf("\ncalls: %d", stat.Count())
+	}
+	return &Edge{
+		From:   fromID,
+		To:     toID,
+		Arrows: "to",
+		Length: edgeLength,
+		Label:  label,
+		Color: struct {
+			Opacity float32 `json:"opacity"`
+			Color   string  `json:"color"`
+		}{Opacity: defaultOpacity, Color: color},
+	}
+}
+
 func (app *ServiceApp) makeEdges(runtimeStream RuntimeStream) []*Edge {
 	edges := make([]*Edge, 0)
 	stream := runtimeStream.Stream()
@@ -228,14 +247,48 @@ func (app *ServiceApp) makeEdges(runtimeStream RuntimeStream) []*Edge {
 		edges = append(edges, app.makeEdge(stream, stream.GetTypeName(), consumer, edgeColor))
 	}
 
-	if ec := runtimeStream.GetErrorConsumer(); ec != nil {
+	if ec := runtimeStream.GetErrorConsumer(); ec != nil && len(ec.GetConsumers()) > 0 {
+		virtualID := ec.Stream().GetID()
+		edges = append(edges, app.makeEdgeFromTo(stream.GetID(), stream.GetID(), stream.GetTypeName(), virtualID, edgeErrorColor))
 		errTypeName := ec.Stream().GetTypeName()
 		for _, consumer := range ec.GetConsumers() {
-			edges = append(edges, app.makeEdge(stream, errTypeName, consumer, edgeErrorColor))
+			edges = append(edges, app.makeEdgeFromTo(virtualID, virtualID, errTypeName, consumer.GetID(), edgeColor))
 		}
 	}
 
 	return edges
+}
+
+func (app *ServiceApp) makeErrorNode(producerStream RuntimeStream) *Node {
+	stream := producerStream.Stream()
+	streamConfig := stream.GetConfig()
+	serviceConfig := app.ServiceConfig()
+	background := serviceConfig.Color
+	serviceName := serviceConfig.Name
+	if streamConfig.GetIdService() != serviceConfig.ID {
+		for _, service := range app.GetConfig().GetServices() {
+			if service.ID == streamConfig.GetIdService() {
+				serviceName = service.Name
+				background = service.Color
+				break
+			}
+		}
+	}
+	label := fmt.Sprintf("%s Error(%s)\n[%s]", stream.GetName(), "ERROR", serviceName)
+	n := &Node{
+		ID:    producerStream.GetErrorConsumer().Stream().GetID(),
+		Label: label,
+		Shape: "image",
+		Image: nodeImage{
+			Unselected: makeNodeImageURI(mdiAlertCircle, background),
+			Selected:   makeNodeImageSelectedURI(mdiAlertCircle, background),
+		},
+		Size:    30,
+		Opacity: defaultOpacity,
+	}
+	n.Color.Border = "transparent"
+	n.Color.Highlight.Border = "transparent"
+	return n
 }
 
 func (app *ServiceApp) statusHandler(w http.ResponseWriter, r *http.Request) {
@@ -289,6 +342,16 @@ func (app *ServiceApp) dataHandler(w http.ResponseWriter, r *http.Request) {
 	for _, stream := range app.streams {
 		networkData.Nodes = append(networkData.Nodes, app.makeNode(stream))
 		networkData.Edges = append(networkData.Edges, app.makeEdges(stream)...)
+	}
+	seen := make(map[int]bool)
+	for _, stream := range app.streams {
+		if ec := stream.GetErrorConsumer(); ec != nil && len(ec.GetConsumers()) > 0 {
+			vid := ec.Stream().GetID()
+			if !seen[vid] {
+				seen[vid] = true
+				networkData.Nodes = append(networkData.Nodes, app.makeErrorNode(stream))
+			}
+		}
 	}
 	jsonData, err := json.Marshal(networkData)
 	if err != nil {
