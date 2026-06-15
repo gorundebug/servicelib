@@ -161,7 +161,6 @@ func MakeConfig() *Config {
 				ID:              incomeServiceId,
 				Name:            "IncomeService",
 				Color:           "#D2E5FF",
-				DelayExecutors:  1,
 				GrpcHost:        "localhost",
 				GrpcPort:        9201,
 				HttpHost:        "localhost",

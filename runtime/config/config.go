@@ -75,7 +75,6 @@ type ServiceConfig struct {
 	Color                string                 `yaml:"color" mapstructure:"color"`
 	DefaultCallSemantics *CallSemanticsGroup    `yaml:"defaultCallSemantics,omitempty" mapstructure:"defaultCallSemantics"`
 	DefaultGrpcTimeout   int                    `yaml:"defaultGrpcTimeout,omitempty" mapstructure:"defaultGrpcTimeout"`
-	DelayExecutors       int                    `yaml:"delayExecutors" mapstructure:"delayExecutors"`
 	Environment          api.Environment        `yaml:"environment" mapstructure:"environment"`
 	GolangVersion        string                 `yaml:"golangVersion,omitempty" mapstructure:"golangVersion"`
 	GrpcHost             string                 `yaml:"grpcHost" mapstructure:"grpcHost"`

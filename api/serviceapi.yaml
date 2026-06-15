@@ -80,7 +80,6 @@ paths:
                       grpcPort: 9090
                       defaultGrpcTimeout: 30000
                       shutdownTimeout: 10000
-                      delayExecutors: 4
                       environment: production
                       color: "#4A90D9"
                       statusHandler: /status
@@ -297,10 +296,6 @@ components:
           $ref: '#/components/schemas/LogLevel'
         environment:
           $ref: '#/components/schemas/Environment'
-        delayExecutors:
-          type: integer
-          description: Number of goroutines dedicated to processing Delay operator timers.
-          minimum: 1
       required:
         - id
         - name
@@ -312,7 +307,6 @@ components:
         - grpcPort
         - defaultGrpcTimeout
         - shutdownTimeout
-        - delayExecutors
         - environment
         - color
         - statusHandler

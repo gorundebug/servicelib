@@ -449,9 +449,6 @@ type Service struct {
 	// DefaultGrpcTimeout Default gRPC call timeout in milliseconds.
 	DefaultGrpcTimeout int `json:"defaultGrpcTimeout"`
 
-	// DelayExecutors Number of goroutines dedicated to processing Delay operator timers.
-	DelayExecutors int `json:"delayExecutors"`
-
 	// Environment Deployment environment for the service. Controls which observability engines
 	// are selected in the generated bootstrap code.
 	// - `local`: local developer machine; human-readable logs and tracing, Prometheus metrics

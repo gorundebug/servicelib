@@ -62,7 +62,6 @@ func ServiceConfigToAPI(s *ServiceConfig) api.Service {
 		Color:                s.Color,
 		DefaultCallSemantics: callSemanticsFromGroup(s.DefaultCallSemantics),
 		DefaultGrpcTimeout:   s.DefaultGrpcTimeout,
-		DelayExecutors:       s.DelayExecutors,
 		Environment:          s.Environment,
 		GrpcHost:             s.GrpcHost,
 		GrpcPort:             s.GrpcPort,

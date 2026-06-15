@@ -49,11 +49,11 @@ var expectedPriorityTaskPoolMetrics = []string{
 
 var expectedDelayPoolMetrics = []string{
 	"delay_pool_events_total",
-	"delay_pool_execute_queue_length",
 	"delay_pool_task_execution_duration_seconds",
 	"delay_pool_tasks_total",
 	"delay_pool_wait_queue_length",
 }
+// delay_pool_events_total labels: event=stop_timeout | task_cancelled
 
 func TestTaskPoolRegistersMetrics(t *testing.T) {
 	m := testmetrics.New()

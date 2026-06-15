@@ -113,7 +113,6 @@ func mockService(environment string) *MockService {
 				MetricsHandler: "metrics",
 				StatusHandler:  "status",
 				Environment:    api.Environment(environment),
-				DelayExecutors: 1,
 			},
 		},
 		Streams:        struct{}{},

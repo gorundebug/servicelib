@@ -66,6 +66,11 @@ func sendRequest() error {
 func TestNetHTTPEndpointConsumer(t *testing.T) {
 	service := testEnv.Service
 	assert.Equal(t, nil, sendRequest())
+	select {
+	case <-service.RequestDataCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for request data")
+	}
 	rd := service.RequestData.Load()
 	assert.NotNilf(t, rd, "request data is nil")
 	if rd != nil {

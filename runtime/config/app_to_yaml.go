@@ -411,7 +411,6 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				"grpcHost":             svc.GrpcHost,
 				"grpcPort":             svc.GrpcPort,
 				"shutdownTimeout":      svc.ShutdownTimeout,
-				"delayExecutors":       svc.DelayExecutors,
 				"environment":          svc.Environment,
 				"color":                svc.Color,
 				"statusHandler":        svc.StatusHandler,

@@ -86,7 +86,8 @@ type MockService struct {
 	endpointSinkSync           *EndpointSinkSync
 	dataHandler                httpds.HTTPHandler
 
-	RequestData atomic.Pointer[RequestData]
+	RequestData   atomic.Pointer[RequestData]
+	RequestDataCh chan struct{}
 }
 
 func (s *MockService) GetConfig() *config.Config {
@@ -278,7 +279,7 @@ func Main(dir string, run func(*TestEnv) int) int {
 		deps,
 		&baseConfigPath,
 		&overrideConfigPath,
-		func() *MockService { return &MockService{} },
+		func() *MockService { return &MockService{RequestDataCh: make(chan struct{}, 1)} },
 		func() *config.Config { return config.MakeConfig() },
 	)
 	if err != nil {
@@ -312,6 +313,10 @@ func (ep *EndpointSink4) BeginRequest(ctx context.Context, _ runtime.Stream) (co
 
 func (ep *EndpointSink4) ConsumeMessage(_ context.Context, _ runtime.Stream, _ struct{}, value *RequestData, _ runtime.Collect[error]) error {
 	ep.mockService.RequestData.Store(value)
+	select {
+	case ep.mockService.RequestDataCh <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -337,6 +342,10 @@ func (ep *EndpointSink) BeginRequest(ctx context.Context, _ runtime.Stream) (con
 
 func (ep *EndpointSink) ConsumeMessage(_ context.Context, _ runtime.Stream, _ struct{}, value *RequestData, _ runtime.Collect[error]) error {
 	ep.mockService.RequestData.Store(value)
+	select {
+	case ep.mockService.RequestDataCh <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -362,6 +371,10 @@ func (ep *EndpointSinkSync) BeginRequest(ctx context.Context, _ runtime.Stream) 
 
 func (ep *EndpointSinkSync) ConsumeMessage(_ context.Context, _ runtime.Stream, _ struct{}, value *RequestData, _ runtime.Collect[error]) error {
 	ep.mockService.RequestData.Store(value)
+	select {
+	case ep.mockService.RequestDataCh <- struct{}{}:
+	default:
+	}
 	return nil
 }
 

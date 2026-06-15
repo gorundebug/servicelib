@@ -61,7 +61,6 @@ A map of microservices. Each service owns a set of stream nodes (grouped into pi
 | `grpcPort` | integer | yes | Port for the service gRPC server (80–65535). |
 | `defaultGrpcTimeout` | integer | no | Default gRPC call timeout in milliseconds. |
 | `shutdownTimeout` | integer | yes | Maximum milliseconds to wait for graceful shutdown before forcing termination. |
-| `delayExecutors` | integer | yes | Number of goroutines dedicated to Delay operator timers (minimum 1). |
 | `environment` | string | yes | Deployment environment identifier (e.g. `production`, `staging`). Exposed in generated config. |
 | `color` | string | yes | Hex color code for the visual designer (e.g. `#4A90D9`). |
 | `statusHandler` | string | yes | URL path for the live topology visualization endpoint (e.g. `status`). Empty to disable. |
@@ -77,7 +76,6 @@ services:
         color: '#B29BDC'
         defaultCallSemantics: FunctionCall
         defaultGrpcTimeout: 5000
-        delayExecutors: 1
         environment: ""
         golangVersion: 1.25.0
         grpcHost: 0.0.0.0

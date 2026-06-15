@@ -6,20 +6,19 @@
 //     task_pool_queue_length{service, name}                       gauge
 //     task_pool_tasks_total{service, name}                        counter
 //     task_pool_task_execution_duration_seconds{service, name}    histogram
-//     task_pool_events_total{service, name, event}                counter  event=stop_timeout | task_rejected
+//     task_pool_events_total{service, name, event}                counter  event=stop_timeout | task_rejected | task_cancelled
 //
 //   priority_task_pool (labels: service, name)
 //     priority_task_pool_queue_length{service, name}              gauge
 //     priority_task_pool_tasks_total{service, name}               counter
 //     priority_task_pool_task_execution_duration_seconds{...}     histogram
-//     priority_task_pool_events_total{service, name, event}       counter  event=stop_timeout | task_rejected
+//     priority_task_pool_events_total{service, name, event}       counter  event=stop_timeout | task_rejected | task_expired
 //
 //   delay_pool (labels: service)
 //     delay_pool_wait_queue_length{service}                       gauge
-//     delay_pool_execute_queue_length{service}                    gauge
 //     delay_pool_tasks_total{service}                             counter
 //     delay_pool_task_execution_duration_seconds{service}         histogram
-//     delay_pool_events_total{service, event}                     counter  event=stop_timeout
+//     delay_pool_events_total{service, event}                     counter  event=stop_timeout | task_cancelled
 
 local g = import 'github.com/grafana/grafonnet/gen/grafonnet-v11.0.0/main.libsonnet';
 local lib = import '_lib.libsonnet';
@@ -140,6 +139,19 @@ lib.dashboard(
       unit='ops',
     ),
 
+    lib.ts(
+      title='Task Pool — Cancelled Tasks Rate',
+      targets=[
+        lib.rate(
+          'task_pool_events_total',
+          '%s, event="task_cancelled"' % poolFilter,
+          '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=6,
+      unit='ops',
+    ),
+
     // =========================================================================
     // Row: Priority Task Pool
     // =========================================================================
@@ -241,6 +253,19 @@ lib.dashboard(
       unit='ops',
     ),
 
+    lib.ts(
+      title='Priority Task Pool — Expired Tasks Rate',
+      targets=[
+        lib.rate(
+          'priority_task_pool_events_total',
+          '%s, event="task_expired"' % priPoolFilter,
+          '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=6,
+      unit='ops',
+    ),
+
     // =========================================================================
     // Row: Delay Pool
     // =========================================================================
@@ -251,18 +276,6 @@ lib.dashboard(
       targets=[
         lib.promQ(
           'delay_pool_wait_queue_length{%s}' % svcFilter,
-          '{{service}}'
-        ),
-      ],
-      w=12, h=8,
-      unit='short',
-    ),
-
-    lib.ts(
-      title='Delay Pool — Execute Queue Length',
-      targets=[
-        lib.promQ(
-          'delay_pool_execute_queue_length{%s}' % svcFilter,
           '{{service}}'
         ),
       ],
@@ -326,6 +339,19 @@ lib.dashboard(
       ],
       w=8, h=8,
       unit='s',
+    ),
+
+    lib.ts(
+      title='Delay Pool — Cancelled Tasks Rate',
+      targets=[
+        lib.rate(
+          'delay_pool_events_total',
+          '%s, event="task_cancelled"' % svcFilter,
+          '{{service}}'
+        ),
+      ],
+      w=12, h=6,
+      unit='ops',
     ),
 
     lib.ts(
