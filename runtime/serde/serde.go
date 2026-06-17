@@ -72,7 +72,7 @@ func GetSerdeType[T any]() reflect.Type {
 func GetSerdeTypeWithoutPtr[T any]() reflect.Type {
 	tp := reflect.TypeOf((*T)(nil)).Elem()
 	for {
-		if tp.Kind() == reflect.Ptr {
+		if tp.Kind() == reflect.Pointer {
 			tp = tp.Elem()
 		} else {
 			break
@@ -85,7 +85,7 @@ func GetSerdeTypeName[T any]() string {
 	name := ""
 	tp := reflect.TypeOf((*T)(nil)).Elem()
 	for {
-		if tp.Kind() == reflect.Ptr {
+		if tp.Kind() == reflect.Pointer {
 			tp = tp.Elem()
 			name = "*" + name
 		} else {

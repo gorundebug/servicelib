@@ -189,7 +189,7 @@ func (s *streamKeyValueSerde[K, V]) IsKeyValue() bool {
 
 func IsTypePtr[T any]() bool {
 	tp := reflect.TypeOf((*T)(nil)).Elem()
-	return tp.Kind() == reflect.Ptr
+	return tp.Kind() == reflect.Pointer
 }
 
 type BytesSerde struct {

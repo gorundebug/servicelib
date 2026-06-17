@@ -123,7 +123,7 @@ func collectStructJSONTags(v interface{}) map[string]int {
 }
 
 func walkJSONFields(t reflect.Type, seen map[reflect.Type]bool, counts map[string]int) {
-	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct || seen[t] {
