@@ -101,6 +101,9 @@ func (l *serviceLoader[Environment, Cfg]) createConfigReloadCounters(ctx context
 }
 
 func (l *serviceLoader[Environment, Cfg]) Stop(ctx context.Context) {
+	if l.watcher == nil {
+		return
+	}
 	if err := l.watcher.Close(); err != nil {
 		l.service.Log().Warn(ctx, "watcher close error", log.Err(err))
 	}
