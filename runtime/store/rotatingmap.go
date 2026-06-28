@@ -14,12 +14,20 @@ import (
 	"time"
 )
 
+// rotatingMapShrinkFactor controls when rotation is skipped.
+// Rotation is skipped when live entry count >= highWaterMark/rotatingMapShrinkFactor,
+// i.e. rotation fires only when current usage has dropped below 25% of the peak.
+// This avoids pointless rotations under steady or growing load while still reclaiming
+// memory after burst traffic.
+const rotatingMapShrinkFactor = 4
+
 type RotatingMap[K comparable, V any] struct {
-	current  map[K]V
-	prev     map[K]V
-	mu       sync.Mutex
-	interval time.Duration
-	timer    *time.Timer
+	current       map[K]V
+	prev          map[K]V
+	mu            sync.Mutex
+	interval      time.Duration
+	timer         *time.Timer
+	highWaterMark int // max live entries observed since last rotation
 }
 
 func MakeRotatingMap[K comparable, V any](interval time.Duration) *RotatingMap[K, V] {
@@ -90,14 +98,31 @@ func (m *RotatingMap[K, V]) Pop(key K) (V, bool) {
 }
 
 func (m *RotatingMap[K, V]) rotate() {
-	newMap := make(map[K]V)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for k, v := range m.prev {
-		m.current[k] = v
+
+	total := len(m.current) + len(m.prev)
+
+	// Compute before updating highWaterMark so the first call (highWaterMark==0) always rotates.
+	shouldRotate := m.highWaterMark == 0 || total*rotatingMapShrinkFactor < m.highWaterMark
+
+	// Track high water mark across all intervals (including skipped ones).
+	if total > m.highWaterMark {
+		m.highWaterMark = total
 	}
-	m.prev = m.current
-	m.current = newMap
+
+	if shouldRotate {
+		// Reset water mark so the next burst is measured from a clean baseline.
+		m.highWaterMark = total
+
+		newMap := make(map[K]V)
+		for k, v := range m.prev {
+			m.current[k] = v
+		}
+		m.prev = m.current
+		m.current = newMap
+	}
+
 	if m.timer != nil {
 		m.timer.Reset(m.interval)
 	}

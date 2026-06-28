@@ -326,6 +326,116 @@ func TestRotatingMap_Rotate_MergePreservesItemsFromBothGenerations(t *testing.T)
 	}
 }
 
+// ---------- shrink-factor rotation guard ----------
+
+// TestRotatingMap_SkipsRotationUnderHighLoad verifies that rotate() does not
+// swap maps when the live entry count is >= highWaterMark/rotatingMapShrinkFactor
+// (i.e., no significant memory waste to reclaim).
+func TestRotatingMap_SkipsRotationUnderHighLoad(t *testing.T) {
+	m := MakeRotatingMap[int, int](time.Hour)
+
+	// Populate to establish a high water mark via the first forced rotation.
+	const peak = 100
+	for i := 0; i < peak; i++ {
+		if err := m.Set(i, i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.rotate() // first rotation always fires; highWaterMark = peak; prev={0..99}
+
+	// With 100 live entries (all in prev) and highWaterMark=100,
+	// total*factor = 100*4 = 400 >= 100 → rotation must be skipped.
+	// After a skip: current stays empty (was not replaced) and prev still has all entries.
+	lenPrevBefore := len(m.prev)
+	lenCurrentBefore := len(m.current)
+
+	m.rotate()
+
+	if len(m.prev) != lenPrevBefore {
+		t.Fatalf("prev must not change when rotation is skipped: before=%d after=%d", lenPrevBefore, len(m.prev))
+	}
+	if len(m.current) != lenCurrentBefore {
+		t.Fatalf("current must not change when rotation is skipped: before=%d after=%d", lenCurrentBefore, len(m.current))
+	}
+	// Spot-check: items must still be accessible.
+	if v, ok := m.Get(0); !ok || v != 0 {
+		t.Fatal("items must remain accessible after skipped rotation")
+	}
+}
+
+// TestRotatingMap_RotatesAfterBurstRecovery verifies that rotate() fires once
+// live entries drop below highWaterMark/rotatingMapShrinkFactor.
+func TestRotatingMap_RotatesAfterBurstRecovery(t *testing.T) {
+	m := MakeRotatingMap[int, int](time.Hour)
+
+	const peak = 100
+	for i := 0; i < peak; i++ {
+		if err := m.Set(i, i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.rotate() // highWaterMark = peak; all entries in prev
+
+	// Pop enough entries so that live < peak/rotatingMapShrinkFactor.
+	// Keep only peak/rotatingMapShrinkFactor - 1 entries alive.
+	threshold := peak / rotatingMapShrinkFactor // = 25
+	for i := 0; i < peak-threshold+1; i++ {
+		m.Pop(i)
+	}
+	// Live entries = threshold-1 = 24, which is < 25 → rotation should fire.
+
+	m.rotate()
+
+	// After rotation: current must be a fresh empty map; prev has the surviving entries.
+	if len(m.current) != 0 {
+		t.Fatalf("current must be empty after rotation, got len=%d", len(m.current))
+	}
+	if m.highWaterMark != threshold-1 {
+		t.Fatalf("highWaterMark must reset to live count after rotation, got %d", m.highWaterMark)
+	}
+}
+
+// TestRotatingMap_HighWaterMarkTrackedWhenSkipped verifies that highWaterMark
+// is updated even when a rotation is skipped, so a later burst is correctly measured.
+func TestRotatingMap_HighWaterMarkTrackedWhenSkipped(t *testing.T) {
+	m := MakeRotatingMap[int, int](time.Hour)
+
+	// First rotation with 10 entries: highWaterMark = 10.
+	for i := 0; i < 10; i++ {
+		_ = m.Set(i, i)
+	}
+	m.rotate() // highWaterMark = 10; entries move to prev
+
+	// Add 200 more entries (growing load) and trigger a skipped rotation.
+	for i := 10; i < 210; i++ {
+		_ = m.Set(i, i)
+	}
+	m.rotate() // total = ~210; 210*4 >= 10 → skip; but highWaterMark must update to ~210
+
+	if m.highWaterMark < 200 {
+		t.Fatalf("highWaterMark must track growing load even when rotation is skipped, got %d", m.highWaterMark)
+	}
+}
+
+// TestRotatingMap_FirstCallAlwaysRotates verifies the initial rotation always
+// fires regardless of entry count, since highWaterMark starts at 0.
+func TestRotatingMap_FirstCallAlwaysRotates(t *testing.T) {
+	m := MakeRotatingMap[string, int](time.Hour)
+	if err := m.Set("k", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	m.rotate()
+
+	// After the first rotation current must be a fresh empty map.
+	if len(m.current) != 0 {
+		t.Fatal("first rotate() call must always perform the rotation: current must be empty")
+	}
+	if _, ok := m.prev["k"]; !ok {
+		t.Fatal("item must be in prev after first rotation")
+	}
+}
+
 // ---------- timer-based rotation ----------
 
 // NOTE: TestRotatingMap_TimerFiresRotation is omitted to avoid timing-sensitive
