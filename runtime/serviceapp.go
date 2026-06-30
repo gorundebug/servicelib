@@ -8,582 +8,582 @@
 package runtime
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"net"
-	"net/http"
-	"reflect"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
+    "context"
+    "errors"
+    "fmt"
+    "net"
+    "net/http"
+    "reflect"
+    "strings"
+    "sync"
+    "sync/atomic"
+    "time"
 
-	"github.com/gorundebug/servicelib/api"
-	"github.com/gorundebug/servicelib/runtime/config"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/log"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
-	"github.com/gorundebug/servicelib/runtime/environment/tracing"
-	"github.com/gorundebug/servicelib/runtime/logging"
-	"github.com/gorundebug/servicelib/runtime/pool"
-	"github.com/gorundebug/servicelib/runtime/serde"
-	"github.com/gorundebug/servicelib/runtime/store"
-	"github.com/gorundebug/servicelib/runtime/telemetry"
+    "github.com/gorundebug/servicelib/api"
+    "github.com/gorundebug/servicelib/runtime/config"
+    "github.com/gorundebug/servicelib/runtime/environment"
+    "github.com/gorundebug/servicelib/runtime/environment/log"
+    "github.com/gorundebug/servicelib/runtime/environment/metrics"
+    "github.com/gorundebug/servicelib/runtime/environment/tracing"
+    "github.com/gorundebug/servicelib/runtime/logging"
+    "github.com/gorundebug/servicelib/runtime/pool"
+    "github.com/gorundebug/servicelib/runtime/serde"
+    "github.com/gorundebug/servicelib/runtime/store"
+    "github.com/gorundebug/servicelib/runtime/telemetry"
 )
 
 var _ RuntimeEnvironment = (*ServiceApp)(nil)
 
 type ServiceApp struct {
-	id                int
-	config            atomic.Pointer[config.RuntimeConfig]
-	environment       RuntimeEnvironment
-	streams           map[int]RuntimeStream
-	endpointConsumers map[int]RuntimeEndpointConsumer
-	dataSources       map[int]DataSource
-	dataSinks         map[int]DataSink
-	serdes            map[reflect.Type]serde.StreamSerializer
-	httpServer        *http.Server
-	mux               *http.ServeMux
-	httpServerDone    chan struct{}
-	metrics           metrics.Metrics
-	metricsEngine     metrics.MetricsEngine
-	tracingEngine     tracing.TracingEngine
-	consumeStatistics map[config.LinkID]ConsumeStatistics
-	runtimeLinks      []RuntimeLinkInfo
-	storages          []store.Storage
-	delayPool         environment.DelayPool
-	taskPools         map[string]pool.TaskPool
-	priorityTaskPools map[string]pool.PriorityTaskPool
-	loader            ServiceLoader
-	logsEngine        log.LogsEngine
-	log               log.Logger
-	dep               environment.ServiceDependencies
-	components        []environment.Lifecycle
+    id                int
+    config            atomic.Pointer[config.RuntimeConfig]
+    environment       RuntimeEnvironment
+    streams           map[int]RuntimeStream
+    endpointConsumers map[int]RuntimeEndpointConsumer
+    dataSources       map[int]DataSource
+    dataSinks         map[int]DataSink
+    serdes            map[reflect.Type]serde.StreamSerializer
+    httpServer        *http.Server
+    mux               *http.ServeMux
+    httpServerDone    chan struct{}
+    metrics           metrics.Metrics
+    metricsEngine     metrics.MetricsEngine
+    tracingEngine     tracing.TracingEngine
+    consumeStatistics map[config.LinkID]ConsumeStatistics
+    runtimeLinks      []RuntimeLinkInfo
+    storages          []store.Storage
+    delayPool         environment.DelayPool
+    taskPools         map[string]pool.TaskPool
+    priorityTaskPools map[string]pool.PriorityTaskPool
+    loader            ServiceLoader
+    logsEngine        log.LogsEngine
+    log               log.Logger
+    dep               environment.ServiceDependencies
+    components        []environment.Lifecycle
 }
 
 func (app *ServiceApp) GetSerde(_ reflect.Type) (serde.Serializer, error) {
-	return nil, nil
+    return nil, nil
 }
 
 func (app *ServiceApp) AddComponent(component environment.Lifecycle) {
-	app.components = append(app.components, component)
+    app.components = append(app.components, component)
 }
 
 func (app *ServiceApp) RuntimeConfig() *config.RuntimeConfig {
-	return app.config.Load()
+    return app.config.Load()
 }
 
 func (app *ServiceApp) GetConfig() config.Config {
-	return app.RuntimeConfig().GetConfig()
+    return app.RuntimeConfig().GetConfig()
 }
 
 func (app *ServiceApp) GetRuntime() ServiceExecutionRuntime {
-	return app
+    return app
 }
 
 func (app *ServiceApp) updateConfig(cfg *config.RuntimeConfig) {
-	app.config.Store(cfg)
-	app.environment.ReloadConfig()
+    app.config.Store(cfg)
+    app.environment.ReloadConfig()
 }
 
 func (app *ServiceApp) ServiceConfig() *config.ServiceConfig {
-	return app.RuntimeConfig().GetServiceConfigByID(app.id)
+    return app.RuntimeConfig().GetServiceConfigByID(app.id)
 }
 
 func (app *ServiceApp) ServiceDependencies() environment.ServiceDependencies {
-	return nil
+    return nil
 }
 
 func (app *ServiceApp) ReloadConfig() {
 }
 
 func (app *ServiceApp) Metrics() metrics.Metrics {
-	return app.metrics
+    return app.metrics
 }
 
 func (app *ServiceApp) MetricsEngine() metrics.MetricsEngine {
-	return app.metricsEngine
+    return app.metricsEngine
 }
 
 func (app *ServiceApp) Tracing() tracing.Tracing {
-	return app.tracingEngine.Tracing()
+    return app.tracingEngine.Tracing()
 }
 
 func (app *ServiceApp) TracingEngine() tracing.TracingEngine {
-	return app.tracingEngine
+    return app.tracingEngine
 }
 
 func (app *ServiceApp) RegisterStream(stream RuntimeStream) {
-	app.streams[stream.Stream().GetID()] = stream
+    app.streams[stream.Stream().GetID()] = stream
 }
 
 func (app *ServiceApp) RegisterEndpointConsumer(consumer RuntimeEndpointConsumer) {
-	app.endpointConsumers[consumer.GetID()] = consumer
+    app.endpointConsumers[consumer.GetID()] = consumer
 }
 
 func (app *ServiceApp) RegisterStorage(storage store.Storage) {
-	app.storages = append(app.storages, storage)
+    app.storages = append(app.storages, storage)
 }
 
 func (app *ServiceApp) registerSerializer(tp reflect.Type, serializer serde.StreamSerializer) {
-	app.serdes[tp] = serializer
+    app.serdes[tp] = serializer
 }
 
 func (app *ServiceApp) getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer {
-	return app.serdes[tp]
+    return app.serdes[tp]
 }
 
 func (app *ServiceApp) registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics) {
-	app.consumeStatistics[linkID] = statistics
+    app.consumeStatistics[linkID] = statistics
 }
 
 func (app *ServiceApp) registerLinkInfo(linkID config.LinkID, callSemantics config.CallSemanticsConfig) {
-	app.runtimeLinks = append(app.runtimeLinks, RuntimeLinkInfo{
-		From:          linkID.From,
-		To:            linkID.To,
-		CallSemantics: callSemantics,
-	})
+    app.runtimeLinks = append(app.runtimeLinks, RuntimeLinkInfo{
+        From:          linkID.From,
+        To:            linkID.To,
+        CallSemantics: callSemantics,
+    })
 }
 
 func (app *ServiceApp) Log() log.Logger {
-	return app.log
+    return app.log
 }
 
 func (app *ServiceApp) ServiceInit() error {
-	return nil
+    return nil
 }
 
 func (app *ServiceApp) RegisterHTTPHandler(path string, handler http.Handler) {
-	if app.mux == nil {
-		panic("http server was not initialized for application")
-	}
-	app.mux.Handle(path, handler)
+    if app.mux == nil {
+        panic("http server was not initialized for application")
+    }
+    app.mux.Handle(path, handler)
 }
 
 func (app *ServiceApp) ServiceContext() interface{} {
-	return app.environment
+    return app.environment
 }
 
 func (app *ServiceApp) initRuntime(ctx context.Context,
-	name string,
-	env RuntimeEnvironment,
-	dep environment.ServiceDependencies,
-	loader ServiceLoader,
-	runtimeConfig *config.RuntimeConfig,
+    name string,
+    env RuntimeEnvironment,
+    dep environment.ServiceDependencies,
+    loader ServiceLoader,
+    runtimeConfig *config.RuntimeConfig,
 ) error {
 
-	var err error
+    var err error
 
-	app.dep = dep
-	app.loader = loader
-	app.environment = env
-	app.config.Store(runtimeConfig)
+    app.dep = dep
+    app.loader = loader
+    app.environment = env
+    app.config.Store(runtimeConfig)
 
-	serviceConfig := runtimeConfig.GetServiceConfigByName(name)
-	if serviceConfig == nil {
-		return fmt.Errorf("cannot find service config for %s", name)
-	}
-	app.id = serviceConfig.ID
+    serviceConfig := runtimeConfig.GetServiceConfigByName(name)
+    if serviceConfig == nil {
+        return fmt.Errorf("cannot find service config for %s", name)
+    }
+    app.id = serviceConfig.ID
 
-	if dep == nil {
-		dep = env.ServiceDependencies()
-	}
+    if dep == nil {
+        dep = env.ServiceDependencies()
+    }
 
-	if dep != nil {
-		app.logsEngine, err = dep.LogsEngine(ctx, env)
-		if err != nil {
-			return err
-		}
-		app.metricsEngine, err = dep.MetricsEngine(ctx, env)
-		if err != nil {
-			return err
-		}
-		app.tracingEngine, err = dep.TracingEngine(ctx, env)
-		if err != nil {
-			return err
-		}
-	}
+    if dep != nil {
+        app.logsEngine, err = dep.LogsEngine(ctx, env)
+        if err != nil {
+            return err
+        }
+        app.metricsEngine, err = dep.MetricsEngine(ctx, env)
+        if err != nil {
+            return err
+        }
+        app.tracingEngine, err = dep.TracingEngine(ctx, env)
+        if err != nil {
+            return err
+        }
+    }
 
-	if app.logsEngine == nil {
-		app.logsEngine, err = logging.CreateLogsEngine(logging.Logrus, env)
-		if err != nil {
-			return err
-		}
-	}
-	app.log = app.logsEngine.DefaultLogger(nil)
+    if app.logsEngine == nil {
+        app.logsEngine, err = logging.CreateLogsEngine(logging.Logrus, env)
+        if err != nil {
+            return err
+        }
+    }
+    app.log = app.logsEngine.DefaultLogger(nil)
 
-	if app.metricsEngine == nil {
-		app.metricsEngine, err = telemetry.CreatePrometheusMetricsEngine(env)
-		if err != nil {
-			return err
-		}
-	}
-	app.metrics = app.metricsEngine.Metrics()
+    if app.metricsEngine == nil {
+        app.metricsEngine, err = telemetry.CreatePrometheusMetricsEngine(env)
+        if err != nil {
+            return err
+        }
+    }
+    app.metrics = app.metricsEngine.Metrics()
 
-	if app.tracingEngine == nil {
-		app.tracingEngine, err = telemetry.CreateStdoutTracingEngine(env)
-		if err != nil {
-			return err
-		}
-	}
+    if app.tracingEngine == nil {
+        app.tracingEngine, err = telemetry.CreateStdoutTracingEngine(env)
+        if err != nil {
+            return err
+        }
+    }
 
-	infoGauge, err := app.metrics.Scope("service", metrics.Labels{
-		"service":     serviceConfig.Name,
-		"environment": string(serviceConfig.Environment),
-	}).Gauge("info", "Service information (value is always 1)", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create service_info gauge: %w", err)
-	}
-	infoGauge.Set(1)
+    infoGauge, err := app.metrics.Scope("service", metrics.Labels{
+        "service":     serviceConfig.Name,
+        "environment": string(serviceConfig.Environment),
+    }).Gauge("info", "Service information (value is always 1)", nil)
+    if err != nil {
+        return fmt.Errorf("failed to create service_info gauge: %w", err)
+    }
+    infoGauge.Set(1)
 
-	app.streams = make(map[int]RuntimeStream)
-	app.endpointConsumers = make(map[int]RuntimeEndpointConsumer)
-	app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
-	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
+    app.streams = make(map[int]RuntimeStream)
+    app.endpointConsumers = make(map[int]RuntimeEndpointConsumer)
+    app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
+    app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 
-	app.dataSources = make(map[int]DataSource)
-	app.dataSinks = make(map[int]DataSink)
+    app.dataSources = make(map[int]DataSource)
+    app.dataSinks = make(map[int]DataSink)
 
-	if dep != nil {
-		app.delayPool, err = dep.DelayPool(ctx, env)
-		if err != nil {
-			return err
-		}
-	}
-	if app.delayPool == nil {
-		app.delayPool, err = pool.MakeGoroutineDelayTaskPool(env)
-		if err != nil {
-			return err
-		}
-	}
-	app.taskPools = make(map[string]pool.TaskPool)
-	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
+    if dep != nil {
+        app.delayPool, err = dep.DelayPool(ctx, env)
+        if err != nil {
+            return err
+        }
+    }
+    if app.delayPool == nil {
+        app.delayPool, err = pool.MakeDelayTaskPool(env)
+        if err != nil {
+            return err
+        }
+    }
+    app.taskPools = make(map[string]pool.TaskPool)
+    app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
 
-	makeTaskPool := func(callSemantics config.CallSemanticsConfig) error {
-		switch cs := callSemantics.(type) {
-		case *config.FunctionCallSemanticsConfig: // skip
-		case *config.TaskPoolCallSemanticsConfig:
-			poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
-			if poolConfig == nil {
-				poolConfig = &config.PoolConfig{
-					Name:           cs.PoolName,
-					ExecutorsCount: 1,
-					Properties:     nil,
-				}
-			}
-			if _, ok := app.taskPools[poolConfig.Name]; !ok {
-				p, err := pool.MakeTaskPool(env, poolConfig)
-				if err != nil {
-					return err
-				}
-				app.taskPools[poolConfig.Name] = p
-			}
-		case *config.PriorityTaskPoolCallSemanticsConfig:
-			poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
-			if poolConfig == nil {
-				poolConfig = &config.PoolConfig{
-					Name:           cs.PoolName,
-					ExecutorsCount: 1,
-					Properties:     nil,
-				}
-			}
-			if _, ok := app.priorityTaskPools[poolConfig.Name]; !ok {
-				p, err := pool.MakePriorityTaskPool(env, poolConfig)
-				if err != nil {
-					return err
-				}
-				app.priorityTaskPools[poolConfig.Name] = p
-			}
-		}
-		return nil
-	}
+    makeTaskPool := func(callSemantics config.CallSemanticsConfig) error {
+        switch cs := callSemantics.(type) {
+        case *config.FunctionCallSemanticsConfig: // skip
+        case *config.TaskPoolCallSemanticsConfig:
+            poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
+            if poolConfig == nil {
+                poolConfig = &config.PoolConfig{
+                    Name:           cs.PoolName,
+                    ExecutorsCount: 1,
+                    Properties:     nil,
+                }
+            }
+            if _, ok := app.taskPools[poolConfig.Name]; !ok {
+                p, err := pool.MakeTaskPool(env, poolConfig)
+                if err != nil {
+                    return err
+                }
+                app.taskPools[poolConfig.Name] = p
+            }
+        case *config.PriorityTaskPoolCallSemanticsConfig:
+            poolConfig := runtimeConfig.GetPoolByName(cs.PoolName)
+            if poolConfig == nil {
+                poolConfig = &config.PoolConfig{
+                    Name:           cs.PoolName,
+                    ExecutorsCount: 1,
+                    Properties:     nil,
+                }
+            }
+            if _, ok := app.priorityTaskPools[poolConfig.Name]; !ok {
+                p, err := pool.MakePriorityTaskPool(env, poolConfig)
+                if err != nil {
+                    return err
+                }
+                app.priorityTaskPools[poolConfig.Name] = p
+            }
+        }
+        return nil
+    }
 
-	if serviceConfig.DefaultCallSemantics != nil {
-		callSemantics := serviceConfig.DefaultCallSemantics.Get()
-		if callSemantics != nil {
-			if err = makeTaskPool(callSemantics); err != nil {
-				return err
-			}
-		}
-	}
+    if serviceConfig.DefaultCallSemantics != nil {
+        callSemantics := serviceConfig.DefaultCallSemantics.Get()
+        if callSemantics != nil {
+            if err = makeTaskPool(callSemantics); err != nil {
+                return err
+            }
+        }
+    }
 
-	for _, link := range runtimeConfig.GetConfig().GetLinks() {
-		callSemantics := link.GetCallSemantics()
-		if callSemantics != nil {
-			if err = makeTaskPool(callSemantics); err != nil {
-				return err
-			}
-		}
-	}
+    for _, link := range runtimeConfig.GetConfig().GetLinks() {
+        callSemantics := link.GetCallSemantics()
+        if callSemantics != nil {
+            if err = makeTaskPool(callSemantics); err != nil {
+                return err
+            }
+        }
+    }
 
-	if !app.environment.HasCustomHTTPServer() {
-		app.mux = http.NewServeMux()
-	}
+    if !app.environment.HasCustomHTTPServer() {
+        app.mux = http.NewServeMux()
+    }
 
-	return env.ServiceInit()
+    return env.ServiceInit()
 }
 
 func (app *ServiceApp) HasCustomHTTPServer() bool {
-	return false
+    return false
 }
 
 func (app *ServiceApp) GetDataSource(id int) DataSource {
-	return app.dataSources[id]
+    return app.dataSources[id]
 }
 
 func (app *ServiceApp) AddDataSource(dataSource DataSource) {
-	app.dataSources[dataSource.GetID()] = dataSource
+    app.dataSources[dataSource.GetID()] = dataSource
 }
 
 func (app *ServiceApp) GetDataSink(id int) DataSink {
-	return app.dataSinks[id]
+    return app.dataSinks[id]
 }
 
-func (app *ServiceApp) CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage {
-	return nil
+func (app *ServiceApp) CreateKeyValueJoinStorage(_ api.JoinStorageType, _ store.JoinStorageConfig, _ Stream) store.Storage {
+    return nil
 }
 
 func (app *ServiceApp) AddDataSink(dataSink DataSink) {
-	app.dataSinks[dataSink.GetID()] = dataSink
+    app.dataSinks[dataSink.GetID()] = dataSink
 }
 
 func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, error) {
-	if ser, err := app.environment.GetSerde(valueType); err != nil {
-		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
-	} else if ser != nil {
-		return ser, nil
-	}
+    if ser, err := app.environment.GetSerde(valueType); err != nil {
+        return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
+    } else if ser != nil {
+        return ser, nil
+    }
 
-	if ser, err := serde.MakeDefaultSerde(valueType); err != nil {
-		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
-	} else if ser != nil {
-		return ser, nil
-	}
+    if ser, err := serde.MakeDefaultSerde(valueType); err != nil {
+        return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
+    } else if ser != nil {
+        return ser, nil
+    }
 
-	return nil, fmt.Errorf("getSerializer error. Unsupported type: %s", valueType.Name())
+    return nil, fmt.Errorf("getSerializer error. Unsupported type: %s", valueType.Name())
 }
 
 func (app *ServiceApp) Start(ctx context.Context) error {
 
-	serviceConfig := app.environment.ServiceConfig()
+    serviceConfig := app.environment.ServiceConfig()
 
-	for _, stream := range app.streams {
-		if err := stream.Build(); err != nil {
-			return err
-		}
-	}
+    for _, stream := range app.streams {
+        if err := stream.Build(); err != nil {
+            return err
+        }
+    }
 
-	for _, v := range app.dataSources {
-		if err := v.Start(ctx); err != nil {
-			return err
-		}
-	}
-	for _, v := range app.dataSinks {
-		if err := v.Start(ctx); err != nil {
-			return err
-		}
-	}
-	for _, v := range app.storages {
-		if err := v.Start(ctx); err != nil {
-			return err
-		}
-	}
-	if err := app.delayPool.Start(ctx); err != nil {
-		return err
-	}
-	for _, taskPool := range app.taskPools {
-		if err := taskPool.Start(ctx); err != nil {
-			return err
-		}
-	}
-	for _, priorityTaskPool := range app.priorityTaskPools {
-		if err := priorityTaskPool.Start(ctx); err != nil {
-			return err
-		}
-	}
-	for _, component := range app.components {
-		if err := component.Start(ctx); err != nil {
-			return err
-		}
-	}
+    for _, v := range app.dataSources {
+        if err := v.Start(ctx); err != nil {
+            return err
+        }
+    }
+    for _, v := range app.dataSinks {
+        if err := v.Start(ctx); err != nil {
+            return err
+        }
+    }
+    for _, v := range app.storages {
+        if err := v.Start(ctx); err != nil {
+            return err
+        }
+    }
+    if err := app.delayPool.Start(ctx); err != nil {
+        return err
+    }
+    for _, taskPool := range app.taskPools {
+        if err := taskPool.Start(ctx); err != nil {
+            return err
+        }
+    }
+    for _, priorityTaskPool := range app.priorityTaskPools {
+        if err := priorityTaskPool.Start(ctx); err != nil {
+            return err
+        }
+    }
+    for _, component := range app.components {
+        if err := component.Start(ctx); err != nil {
+            return err
+        }
+    }
 
-	if len(serviceConfig.StatusHandler) > 0 {
-		statusPath := "/" + strings.TrimPrefix(serviceConfig.StatusHandler, "/")
-		app.environment.RegisterHTTPHandler(statusPath, http.HandlerFunc(app.statusHandler))
-		app.environment.RegisterHTTPHandler(statusPath+"/data", http.HandlerFunc(app.dataHandler))
-		app.environment.RegisterHTTPHandler(statusPath+"/graph", http.HandlerFunc(app.graphHandler))
-		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.js", http.HandlerFunc(app.visJSHandler))
-		app.environment.RegisterHTTPHandler(statusPath+"/vis.min.css", http.HandlerFunc(app.visCSSHandler))
-	}
+    if len(serviceConfig.StatusHandler) > 0 {
+        statusPath := "/" + strings.TrimPrefix(serviceConfig.StatusHandler, "/")
+        app.environment.RegisterHTTPHandler(statusPath, http.HandlerFunc(app.statusHandler))
+        app.environment.RegisterHTTPHandler(statusPath+"/data", http.HandlerFunc(app.dataHandler))
+        app.environment.RegisterHTTPHandler(statusPath+"/graph", http.HandlerFunc(app.graphHandler))
+        app.environment.RegisterHTTPHandler(statusPath+"/vis.min.js", http.HandlerFunc(app.visJSHandler))
+        app.environment.RegisterHTTPHandler(statusPath+"/vis.min.css", http.HandlerFunc(app.visCSSHandler))
+    }
 
-	if len(serviceConfig.MetricsHandler) > 0 && app.metricsEngine.HTTPMetricsHandler() != nil {
-		metricsPath := "/" + strings.TrimPrefix(serviceConfig.MetricsHandler, "/")
-		app.environment.RegisterHTTPHandler(metricsPath, app.metricsEngine.HTTPMetricsHandler())
-	}
+    if len(serviceConfig.MetricsHandler) > 0 && app.metricsEngine.HTTPMetricsHandler() != nil {
+        metricsPath := "/" + strings.TrimPrefix(serviceConfig.MetricsHandler, "/")
+        app.environment.RegisterHTTPHandler(metricsPath, app.metricsEngine.HTTPMetricsHandler())
+    }
 
-	if app.mux != nil {
-		var handler http.Handler = app.mux
-		if app.metricsEngine != nil {
-			handler = app.metricsEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
-		}
-		if app.tracingEngine != nil {
-			handler = app.tracingEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
-			inner := handler
-			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("X-Trace") != "" {
-					r = r.WithContext(tracing.EnableSampling(r.Context()))
-				}
-				inner.ServeHTTP(w, r)
-			})
-		}
-		addr := fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort)
-		app.httpServerDone = make(chan struct{})
-		app.httpServer = &http.Server{Handler: handler, Addr: addr}
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return err
-		}
-		go func() {
-			app.environment.Log().Info(ctx, "Http service listening", log.Str("service", serviceConfig.Name), log.Any("addr", app.httpServer.Addr))
-			err := app.httpServer.Serve(ln)
-			if !errors.Is(err, http.ErrServerClosed) {
-				panic(err)
-			}
-			app.httpServerDone <- struct{}{}
-		}()
-	}
+    if app.mux != nil {
+        var handler http.Handler = app.mux
+        if app.metricsEngine != nil {
+            handler = app.metricsEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
+        }
+        if app.tracingEngine != nil {
+            handler = app.tracingEngine.HTTPServerHandler(handler, ToSnakeCase(serviceConfig.Name))
+            inner := handler
+            handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                if r.Header.Get("X-Trace") != "" {
+                    r = r.WithContext(tracing.EnableSampling(r.Context()))
+                }
+                inner.ServeHTTP(w, r)
+            })
+        }
+        addr := fmt.Sprintf("%s:%d", serviceConfig.HttpHost, serviceConfig.HttpPort)
+        app.httpServerDone = make(chan struct{})
+        app.httpServer = &http.Server{Handler: handler, Addr: addr}
+        ln, err := net.Listen("tcp", addr)
+        if err != nil {
+            return err
+        }
+        go func() {
+            app.environment.Log().Info(ctx, "Http service listening", log.Str("service", serviceConfig.Name), log.Any("addr", app.httpServer.Addr))
+            err := app.httpServer.Serve(ln)
+            if !errors.Is(err, http.ErrServerClosed) {
+                panic(err)
+            }
+            app.httpServerDone <- struct{}{}
+        }()
+    }
 
-	return nil
+    return nil
 }
 
 func (app *ServiceApp) Release() {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {
-	serviceConfig := app.ServiceConfig()
+    serviceConfig := app.ServiceConfig()
 
-	wg := sync.WaitGroup{}
+    wg := sync.WaitGroup{}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		app.loader.Stop(ctx)
-	}()
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        app.loader.Stop(ctx)
+    }()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		app.delayPool.Stop(ctx)
-	}()
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        app.delayPool.Stop(ctx)
+    }()
 
-	for _, v := range app.taskPools {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
+    for _, v := range app.taskPools {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            v.Stop(ctx)
+        }()
+    }
 
-	for _, v := range app.priorityTaskPools {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
+    for _, v := range app.priorityTaskPools {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            v.Stop(ctx)
+        }()
+    }
 
-	for _, v := range app.components {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
+    for _, v := range app.components {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            v.Stop(ctx)
+        }()
+    }
 
-	for _, v := range app.dataSources {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
+    for _, v := range app.dataSources {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            v.Stop(ctx)
+        }()
+    }
 
-	if app.httpServer != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			go func() {
-				if err := app.httpServer.Shutdown(ctx); err != nil {
-					app.environment.Log().Warn(ctx, "server shutdown", log.Err(err))
-				}
-			}()
-			select {
-			case <-app.httpServerDone:
-			case <-ctx.Done():
-				app.environment.Log().Warn(ctx, "monitoring server stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
-			}
-		}()
-	}
+    if app.httpServer != nil {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            go func() {
+                if err := app.httpServer.Shutdown(ctx); err != nil {
+                    app.environment.Log().Warn(ctx, "server shutdown", log.Err(err))
+                }
+            }()
+            select {
+            case <-app.httpServerDone:
+            case <-ctx.Done():
+                app.environment.Log().Warn(ctx, "monitoring server stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+            }
+        }()
+    }
 
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
+    done := make(chan struct{})
+    go func() {
+        wg.Wait()
+        close(done)
+    }()
 
-	timeout := false
+    timeout := false
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-		timeout = true
-		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
-	}
+    select {
+    case <-done:
+    case <-ctx.Done():
+        timeout = true
+        app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+    }
 
-	if !timeout {
-		wg = sync.WaitGroup{}
+    if !timeout {
+        wg = sync.WaitGroup{}
 
-		for _, v := range app.dataSinks {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				v.Stop(ctx)
-			}()
-		}
+        for _, v := range app.dataSinks {
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                v.Stop(ctx)
+            }()
+        }
 
-		done := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
+        done := make(chan struct{})
+        go func() {
+            wg.Wait()
+            close(done)
+        }()
 
-		select {
-		case <-done:
-		case <-ctx.Done():
-			app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
-		}
-	}
+        select {
+        case <-done:
+        case <-ctx.Done():
+            app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+        }
+    }
 
-	if err := app.metricsEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "metrics engine shutdown", log.Err(err))
-	}
-	if err := app.tracingEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "tracing engine shutdown", log.Err(err))
-	}
-	if err := app.logsEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "logs engine shutdown", log.Err(err))
-	}
+    if err := app.metricsEngine.Shutdown(ctx); err != nil {
+        app.environment.Log().Warn(ctx, "metrics engine shutdown", log.Err(err))
+    }
+    if err := app.tracingEngine.Shutdown(ctx); err != nil {
+        app.environment.Log().Warn(ctx, "tracing engine shutdown", log.Err(err))
+    }
+    if err := app.logsEngine.Shutdown(ctx); err != nil {
+        app.environment.Log().Warn(ctx, "logs engine shutdown", log.Err(err))
+    }
 }
 
 func (app *ServiceApp) Delay(ctx context.Context, duration time.Duration, f func()) error {
-	return app.delayPool.Delay(ctx, duration, f)
+    return app.delayPool.Delay(ctx, duration, f)
 }
 
 func (app *ServiceApp) GetTaskPool(name string) pool.TaskPool {
-	return app.taskPools[name]
+    return app.taskPools[name]
 }
 
 func (app *ServiceApp) GetPriorityTaskPool(name string) pool.PriorityTaskPool {
-	return app.priorityTaskPools[name]
+    return app.priorityTaskPools[name]
 }

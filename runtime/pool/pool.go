@@ -40,10 +40,6 @@ func MakeDelayTaskPool(env environment.ServiceEnvironment) (DelayPool, error) {
 	return makeDelayPool(env)
 }
 
-func MakeGoroutineDelayTaskPool(env environment.ServiceEnvironment) (DelayPool, error) {
-	return makeGoroutineDelayPool(env)
-}
-
 func MakePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
 	return makePriorityTaskPool(env, poolConfig)
 }

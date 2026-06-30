@@ -11,15 +11,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"math/bits"
 	"reflect"
 	"slices"
 
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 )
 
-const uintSize = bits.UintSize / 8
-const maxSizeLength = uintSize
+const sizeBytes = 8
+const maxSizeLength = sizeBytes
 
 func fixedSizeTypeDataSize(data any) int {
 	switch data.(type) {
@@ -36,23 +35,15 @@ func fixedSizeTypeDataSize(data any) int {
 }
 
 func setSize(data []byte, size int) int {
-	if uintSize == 4 {
-		binary.BigEndian.PutUint32(data, uint32(size))
-	} else {
-		binary.BigEndian.PutUint64(data, uint64(size))
-	}
-	return uintSize
+	binary.BigEndian.PutUint64(data, uint64(size))
+	return sizeBytes
 }
 
 func getSize(data []byte) (int, int) {
-	if len(data) < uintSize {
+	if len(data) < sizeBytes {
 		return 0, 0
 	}
-	if uintSize == 4 {
-		return int(binary.BigEndian.Uint32(data)), 4
-	} else {
-		return int(binary.BigEndian.Uint64(data)), 8
-	}
+	return int(binary.BigEndian.Uint64(data)), sizeBytes
 }
 
 type streamSerde[T any] struct {
@@ -452,21 +443,14 @@ func (s *IntArraySerde) DeserializeObj(data []byte) (interface{}, error) {
 
 func (s *IntArraySerde) Serialize(value []int, b []byte) ([]byte, error) {
 	length := len(value)
-	b = slices.Grow(b, maxSizeLength+length*uintSize)
+	b = slices.Grow(b, maxSizeLength+length*sizeBytes)
 	offset := len(b)
-	b = b[:offset+maxSizeLength+length*uintSize]
+	b = b[:offset+maxSizeLength+length*sizeBytes]
 	setSize(b[offset:offset+maxSizeLength], length)
 	pos := offset + maxSizeLength
-	if uintSize == 4 {
-		for _, v := range value {
-			binary.BigEndian.PutUint32(b[pos:pos+uintSize], uint32(v)^0x80000000)
-			pos += uintSize
-		}
-	} else {
-		for _, v := range value {
-			binary.BigEndian.PutUint64(b[pos:pos+uintSize], uint64(v)^0x8000000000000000)
-			pos += uintSize
-		}
+	for _, v := range value {
+		binary.BigEndian.PutUint64(b[pos:pos+sizeBytes], uint64(v)^0x8000000000000000)
+		pos += sizeBytes
 	}
 	return b, nil
 }
@@ -476,20 +460,13 @@ func (s *IntArraySerde) Deserialize(data []byte) ([]int, error) {
 	if n == 0 {
 		return nil, fmt.Errorf("IntArraySerde deserialization error (invalid length data)")
 	}
-	if len(data) < uintSize*length+n {
+	if len(data) < sizeBytes*length+n {
 		return nil, fmt.Errorf("IntArraySerde deserialization error (invalid data)")
 	}
 	values := make([]int, length)
-	if uintSize == 4 {
-		for i := 0; i < length; i++ {
-			values[i] = int(int32(binary.BigEndian.Uint32(data[n:]) ^ 0x80000000))
-			n += 4
-		}
-	} else {
-		for i := 0; i < length; i++ {
-			values[i] = int(int64(binary.BigEndian.Uint64(data[n:]) ^ 0x8000000000000000))
-			n += 8
-		}
+	for i := 0; i < length; i++ {
+		values[i] = int(int64(binary.BigEndian.Uint64(data[n:]) ^ 0x8000000000000000))
+		n += sizeBytes
 	}
 	return values, nil
 }
@@ -515,21 +492,14 @@ func (s *UIntArraySerde) DeserializeObj(data []byte) (interface{}, error) {
 
 func (s *UIntArraySerde) Serialize(value []uint, b []byte) ([]byte, error) {
 	length := len(value)
-	b = slices.Grow(b, maxSizeLength+length*uintSize)
+	b = slices.Grow(b, maxSizeLength+length*sizeBytes)
 	offset := len(b)
-	b = b[:offset+maxSizeLength+length*uintSize]
+	b = b[:offset+maxSizeLength+length*sizeBytes]
 	setSize(b[offset:offset+maxSizeLength], length)
 	pos := offset + maxSizeLength
-	if uintSize == 4 {
-		for _, v := range value {
-			binary.BigEndian.PutUint32(b[pos:pos+uintSize], uint32(v))
-			pos += uintSize
-		}
-	} else {
-		for _, v := range value {
-			binary.BigEndian.PutUint64(b[pos:pos+uintSize], uint64(v))
-			pos += uintSize
-		}
+	for _, v := range value {
+		binary.BigEndian.PutUint64(b[pos:pos+sizeBytes], uint64(v))
+		pos += sizeBytes
 	}
 	return b, nil
 }
@@ -539,20 +509,13 @@ func (s *UIntArraySerde) Deserialize(data []byte) ([]uint, error) {
 	if n == 0 {
 		return nil, fmt.Errorf("UIntArraySerde deserialization error (invalid length data)")
 	}
-	if len(data) < uintSize*length+n {
+	if len(data) < sizeBytes*length+n {
 		return nil, fmt.Errorf("UIntArraySerde deserialization error (invalid data)")
 	}
 	values := make([]uint, length)
-	if uintSize == 4 {
-		for i := 0; i < length; i++ {
-			values[i] = uint(binary.BigEndian.Uint32(data[n:]))
-			n += 4
-		}
-	} else {
-		for i := 0; i < length; i++ {
-			values[i] = uint(binary.BigEndian.Uint64(data[n:]))
-			n += 8
-		}
+	for i := 0; i < length; i++ {
+		values[i] = uint(binary.BigEndian.Uint64(data[n:]))
+		n += sizeBytes
 	}
 	return values, nil
 }
@@ -673,26 +636,18 @@ func (s *UIntSerde) DeserializeObj(data []byte) (interface{}, error) {
 }
 
 func (s *UIntSerde) Serialize(value uint, b []byte) ([]byte, error) {
-	b = slices.Grow(b, uintSize)
+	b = slices.Grow(b, sizeBytes)
 	offset := len(b)
-	b = b[:offset+uintSize]
-	if uintSize == 4 {
-		binary.BigEndian.PutUint32(b[offset:], uint32(value))
-	} else {
-		binary.BigEndian.PutUint64(b[offset:], uint64(value))
-	}
+	b = b[:offset+sizeBytes]
+	binary.BigEndian.PutUint64(b[offset:], uint64(value))
 	return b, nil
 }
 
 func (s *UIntSerde) Deserialize(data []byte) (uint, error) {
-	if len(data) < uintSize {
+	if len(data) < sizeBytes {
 		return 0, fmt.Errorf("deserialization error UIntSerde.Deserialize")
 	}
-	if uintSize == 4 {
-		return uint(binary.BigEndian.Uint32(data)), nil
-	} else {
-		return uint(binary.BigEndian.Uint64(data)), nil
-	}
+	return uint(binary.BigEndian.Uint64(data)), nil
 }
 
 type UInt8Serde struct {
@@ -847,26 +802,18 @@ func (s *IntSerde) DeserializeObj(data []byte) (interface{}, error) {
 }
 
 func (s *IntSerde) Serialize(value int, b []byte) ([]byte, error) {
-	b = slices.Grow(b, uintSize)
+	b = slices.Grow(b, sizeBytes)
 	offset := len(b)
-	b = b[:offset+uintSize]
-	if uintSize == 4 {
-		binary.BigEndian.PutUint32(b[offset:], uint32(value)^(1<<31))
-	} else {
-		binary.BigEndian.PutUint64(b[offset:], uint64(value)^(1<<63))
-	}
+	b = b[:offset+sizeBytes]
+	binary.BigEndian.PutUint64(b[offset:], uint64(value)^(1<<63))
 	return b, nil
 }
 
 func (s *IntSerde) Deserialize(data []byte) (int, error) {
-	if len(data) < uintSize {
+	if len(data) < sizeBytes {
 		return 0, fmt.Errorf("deserialization error IntSerde.Deserialize")
 	}
-	if uintSize == 4 {
-		return int(int32(binary.BigEndian.Uint32(data) ^ (1 << 31))), nil
-	} else {
-		return int(int64(binary.BigEndian.Uint64(data) ^ (1 << 63))), nil
-	}
+	return int(int64(binary.BigEndian.Uint64(data) ^ (1 << 63))), nil
 }
 
 type Int8Serde struct {

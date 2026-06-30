@@ -160,6 +160,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 		}
 		called = true
 		started := make(chan struct{})
+		startedCh := started // captured by outer goroutine; never written by inner goroutine
 		go func() {
 			ticker := time.NewTicker(time.Second)
 			defer ticker.Stop()
@@ -244,7 +245,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 			}
 		}()
-		<-started
+		<-startedCh
 	})
 	if !called {
 		p.lock.Lock()

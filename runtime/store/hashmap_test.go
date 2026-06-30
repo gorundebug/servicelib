@@ -399,15 +399,18 @@ func TestRotate_DecrementsGaugeForEvictedItems(t *testing.T) {
 	s, gauge := makeStorage(t, time.Hour, false)
 	defer s.Stop(context.Background())
 
-	// Pre-populate storage2 (items evicted on the next rotate).
-	s.storage2["old1"] = &Item{}
-	s.storage2["old2"] = &Item{}
-	gauge.Add(2)
+	// "dup" exists in both storage1 and storage2: the storage2 copy is superseded and evicted.
+	// Items only in storage2 (no duplicate) are rescued, not evicted.
+	s.storage1["dup"] = &Item{}
+	s.storage2["dup"] = &Item{}
+	s.storage2["rescued"] = &Item{}
+	gauge.Add(3) // all three counted
 
 	s.rotate(context.Background())
 
-	if gauge.Value() != 0 {
-		t.Fatalf("gauge should be 0 after evicting 2 items, got %d", gauge.Value())
+	// "dup" from storage2 evicted (key already in storage1); "rescued" survives.
+	if gauge.Value() != 2 {
+		t.Fatalf("gauge should be 2 after evicting 1 duplicate, got %d", gauge.Value())
 	}
 }
 
@@ -660,7 +663,7 @@ func TestRotate_PreservesStorage1ItemsInStorage2(t *testing.T) {
 	s, _ := makeStorage(t, time.Hour, false)
 	defer s.Stop(context.Background())
 
-	s.storage1["live"] = &Item{}
+	s.storage1["live"] = &Item{} // zero deadline = no expiry
 
 	// First rotate: "live" moves to storage2.
 	s.rotate(context.Background())
@@ -668,9 +671,10 @@ func TestRotate_PreservesStorage1ItemsInStorage2(t *testing.T) {
 		t.Fatal("item should be in storage2 after first rotate")
 	}
 
-	// Second rotate: storage2 (with "live") is evicted, storage1 (empty) becomes storage2.
+	// Second rotate: "live" is rescued from storage2 into storage1, then storage1
+	// becomes new storage2 — item survives (RotatingMap semantics, not dropped).
 	s.rotate(context.Background())
-	if _, ok := s.storage2["live"]; ok {
-		t.Fatal("item should be gone after second rotate")
+	if _, ok := s.storage2["live"]; !ok {
+		t.Fatal("item should survive second rotate (rescued from storage2)")
 	}
 }
