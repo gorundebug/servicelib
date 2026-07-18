@@ -10,7 +10,7 @@
          },
          "id": 1,
          "panels": [ ],
-         "title": "Connector Health",
+         "title": "Goroutines & Threads",
          "type": "row"
       },
       {
@@ -20,11 +20,11 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "ops"
+               "unit": "short"
             }
          },
          "gridPos": {
-            "h": 6,
+            "h": 8,
             "w": 12,
             "x": 0,
             "y": 1
@@ -37,12 +37,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "rate(datasource_connector_events_total{job=~\"$job\", connector=~\"$connector\", event=\"stop_timeout\"}[$__rate_interval])",
+               "expr": "go_goroutines{job=~\"$job\"}",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}}"
+               "legendFormat": "{{job}}"
             }
          ],
-         "title": "Connector Stop Timeouts",
+         "title": "Goroutines",
          "type": "timeseries"
       },
       {
@@ -56,19 +56,12 @@
             }
          },
          "gridPos": {
-            "h": 6,
+            "h": 8,
             "w": 12,
             "x": 12,
             "y": 1
          },
          "id": 3,
-         "options": {
-            "reduceOptions": {
-               "calcs": [
-                  "lastNotNull"
-               ]
-            }
-         },
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -76,13 +69,13 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "sum(datasource_connector_events_total{job=~\"$job\", connector=~\"$connector\", event=\"stop_timeout\"}) by (connector)",
+               "expr": "go_threads{job=~\"$job\"}",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}}"
+               "legendFormat": "{{job}}"
             }
          ],
-         "title": "Connector Stop Timeouts (total)",
-         "type": "stat"
+         "title": "OS Threads",
+         "type": "timeseries"
       },
       {
          "collapsed": false,
@@ -90,11 +83,11 @@
             "h": 1,
             "w": 0,
             "x": 24,
-            "y": 7
+            "y": 9
          },
          "id": 4,
          "panels": [ ],
-         "title": "Endpoint Throughput",
+         "title": "Memory",
          "type": "row"
       },
       {
@@ -104,14 +97,14 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "ops"
+               "unit": "bytes"
             }
          },
          "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 8
+            "y": 10
          },
          "id": 5,
          "pluginVersion": "v11.0.0",
@@ -121,12 +114,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "rate(datasource_endpoint_messages_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])",
+               "expr": "go_memstats_heap_alloc_bytes{job=~\"$job\"}",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "{{job}}"
             }
          ],
-         "title": "Message Rate",
+         "title": "Heap Allocated",
          "type": "timeseries"
       },
       {
@@ -136,14 +129,14 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "short"
+               "unit": "bytes"
             }
          },
          "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 8
+            "y": 10
          },
          "id": 6,
          "pluginVersion": "v11.0.0",
@@ -153,26 +146,22 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "datasource_endpoint_active_requests{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}",
+               "expr": "go_memstats_heap_inuse_bytes{job=~\"$job\"}",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "in-use {{job}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "go_memstats_heap_idle_bytes{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "idle {{job}}"
             }
          ],
-         "title": "Active Requests",
+         "title": "Heap In Use vs Idle",
          "type": "timeseries"
-      },
-      {
-         "collapsed": false,
-         "gridPos": {
-            "h": 1,
-            "w": 0,
-            "x": 24,
-            "y": 16
-         },
-         "id": 7,
-         "panels": [ ],
-         "title": "Pending Requests",
-         "type": "row"
       },
       {
          "datasource": {
@@ -181,14 +170,46 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "short"
+               "unit": "bytes"
             }
          },
          "gridPos": {
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 17
+            "y": 18
+         },
+         "id": 7,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "go_memstats_heap_sys_bytes{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Heap Reserved from OS (sys)",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 18
          },
          "id": 8,
          "pluginVersion": "v11.0.0",
@@ -198,307 +219,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "datasource_endpoint_pending_requests{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}",
+               "expr": "go_memstats_stack_inuse_bytes{job=~\"$job\"}",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "{{job}}"
             }
          ],
-         "title": "Pending Requests",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "s"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 17
-         },
-         "id": 9,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "datasource_endpoint_pending_oldest_age_seconds{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Oldest Pending Request Age",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "ops"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 25
-         },
-         "id": 10,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"late_result\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Late Results Rate",
-         "type": "timeseries"
-      },
-      {
-         "collapsed": false,
-         "gridPos": {
-            "h": 1,
-            "w": 0,
-            "x": 12,
-            "y": 33
-         },
-         "id": 11,
-         "panels": [ ],
-         "title": "Request Latency",
-         "type": "row"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "s"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 0,
-            "y": 34
-         },
-         "id": 12,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "histogram_quantile(0.5, sum(rate(datasource_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
-               "intervalFactor": 2,
-               "legendFormat": "p50 {{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Request Duration p50",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "s"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 34
-         },
-         "id": 13,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "histogram_quantile(0.95, sum(rate(datasource_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
-               "intervalFactor": 2,
-               "legendFormat": "p95 {{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Request Duration p95",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "s"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
-            "y": 34
-         },
-         "id": 14,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "histogram_quantile(0.99, sum(rate(datasource_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
-               "intervalFactor": 2,
-               "legendFormat": "p99 {{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Request Duration p99",
-         "type": "timeseries"
-      },
-      {
-         "collapsed": false,
-         "gridPos": {
-            "h": 1,
-            "w": 0,
-            "x": 24,
-            "y": 42
-         },
-         "id": 15,
-         "panels": [ ],
-         "title": "Error Events",
-         "type": "row"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "ops"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 43
-         },
-         "id": 16,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Request Errors Rate",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "ops"
-            }
-         },
-         "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
-            "y": 43
-         },
-         "id": 17,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"missing_stream_id\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "missing_stream_id {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"late_result\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "late_result {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"unknown_message_id\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "unknown_msg_id {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"duplicate_message_id\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "duplicate_msg_id {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"invalid_http_method\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "invalid_http_method {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"begin_request_failed\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "begin_request_failed {{connector}}/{{endpoint}}"
-            }
-         ],
-         "title": "Protocol / Logic Event Rates",
+         "title": "Stack In Use",
          "type": "timeseries"
       },
       {
@@ -512,12 +238,385 @@
             }
          },
          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 26
+         },
+         "id": 9,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "go_memstats_heap_objects{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Heap Objects",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "Bps"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 26
+         },
+         "id": 10,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(go_memstats_alloc_bytes_total{job=~\"$job\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Total Alloc Rate",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 34
+         },
+         "id": 11,
+         "panels": [ ],
+         "title": "Garbage Collection",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 35
+         },
+         "id": 12,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.50, rate(go_gc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval]))",
+               "intervalFactor": 2,
+               "legendFormat": "p50 {{job}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.75, rate(go_gc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval]))",
+               "intervalFactor": 2,
+               "legendFormat": "p75 {{job}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.99, rate(go_gc_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval]))",
+               "intervalFactor": 2,
+               "legendFormat": "p99 {{job}}"
+            }
+         ],
+         "title": "GC Pause Duration p50 / p75 / p99",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 35
+         },
+         "id": 13,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(go_gc_duration_seconds_count{job=~\"$job\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "GC Runs per Second",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 43
+         },
+         "id": 14,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "go_memstats_next_gc_bytes{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Next GC Target",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "percentunit"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 43
+         },
+         "id": 15,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "go_memstats_gc_cpu_fraction{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "GC CPU Fraction",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 51
+         },
+         "id": 16,
+         "panels": [ ],
+         "title": "Process",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s/s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 52
+         },
+         "id": 17,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "CPU Usage",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 52
+         },
+         "id": 18,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "process_resident_memory_bytes{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Resident Memory (RSS)",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 60
+         },
+         "id": 19,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "process_virtual_memory_bytes{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            }
+         ],
+         "title": "Virtual Memory",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 60
+         },
+         "id": 20,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "process_open_fds{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "{{job}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "process_max_fds{job=~\"$job\"}",
+               "intervalFactor": 2,
+               "legendFormat": "max {{job}}"
+            }
+         ],
+         "title": "Open File Descriptors",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "dateTimeAsLocal"
+            }
+         },
+         "gridPos": {
             "h": 4,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 64
          },
-         "id": 18,
+         "id": 21,
          "options": {
             "reduceOptions": {
                "calcs": [
@@ -532,12 +631,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "sum(datasource_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}) by (connector, endpoint)",
+               "expr": "process_start_time_seconds{job=~\"$job\"} * 1000",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "{{job}}"
             }
          ],
-         "title": "Total Request Errors",
+         "title": "Process Start Time",
          "type": "stat"
       }
    ],
@@ -545,7 +644,8 @@
    "schemaVersion": 39,
    "tags": [
       "servicelib",
-      "datasource"
+      "runtime",
+      "go"
    ],
    "templating": {
       "list": [
@@ -560,36 +660,11 @@
                "type": "prometheus",
                "uid": "$datasource"
             },
-            "includeAll": false,
+            "includeAll": true,
             "label": "Job",
-            "multi": false,
+            "multi": true,
             "name": "job",
-            "query": "label_values(datasource_endpoint_messages_total, job)",
-            "regex": "servicelib",
-            "type": "query"
-         },
-         {
-            "datasource": {
-               "type": "prometheus",
-               "uid": "$datasource"
-            },
-            "includeAll": true,
-            "label": "Connector",
-            "multi": true,
-            "name": "connector",
-            "query": "label_values(datasource_endpoint_messages_total{job=~\"$job\"}, connector)",
-            "type": "query"
-         },
-         {
-            "datasource": {
-               "type": "prometheus",
-               "uid": "$datasource"
-            },
-            "includeAll": true,
-            "label": "Endpoint",
-            "multi": true,
-            "name": "endpoint",
-            "query": "label_values(datasource_endpoint_messages_total{job=~\"$job\", connector=~\"$connector\"}, endpoint)",
+            "query": "label_values(go_goroutines, job)",
             "type": "query"
          }
       ]
@@ -599,6 +674,6 @@
       "to": "now"
    },
    "timezone": "browser",
-   "title": "servicelib / Data Sources",
-   "uid": "servicelib-datasource"
+   "title": "servicelib / Go Runtime & Process",
+   "uid": "servicelib-runtime"
 }

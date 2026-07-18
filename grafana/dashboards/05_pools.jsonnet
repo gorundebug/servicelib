@@ -4,12 +4,18 @@
 //
 //   task_pool (labels: service, name)
 //     task_pool_queue_length{service, name}                       gauge
+//     task_pool_executors_target{service, name}                   gauge
+//     task_pool_executors_allocated{service, name}                gauge
+//     task_pool_executors_busy{service, name}                     gauge
 //     task_pool_tasks_total{service, name}                        counter
 //     task_pool_task_execution_duration_seconds{service, name}    histogram
 //     task_pool_events_total{service, name, event}                counter  event=stop_timeout | task_rejected | task_cancelled
 //
 //   priority_task_pool (labels: service, name)
 //     priority_task_pool_queue_length{service, name}              gauge
+//     priority_task_pool_executors_target{service, name}          gauge
+//     priority_task_pool_executors_allocated{service, name}       gauge
+//     priority_task_pool_executors_busy{service, name}            gauge
 //     priority_task_pool_tasks_total{service, name}               counter
 //     priority_task_pool_task_execution_duration_seconds{...}     histogram
 //     priority_task_pool_events_total{service, name, event}       counter  event=stop_timeout | task_rejected | task_expired
@@ -49,6 +55,22 @@ lib.dashboard(
         lib.promQ(
           'task_pool_queue_length{%s}' % poolFilter,
           '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=8,
+      unit='short',
+    ),
+
+    lib.ts(
+      title='Task Pool — Executor State',
+      targets=[
+        lib.promQ('task_pool_executors_target{%s}' % poolFilter, 'target {{service}} / {{name}}'),
+        lib.promQ('task_pool_executors_allocated{%s}' % poolFilter, 'allocated {{service}} / {{name}}'),
+        lib.promQ('task_pool_executors_busy{%s}' % poolFilter, 'busy {{service}} / {{name}}'),
+        lib.promQ(
+          'clamp_min(task_pool_executors_allocated{%s} - task_pool_executors_busy{%s}, 0)' %
+          [poolFilter, poolFilter],
+          'free {{service}} / {{name}}'
         ),
       ],
       w=12, h=8,
@@ -163,6 +185,22 @@ lib.dashboard(
         lib.promQ(
           'priority_task_pool_queue_length{%s}' % priPoolFilter,
           '{{service}} / {{name}}'
+        ),
+      ],
+      w=12, h=8,
+      unit='short',
+    ),
+
+    lib.ts(
+      title='Priority Task Pool — Executor State',
+      targets=[
+        lib.promQ('priority_task_pool_executors_target{%s}' % priPoolFilter, 'target {{service}} / {{name}}'),
+        lib.promQ('priority_task_pool_executors_allocated{%s}' % priPoolFilter, 'allocated {{service}} / {{name}}'),
+        lib.promQ('priority_task_pool_executors_busy{%s}' % priPoolFilter, 'busy {{service}} / {{name}}'),
+        lib.promQ(
+          'clamp_min(priority_task_pool_executors_allocated{%s} - priority_task_pool_executors_busy{%s}, 0)' %
+          [priPoolFilter, priPoolFilter],
+          'free {{service}} / {{name}}'
         ),
       ],
       w=12, h=8,

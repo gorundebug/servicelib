@@ -38,22 +38,25 @@ type PriorityTaskPool interface {
 }
 
 type PriorityTaskPoolImpl struct {
-	lock                sync.Mutex
-	name                string
-	pq                  *TaskPriorityQueue
-	gaugeQueueLength    metrics.Int64Gauge
-	tasksTotal          metrics.Int64Counter
-	executionDuration   metrics.Float64Histogram
-	stopTimeoutCounter  metrics.Int64Counter
-	taskRejectedCounter metrics.Int64Counter
-	taskExpiredCounter  metrics.Int64Counter
-	wg                  sync.WaitGroup
-	done                bool
-	stop                chan struct{}
-	stopOnce            sync.Once
-	startOnce           sync.Once
-	cond                *sync.Cond
-	environment         environment.ServiceEnvironment
+	lock                    sync.Mutex
+	name                    string
+	pq                      *TaskPriorityQueue
+	gaugeQueueLength        metrics.Int64Gauge
+	gaugeExecutorsTarget    metrics.Int64Gauge
+	gaugeExecutorsAllocated metrics.Int64Gauge
+	gaugeExecutorsBusy      metrics.Int64Gauge
+	tasksTotal              metrics.Int64Counter
+	executionDuration       metrics.Float64Histogram
+	stopTimeoutCounter      metrics.Int64Counter
+	taskRejectedCounter     metrics.Int64Counter
+	taskExpiredCounter      metrics.Int64Counter
+	wg                      sync.WaitGroup
+	done                    bool
+	stop                    chan struct{}
+	stopOnce                sync.Once
+	startOnce               sync.Once
+	cond                    *sync.Cond
+	environment             environment.ServiceEnvironment
 }
 
 func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
@@ -74,6 +77,18 @@ func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config
 	})
 	var err error
 	pool.gaugeQueueLength, err = scope.Gauge("queue_length", "Priority task pool wait queue length", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsTarget, err = scope.Gauge("executors_target", "Desired number of priority task pool executors", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsAllocated, err = scope.Gauge("executors_allocated", "Number of live priority task pool executors", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsBusy, err = scope.Gauge("executors_busy", "Number of priority task pool executors running callbacks", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +231,7 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 				}
 				pRestart = new(bool)
 				executorsCount = executorsCountNew
+				p.gaugeExecutorsTarget.Set(int64(executorsCount))
 
 				p.lock.Lock()
 
@@ -228,9 +244,11 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 
 				for i := 0; i < executorsCount; i++ {
 					p.wg.Add(1)
+					p.gaugeExecutorsAllocated.Inc()
 
 					go func(restart *bool) {
 						defer p.wg.Done()
+						defer p.gaugeExecutorsAllocated.Dec()
 						for {
 							p.lock.Lock()
 							if *restart {
@@ -250,11 +268,15 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 							p.lock.Unlock()
 							stopFn()
 							p.gaugeQueueLength.Dec()
-							startTime := time.Now()
-							runTask(ctx, p.environment, p.name, task.fn)
-							task.fn = nil
-							p.tasksTotal.Inc(ctx)
-							p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+							func() {
+								p.gaugeExecutorsBusy.Inc()
+								defer p.gaugeExecutorsBusy.Dec()
+								startTime := time.Now()
+								runTask(ctx, p.environment, p.name, task.fn)
+								task.fn = nil
+								p.tasksTotal.Inc(ctx)
+								p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+							}()
 						}
 					}(pRestart)
 				}

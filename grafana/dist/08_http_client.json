@@ -10,7 +10,7 @@
          },
          "id": 1,
          "panels": [ ],
-         "title": "Connector Health",
+         "title": "Traffic",
          "type": "row"
       },
       {
@@ -24,8 +24,8 @@
             }
          },
          "gridPos": {
-            "h": 6,
-            "w": 12,
+            "h": 8,
+            "w": 24,
             "x": 0,
             "y": 1
          },
@@ -37,141 +37,25 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "rate(datasink_connector_events_total{job=~\"$job\", connector=~\"$connector\", event=\"stop_timeout\"}[$__rate_interval])",
+               "expr": "rate(http_client_request_duration_seconds_count{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}}"
+               "legendFormat": "{{http_request_method}} → {{server_address}} {{http_response_status_code}}"
             }
          ],
-         "title": "Connector Stop Timeouts",
+         "title": "Request Rate",
          "type": "timeseries"
       },
       {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "short"
-            }
-         },
+         "collapsed": false,
          "gridPos": {
-            "h": 6,
-            "w": 12,
-            "x": 12,
-            "y": 1
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 9
          },
          "id": 3,
-         "options": {
-            "reduceOptions": {
-               "calcs": [
-                  "lastNotNull"
-               ]
-            }
-         },
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "sum(datasink_connector_events_total{job=~\"$job\", connector=~\"$connector\", event=\"stop_timeout\"}) by (connector)",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}}"
-            }
-         ],
-         "title": "Connector Stop Timeouts (total)",
-         "type": "stat"
-      },
-      {
-         "collapsed": false,
-         "gridPos": {
-            "h": 1,
-            "w": 0,
-            "x": 24,
-            "y": 7
-         },
-         "id": 4,
          "panels": [ ],
-         "title": "Endpoint Throughput",
-         "type": "row"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "ops"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 8
-         },
-         "id": 5,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasink_endpoint_messages_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Message Rate",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
-               "unit": "short"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 8
-         },
-         "id": 6,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "datasink_endpoint_active_requests{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}",
-               "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
-            }
-         ],
-         "title": "Active Requests",
-         "type": "timeseries"
-      },
-      {
-         "collapsed": false,
-         "gridPos": {
-            "h": 1,
-            "w": 0,
-            "x": 24,
-            "y": 16
-         },
-         "id": 7,
-         "panels": [ ],
-         "title": "Request Latency",
+         "title": "Latency",
          "type": "row"
       },
       {
@@ -188,9 +72,9 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 17
+            "y": 10
          },
-         "id": 8,
+         "id": 4,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -198,9 +82,9 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "histogram_quantile(0.5, sum(rate(datasink_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "expr": "histogram_quantile(0.50, sum(rate(http_client_request_duration_seconds_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le, server_address, http_request_method))",
                "intervalFactor": 2,
-               "legendFormat": "p50 {{connector}} / {{endpoint}}"
+               "legendFormat": "p50 {{http_request_method}} → {{server_address}}"
             }
          ],
          "title": "Request Duration p50",
@@ -220,9 +104,9 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 17
+            "y": 10
          },
-         "id": 9,
+         "id": 5,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -230,9 +114,9 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "histogram_quantile(0.95, sum(rate(datasink_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "expr": "histogram_quantile(0.95, sum(rate(http_client_request_duration_seconds_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le, server_address, http_request_method))",
                "intervalFactor": 2,
-               "legendFormat": "p95 {{connector}} / {{endpoint}}"
+               "legendFormat": "p95 {{http_request_method}} → {{server_address}}"
             }
          ],
          "title": "Request Duration p95",
@@ -252,9 +136,9 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 17
+            "y": 10
          },
-         "id": 10,
+         "id": 6,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -262,9 +146,9 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "histogram_quantile(0.99, sum(rate(datasink_endpoint_request_duration_seconds_bucket{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\"}[$__rate_interval])) by (le, connector, endpoint))",
+               "expr": "histogram_quantile(0.99, sum(rate(http_client_request_duration_seconds_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le, server_address, http_request_method))",
                "intervalFactor": 2,
-               "legendFormat": "p99 {{connector}} / {{endpoint}}"
+               "legendFormat": "p99 {{http_request_method}} → {{server_address}}"
             }
          ],
          "title": "Request Duration p99",
@@ -276,11 +160,63 @@
             "h": 1,
             "w": 0,
             "x": 24,
-            "y": 25
+            "y": 18
          },
-         "id": 11,
+         "id": 7,
          "panels": [ ],
-         "title": "Error Events",
+         "title": "Latency Heatmap",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 19
+         },
+         "id": 8,
+         "options": {
+            "calculate": false,
+            "color": {
+               "mode": "scheme",
+               "scheme": "Oranges",
+               "steps": 128
+            },
+            "yAxis": {
+               "unit": "s"
+            }
+         },
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "sum(rate(http_client_request_duration_seconds_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "intervalFactor": 2,
+               "legendFormat": "{{le}}"
+            }
+         ],
+         "title": "Request Duration Heatmap",
+         "type": "heatmap"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 29
+         },
+         "id": 9,
+         "panels": [ ],
+         "title": "Errors",
          "type": "row"
       },
       {
@@ -297,9 +233,9 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 26
+            "y": 30
          },
-         "id": 12,
+         "id": 10,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -307,12 +243,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "rate(datasink_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}[$__rate_interval])",
+               "expr": "rate(http_client_request_duration_seconds_count{job=~\"$job\", server_address=~\"$server_address\", http_response_status_code=~\"4..|5..\"}[$__rate_interval])",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "{{http_response_status_code}} {{http_request_method}} → {{server_address}}"
             }
          ],
-         "title": "Request Errors Rate",
+         "title": "Error Rate (4xx + 5xx)",
          "type": "timeseries"
       },
       {
@@ -329,7 +265,52 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 26
+            "y": 30
+         },
+         "id": 11,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(http_client_request_duration_seconds_count{job=~\"$job\", server_address=~\"$server_address\", error_type!=\"\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{error_type}} {{http_request_method}} → {{server_address}}"
+            }
+         ],
+         "title": "Transport Error Rate",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 38
+         },
+         "id": 12,
+         "panels": [ ],
+         "title": "Payload Size",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 39
          },
          "id": 13,
          "pluginVersion": "v11.0.0",
@@ -339,21 +320,12 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "rate(datasink_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"begin_request_failed\"}[$__rate_interval])",
+               "expr": "histogram_quantile(0.95, sum(rate(http_client_request_body_size_bytes_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le, server_address))",
                "intervalFactor": 2,
-               "legendFormat": "begin_request_failed {{connector}}/{{endpoint}}"
-            },
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "rate(datasink_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"late_result\"}[$__rate_interval])",
-               "intervalFactor": 2,
-               "legendFormat": "late_result {{connector}}/{{endpoint}}"
+               "legendFormat": "p95 req → {{server_address}}"
             }
          ],
-         "title": "Other Error Event Rates",
+         "title": "Request Body Size p95",
          "type": "timeseries"
       },
       {
@@ -363,23 +335,16 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "short"
+               "unit": "bytes"
             }
          },
          "gridPos": {
-            "h": 4,
+            "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 30
+            "x": 12,
+            "y": 39
          },
          "id": 14,
-         "options": {
-            "reduceOptions": {
-               "calcs": [
-                  "lastNotNull"
-               ]
-            }
-         },
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -387,20 +352,21 @@
                   "type": "prometheus",
                   "uid": "$datasource"
                },
-               "expr": "sum(datasink_endpoint_events_total{job=~\"$job\", connector=~\"$connector\", endpoint=~\"$endpoint\", event=\"request_error\"}) by (connector, endpoint)",
+               "expr": "histogram_quantile(0.95, sum(rate(http_client_response_body_size_bytes_bucket{job=~\"$job\", server_address=~\"$server_address\"}[$__rate_interval])) by (le, server_address))",
                "intervalFactor": 2,
-               "legendFormat": "{{connector}} / {{endpoint}}"
+               "legendFormat": "p95 resp ← {{server_address}}"
             }
          ],
-         "title": "Total Request Errors",
-         "type": "stat"
+         "title": "Response Body Size p95",
+         "type": "timeseries"
       }
    ],
    "refresh": "30s",
    "schemaVersion": 39,
    "tags": [
       "servicelib",
-      "datasink"
+      "http",
+      "client"
    ],
    "templating": {
       "list": [
@@ -419,7 +385,7 @@
             "label": "Job",
             "multi": false,
             "name": "job",
-            "query": "label_values(datasink_endpoint_messages_total, job)",
+            "query": "label_values(http_client_request_duration_seconds_bucket, job)",
             "regex": "servicelib",
             "type": "query"
          },
@@ -429,22 +395,10 @@
                "uid": "$datasource"
             },
             "includeAll": true,
-            "label": "Connector",
+            "label": "Server_address",
             "multi": true,
-            "name": "connector",
-            "query": "label_values(datasink_endpoint_messages_total{job=~\"$job\"}, connector)",
-            "type": "query"
-         },
-         {
-            "datasource": {
-               "type": "prometheus",
-               "uid": "$datasource"
-            },
-            "includeAll": true,
-            "label": "Endpoint",
-            "multi": true,
-            "name": "endpoint",
-            "query": "label_values(datasink_endpoint_messages_total{job=~\"$job\", connector=~\"$connector\"}, endpoint)",
+            "name": "server_address",
+            "query": "label_values(http_client_request_duration_seconds_bucket{job=~\"$job\"}, server_address)",
             "type": "query"
          }
       ]
@@ -454,6 +408,6 @@
       "to": "now"
    },
    "timezone": "browser",
-   "title": "servicelib / Data Sinks",
-   "uid": "servicelib-datasink"
+   "title": "servicelib / HTTP Client",
+   "uid": "servicelib-http-client"
 }

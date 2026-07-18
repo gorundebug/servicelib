@@ -200,7 +200,7 @@ func MakeConfig() *Config {
 			},
 			InputRequest3: cfg.InputStreamConfig{
 				ID:         inputRequestId3,
-				Name:       "InputRequest",
+				Name:       "InputRequest3",
 				IdService:  incomeServiceId,
 				XPos:       -1,
 				YPos:       36,
@@ -291,13 +291,13 @@ func MakeConfig() *Config {
 			},
 			Sink4: cfg.CustomEndpointConfig{
 				ID:              sink4EndpointId,
-				Name:            "Sink",
+				Name:            "Sink4",
 				IdDataConnector: customSinkConnId,
 				FunctionName:    "SinkFunction",
 			},
 			SinkSync: cfg.CustomEndpointConfig{
 				ID:              sinkSyncEndpointId,
-				Name:            "Sink",
+				Name:            "SinkSync",
 				IdDataConnector: customSinkConnId,
 				FunctionName:    "SinkFunction",
 			},

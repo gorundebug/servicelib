@@ -52,7 +52,7 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "ops"
+               "unit": "short"
             }
          },
          "gridPos": {
@@ -62,6 +62,65 @@
             "y": 1
          },
          "id": 3,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "task_pool_executors_target{service=~\"$service\", name=~\"$pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "target {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "task_pool_executors_allocated{service=~\"$service\", name=~\"$pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "allocated {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "task_pool_executors_busy{service=~\"$service\", name=~\"$pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "busy {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "clamp_min(task_pool_executors_allocated{service=~\"$service\", name=~\"$pool\"} - task_pool_executors_busy{service=~\"$service\", name=~\"$pool\"}, 0)",
+               "intervalFactor": 2,
+               "legendFormat": "free {{service}} / {{name}}"
+            }
+         ],
+         "title": "Task Pool — Executor State",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 9
+         },
+         "id": 4,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -90,10 +149,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
+            "x": 12,
             "y": 9
          },
-         "id": 4,
+         "id": 5,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -122,10 +181,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 8,
-            "y": 9
+            "x": 0,
+            "y": 17
          },
-         "id": 5,
+         "id": 6,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -154,10 +213,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 16,
-            "y": 9
+            "x": 8,
+            "y": 17
          },
-         "id": 6,
+         "id": 7,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -187,9 +246,9 @@
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 15
+            "y": 23
          },
-         "id": 7,
+         "id": 8,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -206,14 +265,78 @@
          "type": "timeseries"
       },
       {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 23
+         },
+         "id": 9,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(task_pool_events_total{service=~\"$service\", name=~\"$pool\", event=\"task_rejected\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{service}} / {{name}}"
+            }
+         ],
+         "title": "Task Pool — Rejected Tasks Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 29
+         },
+         "id": 10,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(task_pool_events_total{service=~\"$service\", name=~\"$pool\", event=\"task_cancelled\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{service}} / {{name}}"
+            }
+         ],
+         "title": "Task Pool — Cancelled Tasks Rate",
+         "type": "timeseries"
+      },
+      {
          "collapsed": false,
          "gridPos": {
             "h": 1,
             "w": 0,
             "x": 12,
-            "y": 23
+            "y": 37
          },
-         "id": 8,
+         "id": 11,
          "panels": [ ],
          "title": "Priority Task Pool",
          "type": "row"
@@ -232,9 +355,9 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 38
          },
-         "id": 9,
+         "id": 12,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -257,16 +380,75 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "ops"
+               "unit": "short"
             }
          },
          "gridPos": {
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 38
          },
-         "id": 10,
+         "id": 13,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "priority_task_pool_executors_target{service=~\"$service\", name=~\"$priority_pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "target {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "priority_task_pool_executors_allocated{service=~\"$service\", name=~\"$priority_pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "allocated {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "priority_task_pool_executors_busy{service=~\"$service\", name=~\"$priority_pool\"}",
+               "intervalFactor": 2,
+               "legendFormat": "busy {{service}} / {{name}}"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "clamp_min(priority_task_pool_executors_allocated{service=~\"$service\", name=~\"$priority_pool\"} - priority_task_pool_executors_busy{service=~\"$service\", name=~\"$priority_pool\"}, 0)",
+               "intervalFactor": 2,
+               "legendFormat": "free {{service}} / {{name}}"
+            }
+         ],
+         "title": "Priority Task Pool — Executor State",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 46
+         },
+         "id": 14,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -295,10 +477,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 32
+            "x": 12,
+            "y": 46
          },
-         "id": 11,
+         "id": 15,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -327,10 +509,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 8,
-            "y": 32
+            "x": 0,
+            "y": 54
          },
-         "id": 12,
+         "id": 16,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -359,10 +541,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 16,
-            "y": 32
+            "x": 8,
+            "y": 54
          },
-         "id": 13,
+         "id": 17,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -392,9 +574,9 @@
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 60
          },
-         "id": 14,
+         "id": 18,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -411,14 +593,78 @@
          "type": "timeseries"
       },
       {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 60
+         },
+         "id": 19,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(priority_task_pool_events_total{service=~\"$service\", name=~\"$priority_pool\", event=\"task_rejected\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{service}} / {{name}}"
+            }
+         ],
+         "title": "Priority Task Pool — Rejected Tasks Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 66
+         },
+         "id": 20,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(priority_task_pool_events_total{service=~\"$service\", name=~\"$priority_pool\", event=\"task_expired\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{service}} / {{name}}"
+            }
+         ],
+         "title": "Priority Task Pool — Expired Tasks Rate",
+         "type": "timeseries"
+      },
+      {
          "collapsed": false,
          "gridPos": {
             "h": 1,
             "w": 0,
             "x": 12,
-            "y": 46
+            "y": 74
          },
-         "id": 15,
+         "id": 21,
          "panels": [ ],
          "title": "Delay Pool",
          "type": "row"
@@ -437,9 +683,9 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 75
          },
-         "id": 16,
+         "id": 22,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -462,48 +708,16 @@
          },
          "fieldConfig": {
             "defaults": {
-               "unit": "short"
-            }
-         },
-         "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 47
-         },
-         "id": 17,
-         "pluginVersion": "v11.0.0",
-         "targets": [
-            {
-               "datasource": {
-                  "type": "prometheus",
-                  "uid": "$datasource"
-               },
-               "expr": "delay_pool_execute_queue_length{service=~\"$service\"}",
-               "intervalFactor": 2,
-               "legendFormat": "{{service}}"
-            }
-         ],
-         "title": "Delay Pool — Execute Queue Length",
-         "type": "timeseries"
-      },
-      {
-         "datasource": {
-            "type": "datasource",
-            "uid": "-- Mixed --"
-         },
-         "fieldConfig": {
-            "defaults": {
                "unit": "ops"
             }
          },
          "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 55
+            "x": 12,
+            "y": 75
          },
-         "id": 18,
+         "id": 23,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -532,10 +746,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 12,
-            "y": 55
+            "x": 0,
+            "y": 83
          },
-         "id": 19,
+         "id": 24,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -564,10 +778,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 63
+            "x": 8,
+            "y": 83
          },
-         "id": 20,
+         "id": 25,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -596,10 +810,10 @@
          "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 8,
-            "y": 63
+            "x": 16,
+            "y": 83
          },
-         "id": 21,
+         "id": 26,
          "pluginVersion": "v11.0.0",
          "targets": [
             {
@@ -629,9 +843,41 @@
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 89
          },
-         "id": 22,
+         "id": 27,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(delay_pool_events_total{service=~\"$service\", event=\"task_cancelled\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{service}}"
+            }
+         ],
+         "title": "Delay Pool — Cancelled Tasks Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 89
+         },
+         "id": 28,
          "pluginVersion": "v11.0.0",
          "targets": [
             {

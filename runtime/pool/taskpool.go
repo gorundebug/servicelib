@@ -35,24 +35,27 @@ type TaskPool interface {
 }
 
 type TaskPoolImpl struct {
-	head                 *Task
-	tail                 *Task
-	lock                 sync.Mutex
-	name                 string
-	gaugeQueueLength     metrics.Int64Gauge
-	tasksTotal           metrics.Int64Counter
-	executionDuration    metrics.Float64Histogram
-	stopTimeoutCounter   metrics.Int64Counter
-	taskRejectedCounter  metrics.Int64Counter
-	taskCancelledCounter metrics.Int64Counter
-	wg                   sync.WaitGroup
-	done                 bool
-	stop                 chan struct{}
-	stopOnce             sync.Once
-	startOnce            sync.Once
-	cond                 *sync.Cond
-	count                int
-	environment          environment.ServiceEnvironment
+	head                    *Task
+	tail                    *Task
+	lock                    sync.Mutex
+	name                    string
+	gaugeQueueLength        metrics.Int64Gauge
+	gaugeExecutorsTarget    metrics.Int64Gauge
+	gaugeExecutorsAllocated metrics.Int64Gauge
+	gaugeExecutorsBusy      metrics.Int64Gauge
+	tasksTotal              metrics.Int64Counter
+	executionDuration       metrics.Float64Histogram
+	stopTimeoutCounter      metrics.Int64Counter
+	taskRejectedCounter     metrics.Int64Counter
+	taskCancelledCounter    metrics.Int64Counter
+	wg                      sync.WaitGroup
+	done                    bool
+	stop                    chan struct{}
+	stopOnce                sync.Once
+	startOnce               sync.Once
+	cond                    *sync.Cond
+	count                   int
+	environment             environment.ServiceEnvironment
 }
 
 func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
@@ -67,6 +70,18 @@ func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolCon
 	})
 	var err error
 	pool.gaugeQueueLength, err = scope.Gauge("queue_length", "Task pool wait queue length", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsTarget, err = scope.Gauge("executors_target", "Desired number of task pool executors", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsAllocated, err = scope.Gauge("executors_allocated", "Number of live task pool executors", nil)
+	if err != nil {
+		return nil, err
+	}
+	pool.gaugeExecutorsBusy, err = scope.Gauge("executors_busy", "Number of task pool executors running callbacks", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +205,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 				pRestart = new(bool)
 				executorsCount = executorsCountNew
+				p.gaugeExecutorsTarget.Set(int64(executorsCount))
 
 				p.lock.Lock()
 				select {
@@ -200,8 +216,10 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 				for i := 0; i < executorsCount; i++ {
 					p.wg.Add(1)
+					p.gaugeExecutorsAllocated.Inc()
 					go func(restart *bool) {
 						defer p.wg.Done()
+						defer p.gaugeExecutorsAllocated.Dec()
 						for {
 							p.lock.Lock()
 							if *restart {
@@ -230,11 +248,15 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 							p.lock.Unlock()
 							stopFn()
 							p.gaugeQueueLength.Dec()
-							startTime := time.Now()
-							runTask(ctx, p.environment, p.name, task.fn)
-							task.fn = nil
-							p.tasksTotal.Inc(ctx)
-							p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+							func() {
+								p.gaugeExecutorsBusy.Inc()
+								defer p.gaugeExecutorsBusy.Dec()
+								startTime := time.Now()
+								runTask(ctx, p.environment, p.name, task.fn)
+								task.fn = nil
+								p.tasksTotal.Inc(ctx)
+								p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+							}()
 						}
 					}(pRestart)
 				}

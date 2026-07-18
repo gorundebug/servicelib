@@ -26,15 +26,20 @@ import (
 // metric registration.
 type mockServiceEnv struct {
 	environment.ServiceEnvironment // nil embedding: panics if unimplemented method called
-	m metrics.Metrics
+	m                              metrics.Metrics
 }
 
-func (e *mockServiceEnv) Metrics() metrics.Metrics             { return e.m }
-func (e *mockServiceEnv) ServiceConfig() *config.ServiceConfig { return &config.ServiceConfig{Name: "test-svc"} }
-func (e *mockServiceEnv) Log() envlog.Logger                   { return nil }
+func (e *mockServiceEnv) Metrics() metrics.Metrics { return e.m }
+func (e *mockServiceEnv) ServiceConfig() *config.ServiceConfig {
+	return &config.ServiceConfig{Name: "test-svc"}
+}
+func (e *mockServiceEnv) Log() envlog.Logger { return nil }
 
 var expectedTaskPoolMetrics = []string{
 	"task_pool_events_total",
+	"task_pool_executors_allocated",
+	"task_pool_executors_busy",
+	"task_pool_executors_target",
 	"task_pool_queue_length",
 	"task_pool_task_execution_duration_seconds",
 	"task_pool_tasks_total",
@@ -42,6 +47,9 @@ var expectedTaskPoolMetrics = []string{
 
 var expectedPriorityTaskPoolMetrics = []string{
 	"priority_task_pool_events_total",
+	"priority_task_pool_executors_allocated",
+	"priority_task_pool_executors_busy",
+	"priority_task_pool_executors_target",
 	"priority_task_pool_queue_length",
 	"priority_task_pool_task_execution_duration_seconds",
 	"priority_task_pool_tasks_total",
@@ -53,6 +61,7 @@ var expectedDelayPoolMetrics = []string{
 	"delay_pool_tasks_total",
 	"delay_pool_wait_queue_length",
 }
+
 // delay_pool_events_total labels: event=stop_timeout | task_cancelled
 
 func TestTaskPoolRegistersMetrics(t *testing.T) {

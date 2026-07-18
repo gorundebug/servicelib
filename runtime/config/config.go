@@ -132,32 +132,66 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 	}
 
 	for _, v := range config.GetStreams() {
+		if _, exists := runtimeCfg.streamsByName[v.GetName()]; exists {
+			return nil, fmt.Errorf("duplicate stream name: %s", v.GetName())
+		}
+		if _, exists := runtimeCfg.streamsByID[v.GetID()]; exists {
+			return nil, fmt.Errorf("duplicate stream id: %d", v.GetID())
+		}
 		runtimeCfg.streamsByName[v.GetName()] = v
 		runtimeCfg.streamsByID[v.GetID()] = v
 	}
 	for _, v := range config.GetServices() {
+		if _, exists := runtimeCfg.servicesByName[v.Name]; exists {
+			return nil, fmt.Errorf("duplicate service name: %s", v.Name)
+		}
+		if _, exists := runtimeCfg.servicesByID[v.ID]; exists {
+			return nil, fmt.Errorf("duplicate service id: %d", v.ID)
+		}
 		runtimeCfg.servicesByName[v.Name] = v
 		runtimeCfg.servicesByID[v.ID] = v
 	}
 	for _, v := range config.GetEndpoints() {
+		if _, exists := runtimeCfg.endpointsByName[v.GetName()]; exists {
+			return nil, fmt.Errorf("duplicate endpoint name: %s", v.GetName())
+		}
+		if _, exists := runtimeCfg.endpointsByID[v.GetID()]; exists {
+			return nil, fmt.Errorf("duplicate endpoint id: %d", v.GetID())
+		}
 		runtimeCfg.endpointsByName[v.GetName()] = v
 		runtimeCfg.endpointsByID[v.GetID()] = v
 	}
 	for _, v := range config.GetDataConnectors() {
+		if _, exists := runtimeCfg.dataConnectorsByName[v.GetName()]; exists {
+			return nil, fmt.Errorf("duplicate data connector name: %s", v.GetName())
+		}
+		if _, exists := runtimeCfg.dataConnectorsByID[v.GetID()]; exists {
+			return nil, fmt.Errorf("duplicate data connector id: %d", v.GetID())
+		}
 		runtimeCfg.dataConnectorsByID[v.GetID()] = v
 		runtimeCfg.dataConnectorsByName[v.GetName()] = v
 	}
 	for _, v := range config.GetPools() {
+		if _, exists := runtimeCfg.poolByName[v.Name]; exists {
+			return nil, fmt.Errorf("duplicate pool name: %s", v.Name)
+		}
 		runtimeCfg.poolByName[v.Name] = v
 	}
 	for _, v := range config.GetTypes() {
+		if _, exists := runtimeCfg.typesByName[v.Name]; exists {
+			return nil, fmt.Errorf("duplicate type name: %s", v.Name)
+		}
 		runtimeCfg.typesByName[v.Name] = v
 	}
 	for _, v := range config.GetLinks() {
 		if err := v.Validate(); err != nil {
 			return nil, fmt.Errorf("validate link error: %w", err)
 		}
-		runtimeCfg.linksByID[LinkID{From: v.From, To: v.To}] = v
+		id := LinkID{From: v.From, To: v.To}
+		if _, exists := runtimeCfg.linksByID[id]; exists {
+			return nil, fmt.Errorf("duplicate link from=%d to=%d", v.From, v.To)
+		}
+		runtimeCfg.linksByID[id] = v
 	}
 	return runtimeCfg, nil
 }

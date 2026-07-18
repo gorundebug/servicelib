@@ -27,16 +27,16 @@ type minimalConfig struct {
 	pools []*config.PoolConfig
 }
 
-func (c *minimalConfig) GetServices() []*config.ServiceConfig          { return nil }
-func (c *minimalConfig) GetStreams() []config.StreamConfig             { return nil }
+func (c *minimalConfig) GetServices() []*config.ServiceConfig            { return nil }
+func (c *minimalConfig) GetStreams() []config.StreamConfig               { return nil }
 func (c *minimalConfig) GetDataConnectors() []config.DataConnectorConfig { return nil }
-func (c *minimalConfig) GetEndpoints() []config.EndpointConfig         { return nil }
-func (c *minimalConfig) GetPools() []*config.PoolConfig                { return c.pools }
-func (c *minimalConfig) GetLinks() []*config.LinkConfig                { return nil }
-func (c *minimalConfig) GetModules() []*config.ModuleConfig            { return nil }
-func (c *minimalConfig) GetTypes() []*config.TypeConfig                { return nil }
-func (c *minimalConfig) GetProperty(_ string) interface{}              { return nil }
-func (c *minimalConfig) ApplyEnvironment() error                       { return nil }
+func (c *minimalConfig) GetEndpoints() []config.EndpointConfig           { return nil }
+func (c *minimalConfig) GetPools() []*config.PoolConfig                  { return c.pools }
+func (c *minimalConfig) GetLinks() []*config.LinkConfig                  { return nil }
+func (c *minimalConfig) GetModules() []*config.ModuleConfig              { return nil }
+func (c *minimalConfig) GetTypes() []*config.TypeConfig                  { return nil }
+func (c *minimalConfig) GetProperty(_ string) interface{}                { return nil }
+func (c *minimalConfig) ApplyEnvironment() error                         { return nil }
 
 type noopLogger struct{}
 
@@ -51,12 +51,19 @@ type mockPoolEnv struct {
 	rc *config.RuntimeConfig
 }
 
-func (e *mockPoolEnv) Metrics() metrics.Metrics             { return e.m }
-func (e *mockPoolEnv) ServiceConfig() *config.ServiceConfig { return &config.ServiceConfig{Name: "test-svc"} }
+func (e *mockPoolEnv) Metrics() metrics.Metrics { return e.m }
+func (e *mockPoolEnv) ServiceConfig() *config.ServiceConfig {
+	return &config.ServiceConfig{Name: "test-svc"}
+}
 func (e *mockPoolEnv) RuntimeConfig() *config.RuntimeConfig { return e.rc }
 func (e *mockPoolEnv) Log() envlog.Logger                   { return noopLogger{} }
 
 func newTestPriorityPool(t *testing.T, name string, executors int) PriorityTaskPool {
+	pool, _ := newTestPriorityPoolWithMetrics(t, name, executors)
+	return pool
+}
+
+func newTestPriorityPoolWithMetrics(t *testing.T, name string, executors int) (PriorityTaskPool, *testmetrics.TestMetrics) {
 	t.Helper()
 	m := testmetrics.New()
 	poolCfg := &config.PoolConfig{Name: name, ExecutorsCount: executors}
@@ -64,7 +71,31 @@ func newTestPriorityPool(t *testing.T, name string, executors int) PriorityTaskP
 	require.NoError(t, err)
 	pool, err := makePriorityTaskPool(&mockPoolEnv{m: m, rc: rc}, poolCfg)
 	require.NoError(t, err)
-	return pool
+	return pool, m
+}
+
+func TestPriorityTaskPool_ExecutorMetrics(t *testing.T) {
+	pool, m := newTestPriorityPoolWithMetrics(t, "priority-metrics", 1)
+	ctx := context.Background()
+	require.NoError(t, pool.Start(ctx))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	require.NoError(t, pool.AddTask(ctx, 0, func() {
+		close(started)
+		<-release
+	}))
+	<-started
+
+	labels := metrics.Labels{"service": "test-svc", "name": "priority-metrics"}
+	assert.Equal(t, int64(1), m.Gauge("priority_task_pool_executors_target", labels).Value())
+	assert.Equal(t, int64(1), m.Gauge("priority_task_pool_executors_allocated", labels).Value())
+	assert.Equal(t, int64(1), m.Gauge("priority_task_pool_executors_busy", labels).Value())
+
+	close(release)
+	pool.Stop(ctx)
+	assert.Equal(t, int64(0), m.Gauge("priority_task_pool_executors_allocated", labels).Value())
+	assert.Equal(t, int64(0), m.Gauge("priority_task_pool_executors_busy", labels).Value())
 }
 
 // TestPriorityTaskPool_PriorityOrdering verifies that queued tasks execute in

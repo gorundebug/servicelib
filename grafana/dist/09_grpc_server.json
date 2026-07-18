@@ -1,0 +1,336 @@
+{
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 0,
+            "y": 0
+         },
+         "id": 1,
+         "panels": [ ],
+         "title": "Traffic",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 1
+         },
+         "id": 2,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(rpc_server_call_duration_seconds_count{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{rpc_method}}"
+            }
+         ],
+         "title": "RPC Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 1
+         },
+         "id": 3,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(rpc_server_call_duration_seconds_count{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{rpc_response_status_code}} {{rpc_method}}"
+            }
+         ],
+         "title": "Status Code Distribution",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 9
+         },
+         "id": 4,
+         "panels": [ ],
+         "title": "Latency",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 10
+         },
+         "id": 5,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.50, sum(rate(rpc_server_call_duration_seconds_bucket{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])) by (le, rpc_method))",
+               "intervalFactor": 2,
+               "legendFormat": "p50 {{rpc_method}}"
+            }
+         ],
+         "title": "Duration p50",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 10
+         },
+         "id": 6,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.95, sum(rate(rpc_server_call_duration_seconds_bucket{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])) by (le, rpc_method))",
+               "intervalFactor": 2,
+               "legendFormat": "p95 {{rpc_method}}"
+            }
+         ],
+         "title": "Duration p95",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 10
+         },
+         "id": 7,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "histogram_quantile(0.99, sum(rate(rpc_server_call_duration_seconds_bucket{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])) by (le, rpc_method))",
+               "intervalFactor": 2,
+               "legendFormat": "p99 {{rpc_method}}"
+            }
+         ],
+         "title": "Duration p99",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 18
+         },
+         "id": 8,
+         "panels": [ ],
+         "title": "Latency Heatmap",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 19
+         },
+         "id": 9,
+         "options": {
+            "calculate": false,
+            "color": {
+               "mode": "scheme",
+               "scheme": "Oranges",
+               "steps": 128
+            },
+            "yAxis": {
+               "unit": "s"
+            }
+         },
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "sum(rate(rpc_server_call_duration_seconds_bucket{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\"}[$__rate_interval])) by (le)",
+               "format": "heatmap",
+               "intervalFactor": 2,
+               "legendFormat": "{{le}}"
+            }
+         ],
+         "title": "Call Duration Heatmap",
+         "type": "heatmap"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 0,
+            "x": 24,
+            "y": 29
+         },
+         "id": 10,
+         "panels": [ ],
+         "title": "Errors",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "ops"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 30
+         },
+         "id": 11,
+         "pluginVersion": "v11.0.0",
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "$datasource"
+               },
+               "expr": "rate(rpc_server_call_duration_seconds_count{job=~\"$job\", rpc_system_name=\"grpc\", rpc_method=~\"$rpc_method\", rpc_response_status_code!=\"OK\"}[$__rate_interval])",
+               "intervalFactor": 2,
+               "legendFormat": "{{rpc_response_status_code}} {{rpc_method}}"
+            }
+         ],
+         "title": "Error Rate (non-OK)",
+         "type": "timeseries"
+      }
+   ],
+   "refresh": "30s",
+   "schemaVersion": 39,
+   "tags": [
+      "servicelib",
+      "grpc",
+      "server"
+   ],
+   "templating": {
+      "list": [
+         {
+            "label": "Datasource",
+            "name": "datasource",
+            "query": "prometheus",
+            "type": "datasource"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "$datasource"
+            },
+            "includeAll": false,
+            "label": "Job",
+            "multi": false,
+            "name": "job",
+            "query": "label_values(rpc_server_call_duration_seconds_bucket, job)",
+            "regex": "servicelib",
+            "type": "query"
+         },
+         {
+            "datasource": {
+               "type": "prometheus",
+               "uid": "$datasource"
+            },
+            "includeAll": true,
+            "label": "Rpc_method",
+            "multi": true,
+            "name": "rpc_method",
+            "query": "label_values(rpc_server_call_duration_seconds_bucket{job=~\"$job\", rpc_system_name=\"grpc\"}, rpc_method)",
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-1h",
+      "to": "now"
+   },
+   "timezone": "browser",
+   "title": "servicelib / gRPC Server",
+   "uid": "servicelib-grpc-server"
+}

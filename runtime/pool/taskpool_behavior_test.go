@@ -14,12 +14,18 @@ import (
 	"time"
 
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/testmetrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func newTestTaskPool(t *testing.T, name string, executors int) TaskPool {
+	pool, _ := newTestTaskPoolWithMetrics(t, name, executors)
+	return pool
+}
+
+func newTestTaskPoolWithMetrics(t *testing.T, name string, executors int) (TaskPool, *testmetrics.TestMetrics) {
 	t.Helper()
 	m := testmetrics.New()
 	poolCfg := &config.PoolConfig{Name: name, ExecutorsCount: executors}
@@ -27,7 +33,31 @@ func newTestTaskPool(t *testing.T, name string, executors int) TaskPool {
 	require.NoError(t, err)
 	pool, err := makeTaskPool(&mockPoolEnv{m: m, rc: rc}, poolCfg)
 	require.NoError(t, err)
-	return pool
+	return pool, m
+}
+
+func TestTaskPool_ExecutorMetrics(t *testing.T) {
+	pool, m := newTestTaskPoolWithMetrics(t, "metrics", 1)
+	ctx := context.Background()
+	require.NoError(t, pool.Start(ctx))
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	require.NoError(t, pool.AddTask(ctx, func() {
+		close(started)
+		<-release
+	}))
+	<-started
+
+	labels := metrics.Labels{"service": "test-svc", "name": "metrics"}
+	assert.Equal(t, int64(1), m.Gauge("task_pool_executors_target", labels).Value())
+	assert.Equal(t, int64(1), m.Gauge("task_pool_executors_allocated", labels).Value())
+	assert.Equal(t, int64(1), m.Gauge("task_pool_executors_busy", labels).Value())
+
+	close(release)
+	pool.Stop(ctx)
+	assert.Equal(t, int64(0), m.Gauge("task_pool_executors_allocated", labels).Value())
+	assert.Equal(t, int64(0), m.Gauge("task_pool_executors_busy", labels).Value())
 }
 
 // TestTaskPool_CancelMovesToFront verifies that cancelling a task's context
