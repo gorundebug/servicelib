@@ -216,6 +216,13 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	Implementation DataConnectorImplementation `json:"implementation"`
 
+	// Implementations Backend-specific implementations keyed by programming-language enum name
+	// (`GoLang`, `Cpp`, or `Python`). When present for a language, this value
+	// overrides `implementation` for services generated in that language.
+	// This allows one logical connector and endpoint contract to be shared by
+	// services implemented with different transport libraries.
+	Implementations *map[string]DataConnectorImplementation `json:"implementations,omitempty"`
+
 	// Module Go module name containing the generated gRPC protobuf types for this connector.
 	// Used to resolve the correct import path for generated gRPC method stubs.
 	// Applies to gRPC connectors.

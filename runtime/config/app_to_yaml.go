@@ -283,6 +283,13 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if string(dc.Implementation) != "" {
 				dcObj["implementation"] = string(dc.Implementation)
 			}
+			if dc.Implementations != nil && len(*dc.Implementations) > 0 {
+				implementations := make(map[string]interface{}, len(*dc.Implementations))
+				for language, implementation := range *dc.Implementations {
+					implementations[language] = string(implementation)
+				}
+				dcObj["implementations"] = implementations
+			}
 			if dc.Host != nil {
 				dcObj["host"] = *dc.Host
 			}

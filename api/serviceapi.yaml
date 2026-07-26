@@ -739,6 +739,16 @@ components:
           $ref: '#/components/schemas/DataConnectorType'
         implementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
+        implementations:
+          type: object
+          description: |
+            Backend-specific implementations keyed by programming-language enum name
+            (`GoLang`, `Cpp`, or `Python`). When present for a language, this value
+            overrides `implementation` for services generated in that language.
+            This allows one logical connector and endpoint contract to be shared by
+            services implemented with different transport libraries.
+          additionalProperties:
+            $ref: '#/components/schemas/DataConnectorImplementation'
         host:
           type: string
           description: Hostname or IP address. Applies to HTTP and gRPC connectors.
