@@ -223,8 +223,8 @@ type DataConnector struct {
 	// services implemented with different transport libraries.
 	Implementations *map[string]DataConnectorImplementation `json:"implementations,omitempty"`
 
-	// Module Go module name containing the generated gRPC protobuf types for this connector.
-	// Used to resolve the correct import path for generated gRPC method stubs.
+	// Module Contract module containing generated gRPC protobuf types for this connector.
+	// Used to resolve the correct generated bindings for each target language.
 	// Applies to gRPC connectors.
 	Module *string `json:"module,omitempty"`
 
@@ -235,14 +235,14 @@ type DataConnector struct {
 	Port *int `json:"port,omitempty"`
 
 	// Type Type of external system the data connector connects to.
-	// - `HTTP` (1): net/http server or client
+	// - `HTTP` (1): HTTP server or client
 	// - `gRPC` (2): gRPC server or client
-	// - `Kafka` (3): Kafka cluster (Sarama)
+	// - `Kafka` (3): Kafka cluster
 	// - `Custom` (4): in-process local connector for testing or internal pipelines
 	Type DataConnectorType `json:"type"`
 
-	// UseDedicatedListener When true, this HTTP connector starts its own dedicated `net/http` listener.
-	// When false, it shares the service's default HTTP mux.
+	// UseDedicatedListener When true, this HTTP connector starts its own dedicated listener.
+	// When false, it shares the service's default HTTP server.
 	// Applies to HTTP source connectors.
 	UseDedicatedListener *bool `json:"useDedicatedListener,omitempty"`
 
@@ -266,9 +266,9 @@ type DataConnector struct {
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.
-// - `HTTP` (1): net/http server or client
+// - `HTTP` (1): HTTP server or client
 // - `gRPC` (2): gRPC server or client
-// - `Kafka` (3): Kafka cluster (Sarama)
+// - `Kafka` (3): Kafka cluster
 // - `Custom` (4): in-process local connector for testing or internal pipelines
 type DataConnectorType int
 
