@@ -22,11 +22,14 @@ const (
 
 // Defines values for DataConnectorImplementation.
 const (
-	DataConnectorImplementationFunction   DataConnectorImplementation = "function"
-	DataConnectorImplementationGoogleGRPC DataConnectorImplementation = "google/grpc"
-	DataConnectorImplementationIBMsarama  DataConnectorImplementation = "IBM/Sarama"
-	DataConnectorImplementationNetHTTP    DataConnectorImplementation = "net/http"
-	DataConnectorImplementationUndefined  DataConnectorImplementation = ""
+	DataConnectorImplementationFunction     DataConnectorImplementation = "function"
+	DataConnectorImplementationGoogleGRPC   DataConnectorImplementation = "google/grpc"
+	DataConnectorImplementationIBMsarama    DataConnectorImplementation = "IBM/Sarama"
+	DataConnectorImplementationNetHTTP      DataConnectorImplementation = "net/http"
+	DataConnectorImplementationUndefined    DataConnectorImplementation = ""
+	DataConnectorImplementationUserverGRPC  DataConnectorImplementation = "userver/grpc"
+	DataConnectorImplementationUserverHTTP  DataConnectorImplementation = "userver/http"
+	DataConnectorImplementationUserverKafka DataConnectorImplementation = "userver/kafka"
 )
 
 // Defines values for DataConnectorType.
@@ -208,6 +211,9 @@ type DataConnector struct {
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
 	// - `google/grpc`: official gRPC-Go library
+	// - `userver/http`: userver HTTP
+	// - `userver/grpc`: userver gRPC
+	// - `userver/kafka`: userver Kafka
 	Implementation DataConnectorImplementation `json:"implementation"`
 
 	// Module Go module name containing the generated gRPC protobuf types for this connector.
@@ -247,6 +253,9 @@ type DataConnector struct {
 // - `function`: in-process custom connector (no network)
 // - `IBM/Sarama`: Sarama Kafka client
 // - `google/grpc`: official gRPC-Go library
+// - `userver/http`: userver HTTP
+// - `userver/grpc`: userver gRPC
+// - `userver/kafka`: userver Kafka
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.

@@ -696,11 +696,17 @@ components:
         - `function`: in-process custom connector (no network)
         - `IBM/Sarama`: Sarama Kafka client
         - `google/grpc`: official gRPC-Go library
+        - `userver/http`: userver HTTP
+        - `userver/grpc`: userver gRPC
+        - `userver/kafka`: userver Kafka
       enum: [ '',
               'net/http',
               'function',
               'IBM/Sarama',
-              'google/grpc'
+              'google/grpc',
+              'userver/http',
+              'userver/grpc',
+              'userver/kafka'
       ]
       x-enum-varnames:
         - Undefined
@@ -708,6 +714,9 @@ components:
         - Function
         - IBMsarama
         - GoogleGRPC
+        - UserverHTTP
+        - UserverGRPC
+        - UserverKafka
 
     DataConnector:
       type: object
