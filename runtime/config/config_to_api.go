@@ -221,11 +221,16 @@ func StreamConfigToAPI(sc StreamConfig) api.Stream {
 }
 
 func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
+	implementation := dc.GetImplementation()
 	d := api.DataConnector{
-		Id:             dc.GetID(),
-		Name:           dc.GetName(),
-		Type:           dc.GetType(),
-		Implementation: dc.GetImplementation(),
+		Id:   dc.GetID(),
+		Name: dc.GetName(),
+		Type: dc.GetType(),
+	}
+	if d.Type == api.DataConnectorTypeCustom {
+		d.Implementation = &implementation
+	} else {
+		d.GoImplementation = &implementation
 	}
 	switch c := dc.(type) {
 	case *HttpDataConnectorConfig:

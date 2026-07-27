@@ -200,8 +200,32 @@ type DataConnector struct {
 	// Brokers Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
 	Brokers *string `json:"brokers,omitempty"`
 
+	// CppImplementation The specific library used to implement a data connector.
+	// - `net/http`: Go standard library HTTP
+	// - `function`: in-process custom connector (no network)
+	// - `IBM/Sarama`: Sarama Kafka client
+	// - `google/grpc`: official gRPC-Go library
+	// - `userver/http`: userver HTTP
+	// - `userver/grpc`: userver gRPC
+	// - `userver/kafka`: userver Kafka
+	// - `aiohttp`: Python aiohttp
+	// - `aiokafka`: Python aiokafka
+	CppImplementation *DataConnectorImplementation `json:"cppImplementation,omitempty"`
+
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
 	DialTimeout *float32 `json:"dialTimeout,omitempty"`
+
+	// GoImplementation The specific library used to implement a data connector.
+	// - `net/http`: Go standard library HTTP
+	// - `function`: in-process custom connector (no network)
+	// - `IBM/Sarama`: Sarama Kafka client
+	// - `google/grpc`: official gRPC-Go library
+	// - `userver/http`: userver HTTP
+	// - `userver/grpc`: userver gRPC
+	// - `userver/kafka`: userver Kafka
+	// - `aiohttp`: Python aiohttp
+	// - `aiokafka`: Python aiokafka
+	GoImplementation *DataConnectorImplementation `json:"goImplementation,omitempty"`
 
 	// Host Hostname or IP address. Applies to HTTP and gRPC connectors.
 	Host *string `json:"host,omitempty"`
@@ -219,14 +243,7 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	// - `aiohttp`: Python aiohttp
 	// - `aiokafka`: Python aiokafka
-	Implementation DataConnectorImplementation `json:"implementation"`
-
-	// Implementations Backend-specific implementations keyed by programming-language enum name
-	// (`GoLang`, `Cpp`, or `Python`). When present for a language, this value
-	// overrides `implementation` for services generated in that language.
-	// This allows one logical connector and endpoint contract to be shared by
-	// services implemented with different transport libraries.
-	Implementations *map[string]DataConnectorImplementation `json:"implementations,omitempty"`
+	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
 	// Module Contract module containing generated gRPC protobuf types for this connector.
 	// Used to resolve the correct generated bindings for each target language.
@@ -238,6 +255,18 @@ type DataConnector struct {
 
 	// Port Port number. Applies to HTTP and gRPC connectors.
 	Port *int `json:"port,omitempty"`
+
+	// PythonImplementation The specific library used to implement a data connector.
+	// - `net/http`: Go standard library HTTP
+	// - `function`: in-process custom connector (no network)
+	// - `IBM/Sarama`: Sarama Kafka client
+	// - `google/grpc`: official gRPC-Go library
+	// - `userver/http`: userver HTTP
+	// - `userver/grpc`: userver gRPC
+	// - `userver/kafka`: userver Kafka
+	// - `aiohttp`: Python aiohttp
+	// - `aiokafka`: Python aiokafka
+	PythonImplementation *DataConnectorImplementation `json:"pythonImplementation,omitempty"`
 
 	// Type Type of external system the data connector connects to.
 	// - `HTTP` (1): HTTP server or client

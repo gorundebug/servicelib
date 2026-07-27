@@ -88,7 +88,9 @@ paths:
                     - id: 1
                       name: HttpServer
                       type: 1
-                      implementation: net/http
+                      goImplementation: net/http
+                      cppImplementation: userver/http
+                      pythonImplementation: aiohttp
                   endpoints:
                     - id: 1
                       name: IngestEndpoint
@@ -745,16 +747,18 @@ components:
           $ref: '#/components/schemas/DataConnectorType'
         implementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
-        implementations:
-          type: object
           description: |
-            Backend-specific implementations keyed by programming-language enum name
-            (`GoLang`, `Cpp`, or `Python`). When present for a language, this value
-            overrides `implementation` for services generated in that language.
-            This allows one logical connector and endpoint contract to be shared by
-            services implemented with different transport libraries.
-          additionalProperties:
-            $ref: '#/components/schemas/DataConnectorImplementation'
+            Fixed implementation used by language-independent connectors such
+            as `Custom`.
+        goImplementation:
+          $ref: '#/components/schemas/DataConnectorImplementation'
+          description: Implementation used when generating a Go service.
+        cppImplementation:
+          $ref: '#/components/schemas/DataConnectorImplementation'
+          description: Implementation used when generating a C++ service.
+        pythonImplementation:
+          $ref: '#/components/schemas/DataConnectorImplementation'
+          description: Implementation used when generating a Python service.
         host:
           type: string
           description: Hostname or IP address. Applies to HTTP and gRPC connectors.
@@ -804,7 +808,6 @@ components:
         - id
         - name
         - type
-        - implementation
 
     Endpoint:
       type: object
