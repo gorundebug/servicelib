@@ -22,6 +22,8 @@ const (
 
 // Defines values for DataConnectorImplementation.
 const (
+	DataConnectorImplementationAioHTTP      DataConnectorImplementation = "aiohttp"
+	DataConnectorImplementationAioKafka     DataConnectorImplementation = "aiokafka"
 	DataConnectorImplementationFunction     DataConnectorImplementation = "function"
 	DataConnectorImplementationGoogleGRPC   DataConnectorImplementation = "google/grpc"
 	DataConnectorImplementationIBMsarama    DataConnectorImplementation = "IBM/Sarama"
@@ -180,6 +182,7 @@ const (
 // - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
 // - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 // - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
+// - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
 type CallSemantics int
 
 // DataConnector Configuration for a connection to an external system. A data connector represents
@@ -214,6 +217,8 @@ type DataConnector struct {
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
+	// - `aiohttp`: Python aiohttp
+	// - `aiokafka`: Python aiokafka
 	Implementation DataConnectorImplementation `json:"implementation"`
 
 	// Implementations Backend-specific implementations keyed by programming-language enum name
@@ -263,6 +268,8 @@ type DataConnector struct {
 // - `userver/http`: userver HTTP
 // - `userver/grpc`: userver gRPC
 // - `userver/kafka`: userver Kafka
+// - `aiohttp`: Python aiohttp
+// - `aiokafka`: Python aiokafka
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.
@@ -378,6 +385,7 @@ type Link struct {
 	// - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
 	// - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 	// - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
+	// - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
 	CallSemantics CallSemantics `json:"callSemantics"`
 
 	// From ID of the upstream (producer) stream node.
@@ -460,6 +468,7 @@ type Service struct {
 	// - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
 	// - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 	// - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
+	// - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
 	DefaultCallSemantics CallSemantics `json:"defaultCallSemantics"`
 
 	// DefaultGrpcTimeout Default gRPC call timeout in milliseconds.

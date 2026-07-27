@@ -699,6 +699,8 @@ components:
         - `userver/http`: userver HTTP
         - `userver/grpc`: userver gRPC
         - `userver/kafka`: userver Kafka
+        - `aiohttp`: Python aiohttp
+        - `aiokafka`: Python aiokafka
       enum: [ '',
               'net/http',
               'function',
@@ -706,7 +708,9 @@ components:
               'google/grpc',
               'userver/http',
               'userver/grpc',
-              'userver/kafka'
+              'userver/kafka',
+              'aiohttp',
+              'aiokafka'
       ]
       x-enum-varnames:
         - Undefined
@@ -717,6 +721,8 @@ components:
         - UserverHTTP
         - UserverGRPC
         - UserverKafka
+        - AioHTTP
+        - AioKafka
 
     DataConnector:
       type: object
