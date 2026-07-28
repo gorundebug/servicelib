@@ -50,6 +50,8 @@ const (
 	mdiAlertCircle              = "M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"
 	mdiTimer                    = "M19.03 7.39L20.45 5.97C20 5.46 19.55 5 19.04 4.56L17.62 6C16.07 4.74 14.12 4 12 4C7.03 4 3 8.03 3 13S7.03 22 12 22C17 22 21 17.97 21 13C21 10.88 20.26 8.93 19.03 7.39M13 14H11V7H13V14M15 1H9V3H15V1Z"
 	mdiSourceBranch             = "M13,14C9.64,14 8.54,15.35 8.18,16.24C9.25,16.7 10,17.76 10,19A3,3 0 0,1 7,22A3,3 0 0,1 4,19C4,17.69 4.83,16.58 6,16.17V7.83C4.83,7.42 4,6.31 4,5A3,3 0 0,1 7,2A3,3 0 0,1 10,5C10,6.31 9.17,7.42 8,7.83V13.12C8.88,12.47 10.16,12 12,12C14.67,12 15.56,10.66 15.85,9.77C14.77,9.32 14,8.25 14,7A3,3 0 0,1 17,4A3,3 0 0,1 20,7C20,8.34 19.12,9.5 17.91,9.86C17.65,11.29 16.68,14 13,14M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18M7,4A1,1 0 0,0 6,5A1,1 0 0,0 7,6A1,1 0 0,0 8,5A1,1 0 0,0 7,4M17,6A1,1 0 0,0 16,7A1,1 0 0,0 17,8A1,1 0 0,0 18,7A1,1 0 0,0 17,6Z"
+	mdiAPI                      = "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z"
+	mdiCallMade                 = "M9,5V7H15.59L4,18.59L5.41,20L17,8.41V15H19V5"
 )
 
 var streamIconMap = map[api.TransformationType]string{
@@ -169,10 +171,7 @@ func (app *ServiceApp) makeNode(runtimeStream RuntimeStream) *Node {
 	label := fmt.Sprintf("%s(%s)\n[%s]", stream.GetName(),
 		englishUpperCaser.String(stream.GetTransformationName()), serviceName)
 
-	iconPath := mdiFunction
-	if icon, ok := streamIconMap[streamConfig.GetType()]; ok {
-		iconPath = icon
-	}
+	iconPath := statusIconPath(app.RuntimeConfig(), streamConfig)
 
 	n := &Node{
 		ID:    stream.GetID(),
@@ -190,6 +189,40 @@ func (app *ServiceApp) makeNode(runtimeStream RuntimeStream) *Node {
 	n.Color.Border = "transparent"
 	n.Color.Highlight.Border = "transparent"
 	return n
+}
+
+func statusIconPath(runtimeConfig *config.RuntimeConfig, streamConfig config.StreamConfig) string {
+	iconPath := mdiFunction
+	if icon, ok := streamIconMap[streamConfig.GetType()]; ok {
+		iconPath = icon
+	}
+	if endpointID := endpointIDForStatusIcon(streamConfig); endpointID != 0 && runtimeConfig != nil {
+		endpoint := runtimeConfig.GetEndpointConfigByID(endpointID)
+		if endpoint != nil {
+			connector := runtimeConfig.GetDataConnectorByID(endpoint.GetIdDataConnector())
+			if connector != nil &&
+				(connector.GetType() == api.DataConnectorTypeHTTP ||
+					connector.GetType() == api.DataConnectorTypeGRPC) {
+				if streamConfig.GetType() == api.TransformationTypeSink {
+					iconPath = mdiCallMade
+				} else {
+					iconPath = mdiAPI
+				}
+			}
+		}
+	}
+	return iconPath
+}
+
+func endpointIDForStatusIcon(stream config.StreamConfig) int {
+	switch cfg := stream.(type) {
+	case *config.InputStreamConfig:
+		return cfg.IdEndpoint
+	case *config.SinkStreamConfig:
+		return cfg.IdEndpoint
+	default:
+		return 0
+	}
 }
 
 func (app *ServiceApp) makeEdge(from Stream, typeName string, consumer Stream, color string) *Edge {

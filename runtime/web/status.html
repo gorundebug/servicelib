@@ -79,28 +79,53 @@
             autoResize: false,
         };
         const graphContainer = document.getElementById('graph');
+        const nodes = new vis.DataSet([]);
+        const edges = new vis.DataSet([]);
         const network = new vis.Network(graphContainer, {
-            nodes: [],
-            edges: []
+            nodes: nodes,
+            edges: edges
         }, options);
+        let initialized = false;
 
-        fetch(dataUrl)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(result => {
-                network.setData({nodes: result.nodes, edges: result.edges});
-                network.redraw();
-                if (result.nodes && result.nodes.length > 0) {
-                    network.focus(result.nodes[0].id);
-                }
-            })
-            .catch(error => {
-                console.error('There was a problem with the fetch operation:', error);
-            });
+        function replaceData(dataSet, items) {
+            const nextIds = new Set(items.map(item => item.id));
+            const removedIds = dataSet.getIds().filter(id => !nextIds.has(id));
+            if (removedIds.length > 0) {
+                dataSet.remove(removedIds);
+            }
+            dataSet.update(items);
+        }
+
+        function refreshNetwork() {
+            fetch(dataUrl, {cache: 'no-store'})
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    const nextNodes = result.nodes || [];
+                    const nextEdges = (result.edges || []).map(edge => ({
+                        ...edge,
+                        id: edge.id || `${edge.from}->${edge.to}`
+                    }));
+                    replaceData(nodes, nextNodes);
+                    replaceData(edges, nextEdges);
+                    if (!initialized && nextNodes.length > 0) {
+                        initialized = true;
+                        network.focus(nextNodes[0].id);
+                    }
+                })
+                .catch(error => {
+                    console.error('There was a problem with the fetch operation:', error);
+                })
+                .finally(() => {
+                    window.setTimeout(refreshNetwork, 1000);
+                });
+        }
+
+        refreshNetwork();
     }
 
     loadCSS(statusBase + '/vis.min.css');
