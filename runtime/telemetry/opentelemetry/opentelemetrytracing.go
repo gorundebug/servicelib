@@ -133,12 +133,19 @@ type samplingGRPCServerHandler struct {
 }
 
 func (h *samplingGRPCServerHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	ctx = h.inner.TagRPC(ctx, info)
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if vals := md.Get("x-trace"); len(vals) > 0 && vals[0] != "" {
-			ctx = tracing.EnableSampling(ctx)
+			return tracing.EnableSampling(ctx)
 		}
 	}
-	return h.inner.TagRPC(ctx, info)
+	// A sampled remote traceparent is itself sufficient to continue
+	// application spans. Requiring the ServiceLib-specific x-trace marker on
+	// every hop would break standard W3C propagation.
+	if oteltrace.SpanContextFromContext(ctx).IsSampled() {
+		return tracing.EnableSampling(ctx)
+	}
+	return ctx
 }
 
 func (h *samplingGRPCServerHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
@@ -240,8 +247,8 @@ func (contextSampler) Description() string { return "ContextSampler" }
 // TracingOption configures how the TracerProvider is built.
 type TracingOption func(*[]sdktrace.TracerProviderOption)
 
-// WithContextSampler enables per-request tracing via tracing.EnableSampling(ctx).
-// Without this option all spans are recorded (AlwaysSample).
+// WithContextSampler explicitly selects the default ServiceLib opt-in
+// sampling contract. It remains useful in uniform option lists.
 func WithContextSampler() TracingOption {
 	return func(opts *[]sdktrace.TracerProviderOption) {
 		*opts = append(*opts, sdktrace.WithSampler(
@@ -273,6 +280,7 @@ func buildProvider(exp sdktrace.SpanExporter, env environment.ServiceEnvironment
 	provOpts := []sdktrace.TracerProviderOption{
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(serviceResource(env)),
+		sdktrace.WithSampler(sdktrace.ParentBased(contextSampler{})),
 	}
 	for _, o := range opts {
 		o(&provOpts)
@@ -295,6 +303,7 @@ func CreatePrettyTracingEngine(env environment.ServiceEnvironment, opts ...Traci
 	provOpts := []sdktrace.TracerProviderOption{
 		sdktrace.WithSyncer(exp),
 		sdktrace.WithResource(serviceResource(env)),
+		sdktrace.WithSampler(sdktrace.ParentBased(contextSampler{})),
 	}
 	for _, o := range opts {
 		o(&provOpts)

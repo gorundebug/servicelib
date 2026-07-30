@@ -215,7 +215,10 @@ grpc.server                          ← transport, via otelgrpc
                       └─ grpc.client ← transport, via otelgrpc
 ```
 
-Per-request sampling via `X-Trace: 1` header (HTTP) or `x-trace` metadata (gRPC).
+Per-request sampling is opt-in via a non-empty `X-Trace` header (HTTP),
+non-empty `x-trace` metadata (gRPC), or an already sampled W3C remote parent.
+Without one of these signals ServiceLib creates no recording request,
+operator, pool, source, or sink spans.
 
 ### Metrics (Prometheus)
 

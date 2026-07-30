@@ -28,6 +28,9 @@ const (
 	DataConnectorImplementationGoogleGRPC   DataConnectorImplementation = "google/grpc"
 	DataConnectorImplementationIBMsarama    DataConnectorImplementation = "IBM/Sarama"
 	DataConnectorImplementationNetHTTP      DataConnectorImplementation = "net/http"
+	DataConnectorImplementationRustAxum     DataConnectorImplementation = "rust/axum"
+	DataConnectorImplementationRustRdkafka  DataConnectorImplementation = "rust/rdkafka"
+	DataConnectorImplementationRustTonic    DataConnectorImplementation = "rust/tonic"
 	DataConnectorImplementationUndefined    DataConnectorImplementation = ""
 	DataConnectorImplementationUserverGRPC  DataConnectorImplementation = "userver/grpc"
 	DataConnectorImplementationUserverHTTP  DataConnectorImplementation = "userver/http"
@@ -137,6 +140,7 @@ const (
 	ProgrammingLanguageCpp       ProgrammingLanguage = 2
 	ProgrammingLanguageGoLang    ProgrammingLanguage = 1
 	ProgrammingLanguagePython    ProgrammingLanguage = 3
+	ProgrammingLanguageRust      ProgrammingLanguage = 4
 	ProgrammingLanguageUndefined ProgrammingLanguage = 0
 )
 
@@ -210,6 +214,9 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	// - `aiohttp`: Python aiohttp
 	// - `aiokafka`: Python aiokafka
+	// - `rust/axum`: Rust axum HTTP
+	// - `rust/tonic`: Rust tonic gRPC
+	// - `rust/rdkafka`: Rust rdkafka Kafka client
 	CppImplementation *DataConnectorImplementation `json:"cppImplementation,omitempty"`
 
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
@@ -225,6 +232,9 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	// - `aiohttp`: Python aiohttp
 	// - `aiokafka`: Python aiokafka
+	// - `rust/axum`: Rust axum HTTP
+	// - `rust/tonic`: Rust tonic gRPC
+	// - `rust/rdkafka`: Rust rdkafka Kafka client
 	GoImplementation *DataConnectorImplementation `json:"goImplementation,omitempty"`
 
 	// Host Hostname or IP address. Applies to HTTP and gRPC connectors.
@@ -243,6 +253,9 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	// - `aiohttp`: Python aiohttp
 	// - `aiokafka`: Python aiokafka
+	// - `rust/axum`: Rust axum HTTP
+	// - `rust/tonic`: Rust tonic gRPC
+	// - `rust/rdkafka`: Rust rdkafka Kafka client
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
 	// Module Contract module containing generated gRPC protobuf types for this connector.
@@ -266,7 +279,25 @@ type DataConnector struct {
 	// - `userver/kafka`: userver Kafka
 	// - `aiohttp`: Python aiohttp
 	// - `aiokafka`: Python aiokafka
+	// - `rust/axum`: Rust axum HTTP
+	// - `rust/tonic`: Rust tonic gRPC
+	// - `rust/rdkafka`: Rust rdkafka Kafka client
 	PythonImplementation *DataConnectorImplementation `json:"pythonImplementation,omitempty"`
+
+	// RustImplementation The specific library used to implement a data connector.
+	// - `net/http`: Go standard library HTTP
+	// - `function`: in-process custom connector (no network)
+	// - `IBM/Sarama`: Sarama Kafka client
+	// - `google/grpc`: official gRPC-Go library
+	// - `userver/http`: userver HTTP
+	// - `userver/grpc`: userver gRPC
+	// - `userver/kafka`: userver Kafka
+	// - `aiohttp`: Python aiohttp
+	// - `aiokafka`: Python aiokafka
+	// - `rust/axum`: Rust axum HTTP
+	// - `rust/tonic`: Rust tonic gRPC
+	// - `rust/rdkafka`: Rust rdkafka Kafka client
+	RustImplementation *DataConnectorImplementation `json:"rustImplementation,omitempty"`
 
 	// Type Type of external system the data connector connects to.
 	// - `HTTP` (1): HTTP server or client
@@ -299,6 +330,9 @@ type DataConnector struct {
 // - `userver/kafka`: userver Kafka
 // - `aiohttp`: Python aiohttp
 // - `aiokafka`: Python aiokafka
+// - `rust/axum`: Rust axum HTTP
+// - `rust/tonic`: Rust tonic gRPC
+// - `rust/rdkafka`: Rust rdkafka Kafka client
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.

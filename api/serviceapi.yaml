@@ -202,12 +202,13 @@ components:
     ProgrammingLanguage:
       type: integer
       description: Target programming language for code generation.
-      enum: [ 0, 1, 2, 3 ]
+      enum: [ 0, 1, 2, 3, 4 ]
       x-enum-varnames:
         - Undefined
         - GoLang
         - Cpp
         - Python
+        - Rust
 
     ProjectSettings:
       type: object
@@ -703,6 +704,9 @@ components:
         - `userver/kafka`: userver Kafka
         - `aiohttp`: Python aiohttp
         - `aiokafka`: Python aiokafka
+        - `rust/axum`: Rust axum HTTP
+        - `rust/tonic`: Rust tonic gRPC
+        - `rust/rdkafka`: Rust rdkafka Kafka client
       enum: [ '',
               'net/http',
               'function',
@@ -712,7 +716,10 @@ components:
               'userver/grpc',
               'userver/kafka',
               'aiohttp',
-              'aiokafka'
+              'aiokafka',
+              'rust/axum',
+              'rust/tonic',
+              'rust/rdkafka'
       ]
       x-enum-varnames:
         - Undefined
@@ -725,6 +732,9 @@ components:
         - UserverKafka
         - AioHTTP
         - AioKafka
+        - RustAxum
+        - RustTonic
+        - RustRdkafka
 
     DataConnector:
       type: object
@@ -759,6 +769,9 @@ components:
         pythonImplementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
           description: Implementation used when generating a Python service.
+        rustImplementation:
+          $ref: '#/components/schemas/DataConnectorImplementation'
+          description: Implementation used when generating a Rust service.
         host:
           type: string
           description: Hostname or IP address. Applies to HTTP and gRPC connectors.

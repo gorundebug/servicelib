@@ -292,6 +292,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.PythonImplementation != nil {
 				dcObj["pythonImplementation"] = string(*dc.PythonImplementation)
 			}
+			if dc.RustImplementation != nil {
+				dcObj["rustImplementation"] = string(*dc.RustImplementation)
+			}
 			if dc.Host != nil {
 				dcObj["host"] = *dc.Host
 			}
