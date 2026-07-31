@@ -129,10 +129,14 @@ func MakeDataSinkEndpoint(dataSink DataSink, id int, environment RuntimeEnvironm
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	connectorName := dataSink.GetName()
 
-	scope := environment.Metrics().Scope("datasink_endpoint", metrics.Labels{
+	labels := metrics.Labels{
 		"connector": connectorName,
 		"endpoint":  endpointName,
-	})
+	}
+	if protocol := dataConnectorProtocol(dataSink.GetConfig().GetType()); protocol != "" {
+		labels["protocol"] = protocol
+	}
+	scope := environment.Metrics().Scope("datasink_endpoint", labels)
 	var err error
 	if ep.beginRequestFailedCounter, err = scope.Counter("events_total", "Total number of events in data sink endpoint", metrics.Labels{"event": "begin_request_failed"}); err != nil {
 		return nil, fmt.Errorf("failed to create metrics for sink endpoint %q: %w", endpointName, err)

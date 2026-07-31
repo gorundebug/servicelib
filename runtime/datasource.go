@@ -143,10 +143,14 @@ func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEn
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	connectorName := dataSource.GetName()
 
-	scope := environment.Metrics().Scope("datasource_endpoint", metrics.Labels{
+	labels := metrics.Labels{
 		"connector": connectorName,
 		"endpoint":  endpointName,
-	})
+	}
+	if protocol := dataConnectorProtocol(dataSource.GetConfig().GetType()); protocol != "" {
+		labels["protocol"] = protocol
+	}
+	scope := environment.Metrics().Scope("datasource_endpoint", labels)
 	var err error
 	if ep.missingStreamIDCounter, err = scope.Counter("events_total", "Total number of events in data source endpoint", metrics.Labels{"event": "missing_stream_id"}); err != nil {
 		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
