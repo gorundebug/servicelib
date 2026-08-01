@@ -67,6 +67,26 @@ func (m *RotatingMap[K, V]) Set(key K, value V) error {
 	return nil
 }
 
+// GetOrCreate returns the existing value for key if present (checking current
+// then prev, without moving it). Otherwise it atomically creates one via
+// factory and stores it in current. loaded reports whether an existing value
+// was found. factory must be cheap and non-blocking: it runs while the map's
+// internal lock is held, so callers must not perform I/O or other blocking
+// work inside it.
+func (m *RotatingMap[K, V]) GetOrCreate(key K, factory func() V) (value V, loaded bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if v, exists := m.current[key]; exists {
+		return v, true
+	}
+	if v, exists := m.prev[key]; exists {
+		return v, true
+	}
+	v := factory()
+	m.current[key] = v
+	return v, false
+}
+
 // Get retrieves the value without deleting it. Returns false if not found.
 func (m *RotatingMap[K, V]) Get(key K) (V, bool) {
 	m.mu.Lock()

@@ -39,21 +39,18 @@ type clientStreamingResult[HandlerState, ReqT, ResR, T, R any] struct {
 	span         tracing.Span
 	doneCh       chan struct{}
 	mu           sync.RWMutex
+
+	// ready is closed once creation of this entry finishes (successfully or
+	// not). A caller that finds an existing-but-not-yet-ready entry (a
+	// concurrent Consume for the same streamID that is still being created)
+	// waits on ready instead of on a service-wide lock.
+	ready chan struct{}
+	err   error
 }
 
-func makeClientStreamingResult[HandlerState, ReqT, ResR, T, R any](
-	handlerCtx context.Context,
-	handlerState HandlerState,
-	sender *grpcSender[ReqT],
-	span tracing.Span,
-	doneCh chan struct{},
-) *clientStreamingResult[HandlerState, ReqT, ResR, T, R] {
+func makeClientStreamingResult[HandlerState, ReqT, ResR, T, R any]() *clientStreamingResult[HandlerState, ReqT, ResR, T, R] {
 	return &clientStreamingResult[HandlerState, ReqT, ResR, T, R]{
-		handlerCtx:   handlerCtx,
-		handlerState: handlerState,
-		sender:       sender,
-		span:         span,
-		doneCh:       doneCh,
+		ready: make(chan struct{}),
 	}
 }
 
@@ -69,7 +66,6 @@ type grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E any] stru
 	handler  EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
 	clientFn ClientStreamingClientFunction[ReqT, ResR]
 	pending  *store.RotatingMap[string, *clientStreamingResult[HandlerState, ReqT, ResR, T, R]]
-	mu       sync.Mutex
 }
 
 func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Start(ctx context.Context) error {
@@ -92,12 +88,16 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		ctx = runtime.WithStreamId(ctx, streamID)
 	}
 
-	ec.mu.Lock()
-	result, loaded := ec.pending.Get(streamID)
+	result, loaded := ec.pending.GetOrCreate(streamID, func() *clientStreamingResult[HandlerState, ReqT, ResR, T, R] {
+		return makeClientStreamingResult[HandlerState, ReqT, ResR, T, R]()
+	})
 	if !loaded {
+
 		handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 		if err != nil {
-			ec.mu.Unlock()
+			ec.pending.Pop(streamID)
+			result.err = err
+			close(result.ready)
 			ec.endpoint.OnBeginRequestFailed(ctx, err)
 			return
 		}
@@ -118,7 +118,9 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 
 		grpcStream, err := ec.clientFn(handlerCtx)
 		if err != nil {
-			ec.mu.Unlock()
+			ec.pending.Pop(streamID)
+			result.err = err
+			close(result.ready)
 			tracing.SpanError(outputSpan, err)
 			if outputSpan != nil {
 				tracing.SpanEvent(outputSpan, "grpc_call.error", tracing.StringAttr("error", err.Error()))
@@ -133,20 +135,12 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		tracing.SpanEvent(outputSpan, "grpc_call")
 
 		doneCh := make(chan struct{})
-		result = makeClientStreamingResult[HandlerState, ReqT, ResR, T, R](
-			handlerCtx, handlerState, &grpcSender[ReqT]{sendFn: grpcStream.Send, span: outputSpan}, outputSpan, doneCh,
-		)
-		if err := ec.pending.Set(streamID, result); err != nil {
-			ec.mu.Unlock()
-			tracing.SpanError(outputSpan, err)
-			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
-			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
-			if outputSpan != nil {
-				outputSpan.End()
-			}
-			return
-		}
-		ec.mu.Unlock()
+		result.handlerCtx = handlerCtx
+		result.handlerState = handlerState
+		result.sender = &grpcSender[ReqT]{sendFn: grpcStream.Send, span: outputSpan}
+		result.span = outputSpan
+		result.doneCh = doneCh
+		close(result.ready)
 
 		// Wait for Done() or context cancellation, then close and receive the response.
 		go func() {
@@ -207,7 +201,12 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 			}
 		}()
 	} else {
-		ec.mu.Unlock()
+		<-result.ready
+		if result.err != nil {
+			// Creation failed on another goroutine; it has already reported
+			// and cleaned up, so this message is simply dropped.
+			return
+		}
 	}
 
 	result.mu.RLock()
