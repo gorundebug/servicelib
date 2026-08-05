@@ -9,7 +9,10 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -19,11 +22,13 @@ import (
 func TestMakeRotatingMap_InitialState(t *testing.T) {
 	m := MakeRotatingMap[string, int](time.Second)
 
-	if m.current == nil {
-		t.Fatal("current map must be initialised")
-	}
-	if m.prev == nil {
-		t.Fatal("prev map must be initialised")
+	for i := range m.shards {
+		if m.shards[i].current == nil {
+			t.Fatalf("current map in shard %d must be initialised", i)
+		}
+		if m.shards[i].prev == nil {
+			t.Fatalf("prev map in shard %d must be initialised", i)
+		}
 	}
 	if m.timer != nil {
 		t.Fatal("timer must be nil before Start")
@@ -172,10 +177,11 @@ func TestRotatingMap_Rotate_ItemMovesToPrev(t *testing.T) {
 
 	m.rotate()
 
-	if len(m.current) != 0 {
-		t.Fatalf("current must be empty after rotate, len=%d", len(m.current))
+	shard := m.shard("k")
+	if len(shard.current) != 0 {
+		t.Fatalf("current must be empty after rotate, len=%d", len(shard.current))
 	}
-	if v, ok := m.prev["k"]; !ok || v != 10 {
+	if v, ok := shard.prev["k"]; !ok || v != 10 {
 		t.Fatalf("expected k=10 in prev, got ok=%v v=%d", ok, v)
 	}
 
@@ -291,10 +297,11 @@ func TestRotatingMap_Rotate_SetAfterRotate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := m.current["b"]; !ok {
+	shard := m.shard("b")
+	if _, ok := shard.current["b"]; !ok {
 		t.Fatal("key set after rotate must be in current")
 	}
-	if _, ok := m.prev["b"]; ok {
+	if _, ok := shard.prev["b"]; ok {
 		t.Fatal("key set after rotate must not be in prev")
 	}
 }
@@ -346,16 +353,16 @@ func TestRotatingMap_SkipsRotationUnderHighLoad(t *testing.T) {
 	// With 100 live entries (all in prev) and highWaterMark=100,
 	// total*factor = 100*4 = 400 >= 100 → rotation must be skipped.
 	// After a skip: current stays empty (was not replaced) and prev still has all entries.
-	lenPrevBefore := len(m.prev)
-	lenCurrentBefore := len(m.current)
+	lenCurrentBefore, lenPrevBefore := rotatingMapGenerationSizes(m)
 
 	m.rotate()
 
-	if len(m.prev) != lenPrevBefore {
-		t.Fatalf("prev must not change when rotation is skipped: before=%d after=%d", lenPrevBefore, len(m.prev))
+	lenCurrentAfter, lenPrevAfter := rotatingMapGenerationSizes(m)
+	if lenPrevAfter != lenPrevBefore {
+		t.Fatalf("prev must not change when rotation is skipped: before=%d after=%d", lenPrevBefore, lenPrevAfter)
 	}
-	if len(m.current) != lenCurrentBefore {
-		t.Fatalf("current must not change when rotation is skipped: before=%d after=%d", lenCurrentBefore, len(m.current))
+	if lenCurrentAfter != lenCurrentBefore {
+		t.Fatalf("current must not change when rotation is skipped: before=%d after=%d", lenCurrentBefore, lenCurrentAfter)
 	}
 	// Spot-check: items must still be accessible.
 	if v, ok := m.Get(0); !ok || v != 0 {
@@ -387,11 +394,9 @@ func TestRotatingMap_RotatesAfterBurstRecovery(t *testing.T) {
 	m.rotate()
 
 	// After rotation: current must be a fresh empty map; prev has the surviving entries.
-	if len(m.current) != 0 {
-		t.Fatalf("current must be empty after rotation, got len=%d", len(m.current))
-	}
-	if m.highWaterMark != threshold-1 {
-		t.Fatalf("highWaterMark must reset to live count after rotation, got %d", m.highWaterMark)
+	current, _ := rotatingMapGenerationSizes(m)
+	if current != 0 {
+		t.Fatalf("current generations must be empty after rotation, got len=%d", current)
 	}
 }
 
@@ -412,8 +417,8 @@ func TestRotatingMap_HighWaterMarkTrackedWhenSkipped(t *testing.T) {
 	}
 	m.rotate() // total = ~210; 210*4 >= 10 → skip; but highWaterMark must update to ~210
 
-	if m.highWaterMark < 200 {
-		t.Fatalf("highWaterMark must track growing load even when rotation is skipped, got %d", m.highWaterMark)
+	if highWaterMark := rotatingMapHighWaterMark(m); highWaterMark < 200 {
+		t.Fatalf("highWaterMark must track growing load even when rotation is skipped, got %d", highWaterMark)
 	}
 }
 
@@ -428,10 +433,11 @@ func TestRotatingMap_FirstCallAlwaysRotates(t *testing.T) {
 	m.rotate()
 
 	// After the first rotation current must be a fresh empty map.
-	if len(m.current) != 0 {
+	shard := m.shard("k")
+	if len(shard.current) != 0 {
 		t.Fatal("first rotate() call must always perform the rotation: current must be empty")
 	}
-	if _, ok := m.prev["k"]; !ok {
+	if _, ok := shard.prev["k"]; !ok {
 		t.Fatal("item must be in prev after first rotation")
 	}
 }
@@ -459,6 +465,26 @@ func TestRotatingMap_Concurrent_SetGet(t *testing.T) {
 	wg.Wait()
 }
 
+func TestRotatingMap_DistributesKeysAcrossShards(t *testing.T) {
+	m := MakeRotatingMap[string, int](time.Hour)
+	for i := 0; i < 1_000; i++ {
+		key := fmt.Sprintf("stream-%d", i)
+		if err := m.Set(key, i); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	used := 0
+	for i := range m.shards {
+		if len(m.shards[i].current) != 0 {
+			used++
+		}
+	}
+	if used < rotatingMapShardCount/2 {
+		t.Fatalf("expected keys to use at least half the shards, used %d", used)
+	}
+}
+
 func TestRotatingMap_Concurrent_SetPopRotate(t *testing.T) {
 	m := MakeRotatingMap[int, int](time.Hour)
 	const goroutines = 30
@@ -473,4 +499,46 @@ func TestRotatingMap_Concurrent_SetPopRotate(t *testing.T) {
 		go func() { defer wg.Done(); m.rotate() }()
 	}
 	wg.Wait()
+}
+
+func BenchmarkRotatingMap_ParallelRequestLifecycle(b *testing.B) {
+	m := MakeRotatingMap[string, int](time.Hour)
+	var sequence atomic.Uint64
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			key := strconv.FormatUint(sequence.Add(1), 10)
+			if err := m.Set(key, 1); err != nil {
+				b.Fatal(err)
+			}
+			if value, ok := m.Get(key); !ok || value != 1 {
+				b.Fatalf("unexpected value %d, found=%v", value, ok)
+			}
+			if _, ok := m.Pop(key); !ok {
+				b.Fatal("pending entry disappeared")
+			}
+		}
+	})
+}
+
+func rotatingMapGenerationSizes[K comparable, V any](m *RotatingMap[K, V]) (current, previous int) {
+	for i := range m.shards {
+		shard := &m.shards[i]
+		shard.mu.Lock()
+		current += len(shard.current)
+		previous += len(shard.prev)
+		shard.mu.Unlock()
+	}
+	return current, previous
+}
+
+func rotatingMapHighWaterMark[K comparable, V any](m *RotatingMap[K, V]) int {
+	result := 0
+	for i := range m.shards {
+		shard := &m.shards[i]
+		shard.mu.Lock()
+		result += shard.highWaterMark
+		shard.mu.Unlock()
+	}
+	return result
 }

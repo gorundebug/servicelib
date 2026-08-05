@@ -10,6 +10,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"hash/maphash"
 	"sync"
 	"time"
 
@@ -20,6 +21,13 @@ import (
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
+
+const pendingRequestShardCount = 64
+
+type pendingRequestShard struct {
+	mu      sync.RWMutex
+	started map[string]time.Time
+}
 
 type DataSource interface {
 	DataConnector
@@ -129,8 +137,8 @@ type DataSourceEndpoint struct {
 	requestDuration           metrics.Float64Histogram
 	activeRequests            metrics.Int64Gauge
 	pendingRequests           metrics.Int64Gauge
-	pendingMu                 sync.RWMutex
-	pendingStartTimes         map[string]time.Time
+	pendingShards             [pendingRequestShardCount]pendingRequestShard
+	pendingHashSeed           maphash.Seed
 }
 
 func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEnvironment) (*DataSourceEndpoint, error) {
@@ -185,7 +193,10 @@ func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEn
 	if ep.pendingRequests, err = scope.Gauge("pending_requests", "Number of requests awaiting a pipeline result", nil); err != nil {
 		return nil, fmt.Errorf("failed to create metrics for source endpoint %q: %w", endpointName, err)
 	}
-	ep.pendingStartTimes = make(map[string]time.Time)
+	ep.pendingHashSeed = maphash.MakeSeed()
+	for i := range ep.pendingShards {
+		ep.pendingShards[i].started = make(map[string]time.Time)
+	}
 	if err = scope.ObservableFloat64Gauge(
 		"pending_oldest_age_seconds",
 		"Age in seconds of the oldest pending request awaiting a pipeline result",
@@ -241,13 +252,16 @@ func (ep *DataSourceEndpoint) OnDuplicateMessageID(ctx context.Context, sessionI
 }
 
 func (ep *DataSourceEndpoint) oldestPendingAge() float64 {
-	ep.pendingMu.RLock()
-	defer ep.pendingMu.RUnlock()
 	var oldest time.Time
-	for _, t := range ep.pendingStartTimes {
-		if oldest.IsZero() || t.Before(oldest) {
-			oldest = t
+	for i := range ep.pendingShards {
+		shard := &ep.pendingShards[i]
+		shard.mu.RLock()
+		for _, started := range shard.started {
+			if oldest.IsZero() || started.Before(oldest) {
+				oldest = started
+			}
 		}
+		shard.mu.RUnlock()
 	}
 	if oldest.IsZero() {
 		return 0
@@ -257,16 +271,23 @@ func (ep *DataSourceEndpoint) oldestPendingAge() float64 {
 
 func (ep *DataSourceEndpoint) OnPendingAdd(_ context.Context, streamID string) {
 	ep.pendingRequests.Inc()
-	ep.pendingMu.Lock()
-	ep.pendingStartTimes[streamID] = time.Now()
-	ep.pendingMu.Unlock()
+	shard := ep.pendingShard(streamID)
+	shard.mu.Lock()
+	shard.started[streamID] = time.Now()
+	shard.mu.Unlock()
 }
 
 func (ep *DataSourceEndpoint) OnPendingRemove(_ context.Context, streamID string) {
 	ep.pendingRequests.Dec()
-	ep.pendingMu.Lock()
-	delete(ep.pendingStartTimes, streamID)
-	ep.pendingMu.Unlock()
+	shard := ep.pendingShard(streamID)
+	shard.mu.Lock()
+	delete(shard.started, streamID)
+	shard.mu.Unlock()
+}
+
+func (ep *DataSourceEndpoint) pendingShard(streamID string) *pendingRequestShard {
+	index := maphash.String(ep.pendingHashSeed, streamID) % pendingRequestShardCount
+	return &ep.pendingShards[index]
 }
 
 func (ep *DataSourceEndpoint) OnInvalidHTTPMethod(ctx context.Context, method string) {

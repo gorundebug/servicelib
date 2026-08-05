@@ -408,16 +408,20 @@ func (ec *customEndpointConsumer[HandlerState, T, R, E]) consumeResult(ctx conte
 		return
 	}
 	if cb(ctx, ec.sc, result.handlerState, value) {
+		var duplicate bool
 		result.cbMu.Lock()
 		if _, exists := result.messageCallbackMap[messageID]; exists {
 			delete(result.messageCallbackMap, messageID)
 		} else {
+			duplicate = true
+		}
+		result.cbMu.Unlock()
+		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
 			if result.span != nil {
 				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
-		result.cbMu.Unlock()
 	}
 	if result.span != nil {
 		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))

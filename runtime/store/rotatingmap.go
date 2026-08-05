@@ -10,6 +10,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"hash/maphash"
 	"sync"
 	"time"
 )
@@ -20,34 +21,42 @@ import (
 // This avoids pointless rotations under steady or growing load while still reclaiming
 // memory after burst traffic.
 const rotatingMapShrinkFactor = 4
+const rotatingMapShardCount = 64
 
-type RotatingMap[K comparable, V any] struct {
+type rotatingMapShard[K comparable, V any] struct {
 	current       map[K]V
 	prev          map[K]V
 	mu            sync.Mutex
-	interval      time.Duration
-	timer         *time.Timer
-	highWaterMark int // max live entries observed since last rotation
+	highWaterMark int
+}
+
+type RotatingMap[K comparable, V any] struct {
+	shards      [rotatingMapShardCount]rotatingMapShard[K, V]
+	interval    time.Duration
+	lifecycleMu sync.Mutex
+	timer       *time.Timer
+	seed        maphash.Seed
 }
 
 func MakeRotatingMap[K comparable, V any](interval time.Duration) *RotatingMap[K, V] {
-	return &RotatingMap[K, V]{
-		current:  make(map[K]V),
-		prev:     make(map[K]V),
-		interval: interval,
+	m := &RotatingMap[K, V]{interval: interval, seed: maphash.MakeSeed()}
+	for i := range m.shards {
+		m.shards[i].current = make(map[K]V)
+		m.shards[i].prev = make(map[K]V)
 	}
+	return m
 }
 
 func (m *RotatingMap[K, V]) Start(_ context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	m.timer = time.AfterFunc(m.interval, m.rotate)
 	return nil
 }
 
 func (m *RotatingMap[K, V]) Stop(_ context.Context) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	if m.timer != nil {
 		m.timer.Stop()
 		m.timer = nil
@@ -55,62 +64,63 @@ func (m *RotatingMap[K, V]) Stop(_ context.Context) {
 }
 
 func (m *RotatingMap[K, V]) Set(key K, value V) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, exists := m.current[key]; exists {
+	shard := m.shard(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if _, exists := shard.current[key]; exists {
 		return fmt.Errorf("duplicate stream ID %v", key)
 	}
-	if _, exists := m.prev[key]; exists {
+	if _, exists := shard.prev[key]; exists {
 		return fmt.Errorf("duplicate stream ID %v", key)
 	}
-	m.current[key] = value
+	shard.current[key] = value
 	return nil
 }
 
 // GetOrCreate returns the existing value for key if present (checking current
 // then prev, without moving it). Otherwise it atomically creates one via
 // factory and stores it in current. loaded reports whether an existing value
-// was found. factory must be cheap and non-blocking: it runs while the map's
-// internal lock is held, so callers must not perform I/O or other blocking
-// work inside it.
+// was found. factory must be cheap and non-blocking: it runs while the shard's
+// lock is held, so callers must not perform I/O or other blocking work inside it.
 func (m *RotatingMap[K, V]) GetOrCreate(key K, factory func() V) (value V, loaded bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if v, exists := m.current[key]; exists {
+	shard := m.shard(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if v, exists := shard.current[key]; exists {
 		return v, true
 	}
-	if v, exists := m.prev[key]; exists {
+	if v, exists := shard.prev[key]; exists {
 		return v, true
 	}
 	v := factory()
-	m.current[key] = v
+	shard.current[key] = v
 	return v, false
 }
 
-// Get retrieves the value without deleting it. Returns false if not found.
 func (m *RotatingMap[K, V]) Get(key K) (V, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if v, exists := m.current[key]; exists {
+	shard := m.shard(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if v, exists := shard.current[key]; exists {
 		return v, true
 	}
-	if v, exists := m.prev[key]; exists {
+	if v, exists := shard.prev[key]; exists {
 		return v, true
 	}
 	var zero V
 	return zero, false
 }
 
-// Pop atomically retrieves and deletes the value. Returns false if not found.
 func (m *RotatingMap[K, V]) Pop(key K) (V, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if v, exists := m.current[key]; exists {
-		delete(m.current, key)
+	shard := m.shard(key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+	if v, exists := shard.current[key]; exists {
+		delete(shard.current, key)
 		return v, true
 	}
-	if v, exists := m.prev[key]; exists {
-		delete(m.prev, key)
+	if v, exists := shard.prev[key]; exists {
+		delete(shard.prev, key)
 		return v, true
 	}
 	var zero V
@@ -118,32 +128,40 @@ func (m *RotatingMap[K, V]) Pop(key K) (V, bool) {
 }
 
 func (m *RotatingMap[K, V]) rotate() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	total := len(m.current) + len(m.prev)
-
-	// Compute before updating highWaterMark so the first call (highWaterMark==0) always rotates.
-	shouldRotate := m.highWaterMark == 0 || total*rotatingMapShrinkFactor < m.highWaterMark
-
-	// Track high water mark across all intervals (including skipped ones).
-	if total > m.highWaterMark {
-		m.highWaterMark = total
+	for i := range m.shards {
+		m.rotateShard(&m.shards[i])
 	}
 
-	if shouldRotate {
-		// Reset water mark so the next burst is measured from a clean baseline.
-		m.highWaterMark = total
-
-		newMap := make(map[K]V)
-		for k, v := range m.prev {
-			m.current[k] = v
-		}
-		m.prev = m.current
-		m.current = newMap
-	}
-
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	if m.timer != nil {
 		m.timer.Reset(m.interval)
 	}
+}
+
+func (m *RotatingMap[K, V]) rotateShard(shard *rotatingMapShard[K, V]) {
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	total := len(shard.current) + len(shard.prev)
+	shouldRotate := shard.highWaterMark == 0 || total*rotatingMapShrinkFactor < shard.highWaterMark
+
+	if total > shard.highWaterMark {
+		shard.highWaterMark = total
+	}
+	if !shouldRotate {
+		return
+	}
+
+	shard.highWaterMark = total
+	newMap := make(map[K]V)
+	for k, v := range shard.prev {
+		shard.current[k] = v
+	}
+	shard.prev = shard.current
+	shard.current = newMap
+}
+
+func (m *RotatingMap[K, V]) shard(key K) *rotatingMapShard[K, V] {
+	return &m.shards[maphash.Comparable(m.seed, key)%rotatingMapShardCount]
 }
