@@ -241,6 +241,10 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 	case *GrpcDataConnectorConfig:
 		d.Address = strOptPtr(c.Address)
 		d.Module = strOptPtr(c.Module)
+		if c.ConnectionsCount > 0 {
+			connectionsCount := c.ConnectionsCount
+			d.ConnectionsCount = &connectionsCount
+		}
 	case *KafkaDataConnectorConfig:
 		d.Brokers = strOptPtr(c.Brokers)
 		d.Version = strOptPtr(c.Version)

@@ -204,6 +204,9 @@ type DataConnector struct {
 	// Brokers Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
 	Brokers *string `json:"brokers,omitempty"`
 
+	// ConnectionsCount Number of independent transport connections used by a gRPC sink connector.
+	ConnectionsCount *int `json:"connectionsCount,omitempty"`
+
 	// CppImplementation The specific library used to implement a data connector.
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)

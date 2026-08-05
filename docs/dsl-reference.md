@@ -498,6 +498,7 @@ A map of external system connections. Each data connector represents one externa
 | Field | Type | Description |
 |---|---|---|
 | `address` | string | gRPC connection address (e.g. `dns:///localhost:9202`). |
+| `connectionsCount` | integer | Number of independent client transport connections, distributed round-robin. Must be at least 1; defaults to 1. |
 
 ### Kafka connector additional fields
 

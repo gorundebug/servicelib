@@ -304,6 +304,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.Address != nil {
 				dcObj["address"] = *dc.Address
 			}
+			if dc.ConnectionsCount != nil {
+				dcObj["connectionsCount"] = *dc.ConnectionsCount
+			}
 			if dc.Brokers != nil {
 				dcObj["brokers"] = *dc.Brokers
 			}

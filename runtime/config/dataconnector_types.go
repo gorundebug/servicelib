@@ -46,6 +46,7 @@ type GrpcDataConnectorConfig struct {
 	ProgrammingLanguage api.ProgrammingLanguage         `yaml:"programmingLanguage,omitempty" mapstructure:"programmingLanguage"`
 	Module              string                          `yaml:"module,omitempty" mapstructure:"module"`
 	Address             string                          `yaml:"address,omitempty" mapstructure:"address"`
+	ConnectionsCount    int                             `yaml:"connectionsCount,omitempty" mapstructure:"connectionsCount"`
 	Properties          map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
 }
 
