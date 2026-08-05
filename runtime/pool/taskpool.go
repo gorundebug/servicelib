@@ -56,13 +56,15 @@ type TaskPoolImpl struct {
 	cond                    *sync.Cond
 	count                   int
 	environment             environment.ServiceEnvironment
+	fallbackConfig          config.PoolConfig
 }
 
 func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
 	pool := &TaskPoolImpl{
-		name:        poolConfig.Name,
-		environment: env,
-		stop:        make(chan struct{}),
+		name:           poolConfig.Name,
+		environment:    env,
+		stop:           make(chan struct{}),
+		fallbackConfig: *poolConfig,
 	}
 	scope := env.Metrics().Scope("task_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -111,8 +113,16 @@ func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolCon
 
 func (p *TaskPoolImpl) GetName() string { return p.name }
 
+func (p *TaskPoolImpl) getPoolConfig() *config.PoolConfig {
+	poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+	if poolConfig != nil {
+		return poolConfig
+	}
+	return &p.fallbackConfig
+}
+
 func (p *TaskPoolImpl) GetExecutorsCount() int {
-	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
+	return p.getPoolConfig().ExecutorsCount
 }
 
 func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) error {
@@ -182,7 +192,7 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 			executorsCount := 0
 			var pRestart *bool
 			for {
-				poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+				poolConfig := p.getPoolConfig()
 				executorsCountNew := poolConfig.ExecutorsCount
 				if executorsCountNew == 0 {
 					executorsCountNew = runtime.NumCPU()

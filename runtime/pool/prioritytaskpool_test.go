@@ -98,6 +98,28 @@ func TestPriorityTaskPool_ExecutorMetrics(t *testing.T) {
 	assert.Equal(t, int64(0), m.Gauge("priority_task_pool_executors_busy", labels).Value())
 }
 
+func TestPriorityTaskPool_UsesConstructorConfigWhenRuntimePoolIsMissing(t *testing.T) {
+	m := testmetrics.New()
+	rc, err := config.NewRuntimeConfig(&minimalConfig{})
+	require.NoError(t, err)
+	poolConfig := &config.PoolConfig{Name: "fallback-priority", ExecutorsCount: 1}
+	priorityPool, err := makePriorityTaskPool(&mockPoolEnv{m: m, rc: rc}, poolConfig)
+	require.NoError(t, err)
+	require.Equal(t, 1, priorityPool.GetExecutorsCount())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, priorityPool.Start(ctx))
+	executed := make(chan struct{})
+	require.NoError(t, priorityPool.AddTask(ctx, 10, func() { close(executed) }))
+	select {
+	case <-executed:
+	case <-ctx.Done():
+		t.Fatal("fallback priority pool did not execute the task")
+	}
+	priorityPool.Stop(context.Background())
+}
+
 // TestPriorityTaskPool_PriorityOrdering verifies that queued tasks execute in
 // ascending priority order (lower value = higher priority).
 func TestPriorityTaskPool_PriorityOrdering(t *testing.T) {

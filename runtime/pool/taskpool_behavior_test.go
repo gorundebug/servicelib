@@ -60,6 +60,28 @@ func TestTaskPool_ExecutorMetrics(t *testing.T) {
 	assert.Equal(t, int64(0), m.Gauge("task_pool_executors_busy", labels).Value())
 }
 
+func TestTaskPool_UsesConstructorConfigWhenRuntimePoolIsMissing(t *testing.T) {
+	m := testmetrics.New()
+	rc, err := config.NewRuntimeConfig(&minimalConfig{})
+	require.NoError(t, err)
+	poolConfig := &config.PoolConfig{Name: "fallback-task", ExecutorsCount: 1}
+	taskPool, err := makeTaskPool(&mockPoolEnv{m: m, rc: rc}, poolConfig)
+	require.NoError(t, err)
+	require.Equal(t, 1, taskPool.GetExecutorsCount())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, taskPool.Start(ctx))
+	executed := make(chan struct{})
+	require.NoError(t, taskPool.AddTask(ctx, func() { close(executed) }))
+	select {
+	case <-executed:
+	case <-ctx.Done():
+		t.Fatal("fallback task pool did not execute the task")
+	}
+	taskPool.Stop(context.Background())
+}
+
 // TestTaskPool_CancelMovesToFront verifies that cancelling a task's context
 // moves it to the head of the queue so it runs before tasks added earlier,
 // allowing resources held in the pipeline to be released as fast as possible.

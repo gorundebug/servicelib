@@ -57,6 +57,7 @@ type PriorityTaskPoolImpl struct {
 	startOnce               sync.Once
 	cond                    *sync.Cond
 	environment             environment.ServiceEnvironment
+	fallbackConfig          config.PoolConfig
 }
 
 func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (PriorityTaskPool, error) {
@@ -66,10 +67,11 @@ func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config
 	}
 	pq := make(TaskPriorityQueue, 0, capacity)
 	pool := &PriorityTaskPoolImpl{
-		name:        poolConfig.Name,
-		pq:          &pq,
-		environment: env,
-		stop:        make(chan struct{}),
+		name:           poolConfig.Name,
+		pq:             &pq,
+		environment:    env,
+		stop:           make(chan struct{}),
+		fallbackConfig: *poolConfig,
 	}
 	scope := env.Metrics().Scope("priority_task_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -150,8 +152,16 @@ func (pq *TaskPriorityQueue) Pop() interface{} {
 
 func (p *PriorityTaskPoolImpl) GetName() string { return p.name }
 
+func (p *PriorityTaskPoolImpl) getPoolConfig() *config.PoolConfig {
+	poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+	if poolConfig != nil {
+		return poolConfig
+	}
+	return &p.fallbackConfig
+}
+
 func (p *PriorityTaskPoolImpl) GetExecutorsCount() int {
-	return p.environment.RuntimeConfig().GetPoolByName(p.name).ExecutorsCount
+	return p.getPoolConfig().ExecutorsCount
 }
 
 func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) error {
@@ -208,7 +218,7 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 			executorsCount := 0
 			var pRestart *bool
 			for {
-				poolConfig := p.environment.RuntimeConfig().GetPoolByName(p.name)
+				poolConfig := p.getPoolConfig()
 				executorsCountNew := poolConfig.ExecutorsCount
 				if executorsCountNew == 0 {
 					executorsCountNew = runtime.NumCPU()
