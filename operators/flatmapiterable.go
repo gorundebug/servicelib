@@ -20,6 +20,8 @@ var _ runtime.TypedTransformConsumedStream[any, any] = (*FlatMapIterableStream[a
 
 type FlatMapIterableStream[T, R any] struct {
 	runtime.ConsumedStream[R]
+	inputKind reflect.Kind
+	runeItems bool
 }
 
 func MakeFlatMapIterableStream[T, R any](streamConfig *config.FlatMapIterableStreamConfig, stream runtime.TypedStream[T]) (runtime.TypedTransformConsumedStream[T, R], error) {
@@ -38,22 +40,15 @@ func MakeFlatMapIterableStream[T, R any](streamConfig *config.FlatMapIterableStr
 		return nil, fmt.Errorf("element type %s is not rune or byte", tpR.Name())
 	}
 	flatMapStreamIterable := &FlatMapIterableStream[T, R]{
-
 		ConsumedStream: runtime.MakeConsumedStream[R](streamConfig.ID, env, runtime.MakeSerde[R](env)),
+		inputKind:      tpT.Kind(),
+		runeItems:      tpT.Kind() == reflect.String && tpR.Kind() == reflect.Int32,
 	}
 	if err := stream.SetConsumer(flatMapStreamIterable); err != nil {
 		return nil, err
 	}
 	env.RegisterStream(flatMapStreamIterable)
 	return flatMapStreamIterable, nil
-}
-
-func isRuneType(value interface{}) bool {
-	switch value.(type) {
-	case rune:
-		return true
-	}
-	return false
 }
 
 func (s *FlatMapIterableStream[T, R]) FunctionImplementation() interface{} {
@@ -87,9 +82,8 @@ func (s *FlatMapIterableStream[T, R]) Consume(ctx context.Context, value T) {
 		ctx = newCtx
 		defer span.End()
 	}
-	var r R
 	val := reflect.ValueOf(value)
-	if val.Kind() == reflect.String && isRuneType(r) {
+	if s.inputKind == reflect.String && s.runeItems {
 		var intf interface{} = value
 		str := intf.(string)
 		for _, v := range str {
