@@ -15,13 +15,16 @@ import (
 	"time"
 )
 
-// rotatingMapShrinkFactor controls when rotation is skipped.
+// Each shard must first reach defaultRotatingMapMinCapacity entries before it
+// is eligible for rotation. rotatingMapShrinkFactor then controls when an
+// eligible shard is actually compacted.
 // Rotation is skipped when live entry count >= highWaterMark/rotatingMapShrinkFactor,
 // i.e. rotation fires only when current usage has dropped below 25% of the peak.
 // This avoids pointless rotations under steady or growing load while still reclaiming
 // memory after burst traffic.
 const rotatingMapShrinkFactor = 4
 const rotatingMapShardCount = 64
+const defaultRotatingMapMinCapacity = 1_000
 
 type rotatingMapShard[K comparable, V any] struct {
 	current       map[K]V
@@ -36,10 +39,15 @@ type RotatingMap[K comparable, V any] struct {
 	lifecycleMu sync.Mutex
 	timer       *time.Timer
 	seed        maphash.Seed
+	minCapacity int
 }
 
 func MakeRotatingMap[K comparable, V any](interval time.Duration) *RotatingMap[K, V] {
-	m := &RotatingMap[K, V]{interval: interval, seed: maphash.MakeSeed()}
+	return makeRotatingMap[K, V](interval, defaultRotatingMapMinCapacity)
+}
+
+func makeRotatingMap[K comparable, V any](interval time.Duration, minCapacity int) *RotatingMap[K, V] {
+	m := &RotatingMap[K, V]{interval: interval, seed: maphash.MakeSeed(), minCapacity: minCapacity}
 	for i := range m.shards {
 		m.shards[i].current = make(map[K]V)
 		m.shards[i].prev = make(map[K]V)
@@ -131,7 +139,10 @@ func (m *RotatingMap[K, V]) rotate() {
 	for i := range m.shards {
 		m.rotateShard(&m.shards[i])
 	}
+	m.resetTimer()
+}
 
+func (m *RotatingMap[K, V]) resetTimer() {
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
 	if m.timer != nil {
@@ -148,6 +159,9 @@ func (m *RotatingMap[K, V]) rotateShard(shard *rotatingMapShard[K, V]) {
 
 	if total > shard.highWaterMark {
 		shard.highWaterMark = total
+	}
+	if shard.highWaterMark < m.minCapacity {
+		return
 	}
 	if !shouldRotate {
 		return

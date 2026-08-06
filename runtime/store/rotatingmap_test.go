@@ -17,10 +17,26 @@ import (
 	"time"
 )
 
+func makeTestRotatingMap[K comparable, V any](interval time.Duration) *RotatingMap[K, V] {
+	return makeRotatingMap[K, V](interval, 0)
+}
+
+func TestRotatingMap_DoesNotRotateBelowMinimumCapacity(t *testing.T) {
+	m := MakeRotatingMap[int, int](time.Hour)
+	shard := &m.shards[0]
+	for i := 0; i < defaultRotatingMapMinCapacity-1; i++ {
+		shard.current[i] = i
+	}
+	m.rotateShard(shard)
+	if len(shard.prev) != 0 {
+		t.Fatal("shard rotated below its minimum capacity")
+	}
+}
+
 // ---------- construction ----------
 
 func TestMakeRotatingMap_InitialState(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Second)
+	m := makeTestRotatingMap[string, int](time.Second)
 
 	for i := range m.shards {
 		if m.shards[i].current == nil {
@@ -41,7 +57,7 @@ func TestMakeRotatingMap_InitialState(t *testing.T) {
 // ---------- lifecycle ----------
 
 func TestRotatingMap_Start_SetsTimer(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Start(context.Background()); err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
@@ -52,12 +68,12 @@ func TestRotatingMap_Start_SetsTimer(t *testing.T) {
 }
 
 func TestRotatingMap_Stop_BeforeStart_NoPanic(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	m.Stop(context.Background()) // must not panic
 }
 
 func TestRotatingMap_Stop_AfterStart_ClearsTimer(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	_ = m.Start(context.Background())
 	m.Stop(context.Background())
 	if m.timer != nil {
@@ -66,7 +82,7 @@ func TestRotatingMap_Stop_AfterStart_ClearsTimer(t *testing.T) {
 }
 
 func TestRotatingMap_Stop_IdempotentDoubleCalls(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	_ = m.Start(context.Background())
 	m.Stop(context.Background())
 	m.Stop(context.Background()) // second Stop must not panic
@@ -75,7 +91,7 @@ func TestRotatingMap_Stop_IdempotentDoubleCalls(t *testing.T) {
 // ---------- Set / Get ----------
 
 func TestRotatingMap_Get_ExistingKey(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 42); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +106,7 @@ func TestRotatingMap_Get_ExistingKey(t *testing.T) {
 }
 
 func TestRotatingMap_Get_MissingKey_ReturnsFalse(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 
 	v, ok := m.Get("missing")
 	if ok {
@@ -102,7 +118,7 @@ func TestRotatingMap_Get_MissingKey_ReturnsFalse(t *testing.T) {
 }
 
 func TestRotatingMap_Set_DuplicateKeyInCurrent_ReturnsError(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +128,7 @@ func TestRotatingMap_Set_DuplicateKeyInCurrent_ReturnsError(t *testing.T) {
 }
 
 func TestRotatingMap_Set_DuplicateKeyInPrev_ReturnsError(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +141,7 @@ func TestRotatingMap_Set_DuplicateKeyInPrev_ReturnsError(t *testing.T) {
 // ---------- Pop ----------
 
 func TestRotatingMap_Pop_ExistingKey(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 7); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +157,7 @@ func TestRotatingMap_Pop_ExistingKey(t *testing.T) {
 }
 
 func TestRotatingMap_Pop_MissingKey_ReturnsFalse(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 
 	v, ok := m.Pop("missing")
 	if ok {
@@ -153,7 +169,7 @@ func TestRotatingMap_Pop_MissingKey_ReturnsFalse(t *testing.T) {
 }
 
 func TestRotatingMap_Pop_TwiceOnSameKey(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 5); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +186,7 @@ func TestRotatingMap_Pop_TwiceOnSameKey(t *testing.T) {
 // TestRotate_ItemMovesToPrev verifies that after one rotation an item set in
 // current moves to prev and is still accessible via Get.
 func TestRotatingMap_Rotate_ItemMovesToPrev(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 10); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +210,7 @@ func TestRotatingMap_Rotate_ItemMovesToPrev(t *testing.T) {
 // TestRotate_PopFromPrev verifies that Pop retrieves a value that has been
 // moved to prev by a rotation.
 func TestRotatingMap_Rotate_PopFromPrev(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 20); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +230,7 @@ func TestRotatingMap_Rotate_PopFromPrev(t *testing.T) {
 // the first rotation still survives: rotate merges prev items back into current
 // before swapping, so items persist across the rotation boundary.
 func TestRotatingMap_Rotate_TwoRotations_ItemSurvives(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 5); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +247,7 @@ func TestRotatingMap_Rotate_TwoRotations_ItemSurvives(t *testing.T) {
 // TestRotate_GetSearchesCurrentThenPrev verifies lookup order: current is
 // checked first, then prev.
 func TestRotatingMap_Rotate_GetSearchesCurrentThenPrev(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 
 	if err := m.Set("a", 1); err != nil {
 		t.Fatal(err)
@@ -257,7 +273,7 @@ func TestRotatingMap_Rotate_GetSearchesCurrentThenPrev(t *testing.T) {
 // TestRotate_PopSearchesCurrentThenPrev verifies that Pop checks current first
 // and, when absent there, removes from prev.
 func TestRotatingMap_Rotate_PopSearchesCurrentThenPrev(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 
 	if err := m.Set("a", 1); err != nil {
 		t.Fatal(err)
@@ -287,7 +303,7 @@ func TestRotatingMap_Rotate_PopSearchesCurrentThenPrev(t *testing.T) {
 // TestRotate_SetAfterRotate verifies that a Set after a rotation goes into the
 // new (empty) current, not into prev.
 func TestRotatingMap_Rotate_SetAfterRotate(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("a", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +327,7 @@ func TestRotatingMap_Rotate_SetAfterRotate(t *testing.T) {
 // older interval survive in prev (via the merge step), and items from the newer
 // interval are also present.
 func TestRotatingMap_Rotate_MergePreservesItemsFromBothGenerations(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 
 	if err := m.Set("a", 1); err != nil {
 		t.Fatal(err)
@@ -339,7 +355,7 @@ func TestRotatingMap_Rotate_MergePreservesItemsFromBothGenerations(t *testing.T)
 // swap maps when the live entry count is >= highWaterMark/rotatingMapShrinkFactor
 // (i.e., no significant memory waste to reclaim).
 func TestRotatingMap_SkipsRotationUnderHighLoad(t *testing.T) {
-	m := MakeRotatingMap[int, int](time.Hour)
+	m := makeTestRotatingMap[int, int](time.Hour)
 
 	// Populate to establish a high water mark via the first forced rotation.
 	const peak = 100
@@ -373,7 +389,7 @@ func TestRotatingMap_SkipsRotationUnderHighLoad(t *testing.T) {
 // TestRotatingMap_RotatesAfterBurstRecovery verifies that rotate() fires once
 // live entries drop below highWaterMark/rotatingMapShrinkFactor.
 func TestRotatingMap_RotatesAfterBurstRecovery(t *testing.T) {
-	m := MakeRotatingMap[int, int](time.Hour)
+	m := makeTestRotatingMap[int, int](time.Hour)
 
 	const peak = 100
 	for i := 0; i < peak; i++ {
@@ -403,7 +419,7 @@ func TestRotatingMap_RotatesAfterBurstRecovery(t *testing.T) {
 // TestRotatingMap_HighWaterMarkTrackedWhenSkipped verifies that highWaterMark
 // is updated even when a rotation is skipped, so a later burst is correctly measured.
 func TestRotatingMap_HighWaterMarkTrackedWhenSkipped(t *testing.T) {
-	m := MakeRotatingMap[int, int](time.Hour)
+	m := makeTestRotatingMap[int, int](time.Hour)
 
 	// First rotation with 10 entries: highWaterMark = 10.
 	for i := 0; i < 10; i++ {
@@ -425,7 +441,7 @@ func TestRotatingMap_HighWaterMarkTrackedWhenSkipped(t *testing.T) {
 // TestRotatingMap_FirstCallAlwaysRotates verifies the initial rotation always
 // fires regardless of entry count, since highWaterMark starts at 0.
 func TestRotatingMap_FirstCallAlwaysRotates(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	if err := m.Set("k", 1); err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +467,7 @@ func TestRotatingMap_FirstCallAlwaysRotates(t *testing.T) {
 // ---------- concurrency ----------
 
 func TestRotatingMap_Concurrent_SetGet(t *testing.T) {
-	m := MakeRotatingMap[int, int](time.Hour)
+	m := makeTestRotatingMap[int, int](time.Hour)
 
 	const goroutines = 50
 	var wg sync.WaitGroup
@@ -466,7 +482,7 @@ func TestRotatingMap_Concurrent_SetGet(t *testing.T) {
 }
 
 func TestRotatingMap_DistributesKeysAcrossShards(t *testing.T) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	for i := 0; i < 1_000; i++ {
 		key := fmt.Sprintf("stream-%d", i)
 		if err := m.Set(key, i); err != nil {
@@ -486,7 +502,7 @@ func TestRotatingMap_DistributesKeysAcrossShards(t *testing.T) {
 }
 
 func TestRotatingMap_Concurrent_SetPopRotate(t *testing.T) {
-	m := MakeRotatingMap[int, int](time.Hour)
+	m := makeTestRotatingMap[int, int](time.Hour)
 	const goroutines = 30
 
 	var wg sync.WaitGroup
@@ -502,7 +518,7 @@ func TestRotatingMap_Concurrent_SetPopRotate(t *testing.T) {
 }
 
 func BenchmarkRotatingMap_ParallelRequestLifecycle(b *testing.B) {
-	m := MakeRotatingMap[string, int](time.Hour)
+	m := makeTestRotatingMap[string, int](time.Hour)
 	var sequence atomic.Uint64
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
