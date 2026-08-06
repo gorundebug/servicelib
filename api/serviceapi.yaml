@@ -787,7 +787,6 @@ components:
           type: integer
           description: Number of independent transport connections used by a gRPC sink connector.
           minimum: 1
-          default: 1
         brokers:
           type: string
           description: Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
