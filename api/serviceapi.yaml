@@ -675,6 +675,12 @@ components:
           example: 2
         callSemantics:
           $ref: '#/components/schemas/CallSemantics'
+        async:
+          type: boolean
+          default: false
+          description: |
+            Value returned by the caller's `IsAsync`/`isAsync` method when
+            `callSemantics` is `FunctionCall`. Ignored for all other call semantics.
         poolName:
           type: string
           description: |

@@ -18,6 +18,7 @@ type CallSemanticsConfig interface {
 }
 
 type FunctionCallSemanticsConfig struct {
+	Async bool `yaml:"async" mapstructure:"async"`
 }
 
 func (f *FunctionCallSemanticsConfig) GetType() api.CallSemantics {

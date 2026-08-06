@@ -578,6 +578,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				messagesCounter: messagesCounter,
 				tracer:          tr,
 			},
+			async: cs.Async,
 		}
 		streamCaller = c
 
@@ -668,6 +669,7 @@ func (c *caller[T]) samplingEnabled(ctx context.Context) bool {
 
 type directCaller[T any] struct {
 	caller[T]
+	async bool
 }
 
 func (c *directCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
@@ -691,7 +693,7 @@ func (c *directCaller[T]) Consume(ctx context.Context, value T) {
 }
 
 func (c *directCaller[T]) IsAsync() bool {
-	return false
+	return c.async
 }
 
 type taskPoolCaller[T any] struct {

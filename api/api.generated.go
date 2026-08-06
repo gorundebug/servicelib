@@ -446,6 +446,10 @@ type JoinType int
 // Links carry data from the upstream node (`from`) to the downstream node (`to`)
 // according to the specified delivery semantics.
 type Link struct {
+	// Async Value returned by the caller's `IsAsync`/`isAsync` method when
+	// `callSemantics` is `FunctionCall`. Ignored for all other call semantics.
+	Async *bool `json:"async,omitempty"`
+
 	// CallSemantics Delivery semantics for a stream link — controls how messages are passed between nodes.
 	// - `Inherited` (1): use the service's `defaultCallSemantics`
 	// - `FunctionCall` (2): synchronous in-goroutine call; lowest latency, no buffering
