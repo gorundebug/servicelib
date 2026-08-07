@@ -28,16 +28,19 @@ type DelayPool interface {
 // without allocating a separate closure environment object for each callback.
 //
 // Ordering invariant: timer is set before context.AfterFunc, so onCtxDone
-// always sees a valid timer. stopCtxFn is stored atomically so runNormal can
-// release the registration without a spin. Tasks with deadline <= 0 skip the
-// timer/AfterFunc path entirely and run directly via a goroutine.
+// always sees a valid timer. normalRun and stopCtxFn form a two-sided atomic
+// handshake so a timer that wins before registration completes still removes
+// the context callback. Tasks with deadline <= 0 skip that handshake and run
+// directly via a goroutine.
 type delayTask struct {
-	once      sync.Once
-	timer     *time.Timer
-	stopCtxFn atomic.Pointer[func() bool]
-	fn        func()
-	p         *DelayPoolImpl
-	ctx       context.Context
+	once             sync.Once
+	timer            *time.Timer
+	stopCtxFn        atomic.Pointer[func() bool]
+	normalRun        atomic.Bool
+	usesCtxAfterFunc bool
+	fn               func()
+	p                *DelayPoolImpl
+	ctx              context.Context
 }
 
 func (t *delayTask) onTimer() {
@@ -45,10 +48,13 @@ func (t *delayTask) onTimer() {
 }
 
 func (t *delayTask) runNormal() {
-	// Release the context.AfterFunc registration immediately so the task struct
-	// is not kept alive until ctx is cancelled.
-	if p := t.stopCtxFn.Load(); p != nil {
-		(*p)()
+	if t.usesCtxAfterFunc {
+		t.normalRun.Store(true)
+		// Release the context.AfterFunc registration immediately so the task
+		// struct is not kept alive until ctx is cancelled.
+		if p := t.stopCtxFn.Load(); p != nil {
+			(*p)()
+		}
 	}
 	defer t.p.wg.Done()
 	defer t.p.gaugeWaitQueueLength.Dec()
@@ -155,11 +161,17 @@ func (p *DelayPoolImpl) Delay(ctx context.Context, deadline time.Duration, fn fu
 		return nil
 	}
 
-	task := &delayTask{fn: fn, p: p, ctx: ctx}
+	task := &delayTask{fn: fn, p: p, ctx: ctx, usesCtxAfterFunc: true}
 	// timer set before context.AfterFunc: onCtxDone always sees a valid timer.
 	task.timer = time.AfterFunc(deadline, task.onTimer)
 	stop := context.AfterFunc(ctx, task.onCtxDone)
 	task.stopCtxFn.Store(&stop)
+	// The timer may have completed before context.AfterFunc returned and before
+	// stopCtxFn became visible to runNormal. Complete the other half of the
+	// handshake so every interleaving unregisters the callback.
+	if task.normalRun.Load() {
+		stop()
+	}
 
 	return nil
 }
