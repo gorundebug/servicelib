@@ -1,0 +1,1444 @@
+/*
+ * Copyright (c) 2024 Sergey Alexeev
+ * Email: sergeyalexeev@yahoo.com
+ *
+ *  Licensed under the MIT License. See the [LICENSE](https://opensource.org/licenses/MIT) file for details.
+ */
+
+package serde
+
+import (
+	"encoding/binary"
+	"fmt"
+	"math"
+	"reflect"
+	"slices"
+
+	"github.com/gorundebug/servicelib/runtime/datastruct"
+)
+
+const sizeBytes = 8
+const maxSizeLength = sizeBytes
+
+func fixedSizeTypeDataSize(data any) int {
+	switch data.(type) {
+	case bool, int8, uint8:
+		return 1
+	case int16, uint16:
+		return 2
+	case int32, uint32, float32:
+		return 4
+	case int64, uint64, float64:
+		return 8
+	}
+	return 0
+}
+
+func setSize(data []byte, size int) int {
+	binary.BigEndian.PutUint64(data, uint64(size))
+	return sizeBytes
+}
+
+func getSize(data []byte) (int, int) {
+	if len(data) < sizeBytes {
+		return 0, 0
+	}
+	return int(binary.BigEndian.Uint64(data)), sizeBytes
+}
+
+type streamSerde[T any] struct {
+	serde Serde[T]
+}
+
+func (s *streamSerde[T]) ValueSerializer() Serializer {
+	return s.serde
+}
+
+func (s *streamSerde[T]) SerializeObj(value interface{}) ([]byte, error) {
+	v, ok := value.(T)
+	if !ok {
+		return nil, fmt.Errorf("value is not %s", GetSerdeType[T]().Name())
+	}
+	return s.Serialize(v)
+}
+
+func (s *streamSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *streamSerde[T]) Serialize(value T) ([]byte, error) {
+	return s.serde.Serialize(value, nil)
+}
+
+func (s *streamSerde[T]) Deserialize(data []byte) (T, error) {
+	return s.serde.Deserialize(data)
+}
+
+func (s *streamSerde[T]) IsKeyValue() bool {
+	return false
+}
+
+type streamKeyValueSerde[K comparable, V any] struct {
+	serdeKey   Serde[K]
+	serdeValue Serde[V]
+}
+
+func (s *streamKeyValueSerde[K, V]) KeySerializer() Serializer {
+	return s.serdeKey
+}
+
+func (s *streamKeyValueSerde[K, V]) ValueSerializer() Serializer {
+	return s.serdeValue
+}
+
+func (s *streamKeyValueSerde[K, V]) SerializeKey(kv datastruct.KeyValue[K, V]) ([]byte, error) {
+	return s.serdeKey.Serialize(kv.Key, nil)
+}
+
+func (s *streamKeyValueSerde[K, V]) SerializeValue(kv datastruct.KeyValue[K, V]) ([]byte, error) {
+	return s.serdeValue.Serialize(kv.Value, nil)
+}
+
+func (s *streamKeyValueSerde[K, V]) SerializeObj(value interface{}) ([]byte, error) {
+	v, ok := value.(datastruct.KeyValue[K, V])
+	if !ok {
+		return nil, fmt.Errorf("value is not %s", GetSerdeType[datastruct.KeyValue[K, V]]().Name())
+	}
+	return s.Serialize(v)
+}
+
+func (s *streamKeyValueSerde[K, V]) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *streamKeyValueSerde[K, V]) DeserializeKeyValue(key []byte, value []byte) (datastruct.KeyValue[K, V], error) {
+	k, err := s.serdeKey.Deserialize(key)
+	if err != nil {
+		return datastruct.KeyValue[K, V]{}, err
+	}
+	v, err := s.serdeValue.Deserialize(value)
+	if err != nil {
+		return datastruct.KeyValue[K, V]{}, err
+	}
+	return datastruct.KeyValue[K, V]{Key: k, Value: v}, nil
+}
+
+func (s *streamKeyValueSerde[K, V]) Serialize(kv datastruct.KeyValue[K, V]) ([]byte, error) {
+	data := make([]byte, maxSizeLength)
+	keyData, err := s.serdeKey.Serialize(kv.Key, data)
+	if err != nil {
+		return nil, err
+	}
+	setSize(keyData[:maxSizeLength], len(keyData)-maxSizeLength)
+
+	keyData = slices.Grow(keyData, maxSizeLength)
+	valueHeaderOffset := len(keyData)
+	keyData = keyData[:valueHeaderOffset+maxSizeLength]
+	valueData, err := s.serdeValue.Serialize(kv.Value, keyData)
+	if err != nil {
+		return nil, err
+	}
+	setSize(valueData[valueHeaderOffset:valueHeaderOffset+maxSizeLength], len(valueData)-valueHeaderOffset-maxSizeLength)
+	return valueData, nil
+}
+
+func (s *streamKeyValueSerde[K, V]) Deserialize(data []byte) (datastruct.KeyValue[K, V], error) {
+	var kv datastruct.KeyValue[K, V]
+
+	var keyLen, n int
+	var err error
+
+	if keyLen, n = getSize(data); n == 0 {
+		return kv, fmt.Errorf("deserialize key len error streamKeyValueSerde")
+	}
+	data = data[n:]
+	if len(data) < keyLen {
+		return kv, fmt.Errorf("deserialize key error streamKeyValueSerde")
+	}
+
+	kv.Key, err = s.serdeKey.Deserialize(data[:keyLen])
+	if err != nil {
+		return kv, err
+	}
+	data = data[keyLen:]
+
+	var valueLen int
+	if valueLen, n = getSize(data); n == 0 {
+		return kv, fmt.Errorf("deserialize value len error streamKeyValueSerde")
+	}
+	data = data[n:]
+	if len(data) < valueLen {
+		return kv, fmt.Errorf("deserialize value error streamKeyValueSerde")
+	}
+	kv.Value, err = s.serdeValue.Deserialize(data[:valueLen])
+	return kv, err
+}
+
+func (s *streamKeyValueSerde[K, V]) IsKeyValue() bool {
+	return true
+}
+
+func IsTypePtr[T any]() bool {
+	tp := reflect.TypeOf((*T)(nil)).Elem()
+	return tp.Kind() == reflect.Pointer
+}
+
+type BytesSerde struct {
+}
+
+func (s *BytesSerde) IsStub() bool {
+	return false
+}
+
+func (s *BytesSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("value is not []byte")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *BytesSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *BytesSerde) Serialize(value []byte, b []byte) ([]byte, error) {
+	offset := len(b)
+	b = slices.Grow(b, maxSizeLength+len(value))
+	b = b[:offset+maxSizeLength+len(value)]
+	setSize(b[offset:offset+maxSizeLength], len(value))
+	copy(b[offset+maxSizeLength:], value)
+	return b, nil
+}
+
+func (s *BytesSerde) Deserialize(data []byte) ([]byte, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("deserialization error BytesSerde.Deserialize (invalid data length)")
+	}
+	if len(data) < n+length {
+		return nil, fmt.Errorf("deserialization error BytesSerde.Deserialize (invalid data)")
+	}
+	return data[n : n+length], nil
+}
+
+type BaseType interface {
+	int32 | int64 | int16 | uint32 | uint64 | uint16 | float32 | float64 | bool
+}
+
+type FixedSizeTypeArraySerde[T BaseType] struct {
+}
+
+func (s *FixedSizeTypeArraySerde[T]) IsStub() bool {
+	return false
+}
+
+func (s *FixedSizeTypeArraySerde[T]) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]T)
+	if !ok {
+		return nil, fmt.Errorf("value is not []T")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *FixedSizeTypeArraySerde[T]) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *FixedSizeTypeArraySerde[T]) Serialize(value []T, b []byte) ([]byte, error) {
+	var v T
+	typeSize := fixedSizeTypeDataSize(v)
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*typeSize)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*typeSize]
+	setSize(b[offset:offset+maxSizeLength], length)
+	if _, err := binary.Encode(b[offset+maxSizeLength:offset+maxSizeLength+length*typeSize], binary.BigEndian, value); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (s *FixedSizeTypeArraySerde[T]) Deserialize(data []byte) ([]T, error) {
+	var v T
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("deserialization error []T.Deserialize (invalid size)")
+	}
+	if len(data) < fixedSizeTypeDataSize(v)*length+n {
+		return nil, fmt.Errorf("deserialization error []T.Deserialize (invalid data)")
+	}
+	values := make([]T, length)
+	if _, err := binary.Decode(data[n:], binary.BigEndian, values); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+type Int16ArraySerde struct {
+}
+
+func (s *Int16ArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *Int16ArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]int16)
+	if !ok {
+		return nil, fmt.Errorf("value is not []int16")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int16ArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int16ArraySerde) Serialize(value []int16, b []byte) ([]byte, error) {
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*2)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*2]
+	setSize(b[offset:offset+maxSizeLength], length)
+	pos := offset + maxSizeLength
+	for _, v := range value {
+		binary.BigEndian.PutUint16(b[pos:pos+2], uint16(v)^0x8000)
+		pos += 2
+	}
+	return b, nil
+}
+
+func (s *Int16ArraySerde) Deserialize(data []byte) ([]int16, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("Int16ArraySerde deserialization error (invalid length data)")
+	}
+	if len(data) < 2*length+n {
+		return nil, fmt.Errorf("Int16ArraySerde deserialization error (invalid data)")
+	}
+	values := make([]int16, length)
+	for i := 0; i < length; i++ {
+		values[i] = int16(binary.BigEndian.Uint16(data[n:]) ^ 0x8000)
+		n += 2
+	}
+	return values, nil
+}
+
+type Int32ArraySerde struct {
+}
+
+func (s *Int32ArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *Int32ArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]int32)
+	if !ok {
+		return nil, fmt.Errorf("value is not []int32")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int32ArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int32ArraySerde) Serialize(value []int32, b []byte) ([]byte, error) {
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*4)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*4]
+	setSize(b[offset:offset+maxSizeLength], length)
+	pos := offset + maxSizeLength
+	for _, v := range value {
+		binary.BigEndian.PutUint32(b[pos:pos+4], uint32(v)^0x80000000)
+		pos += 4
+	}
+	return b, nil
+}
+
+func (s *Int32ArraySerde) Deserialize(data []byte) ([]int32, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("Int32ArraySerde deserialization error (invalid length data)")
+	}
+	if len(data) < 4*length+n {
+		return nil, fmt.Errorf("Int32ArraySerde deserialization error (invalid data)")
+	}
+	values := make([]int32, length)
+	for i := 0; i < length; i++ {
+		values[i] = int32(binary.BigEndian.Uint32(data[n:]) ^ 0x80000000)
+		n += 4
+	}
+	return values, nil
+}
+
+type Int64ArraySerde struct {
+}
+
+func (s *Int64ArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *Int64ArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]int64)
+	if !ok {
+		return nil, fmt.Errorf("value is not []int64")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int64ArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int64ArraySerde) Serialize(value []int64, b []byte) ([]byte, error) {
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*8)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*8]
+	setSize(b[offset:offset+maxSizeLength], length)
+	pos := offset + maxSizeLength
+	for _, v := range value {
+		binary.BigEndian.PutUint64(b[pos:pos+8], uint64(v)^0x8000000000000000)
+		pos += 8
+	}
+	return b, nil
+}
+
+func (s *Int64ArraySerde) Deserialize(data []byte) ([]int64, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("Int64ArraySerde deserialization error (invalid length data)")
+	}
+	if len(data) < 8*length+n {
+		return nil, fmt.Errorf("Int64ArraySerde deserialization error (invalid data)")
+	}
+	values := make([]int64, length)
+	for i := 0; i < length; i++ {
+		values[i] = int64(binary.BigEndian.Uint64(data[n:]) ^ 0x8000000000000000)
+		n += 8
+	}
+	return values, nil
+}
+
+type IntArraySerde struct {
+}
+
+func (s *IntArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *IntArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]int)
+	if !ok {
+		return nil, fmt.Errorf("value is not []int")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *IntArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *IntArraySerde) Serialize(value []int, b []byte) ([]byte, error) {
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*sizeBytes)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*sizeBytes]
+	setSize(b[offset:offset+maxSizeLength], length)
+	pos := offset + maxSizeLength
+	for _, v := range value {
+		binary.BigEndian.PutUint64(b[pos:pos+sizeBytes], uint64(v)^0x8000000000000000)
+		pos += sizeBytes
+	}
+	return b, nil
+}
+
+func (s *IntArraySerde) Deserialize(data []byte) ([]int, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("IntArraySerde deserialization error (invalid length data)")
+	}
+	if len(data) < sizeBytes*length+n {
+		return nil, fmt.Errorf("IntArraySerde deserialization error (invalid data)")
+	}
+	values := make([]int, length)
+	for i := 0; i < length; i++ {
+		values[i] = int(int64(binary.BigEndian.Uint64(data[n:]) ^ 0x8000000000000000))
+		n += sizeBytes
+	}
+	return values, nil
+}
+
+type UIntArraySerde struct {
+}
+
+func (s *UIntArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *UIntArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]uint)
+	if !ok {
+		return nil, fmt.Errorf("value is not []uint")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UIntArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UIntArraySerde) Serialize(value []uint, b []byte) ([]byte, error) {
+	length := len(value)
+	b = slices.Grow(b, maxSizeLength+length*sizeBytes)
+	offset := len(b)
+	b = b[:offset+maxSizeLength+length*sizeBytes]
+	setSize(b[offset:offset+maxSizeLength], length)
+	pos := offset + maxSizeLength
+	for _, v := range value {
+		binary.BigEndian.PutUint64(b[pos:pos+sizeBytes], uint64(v))
+		pos += sizeBytes
+	}
+	return b, nil
+}
+
+func (s *UIntArraySerde) Deserialize(data []byte) ([]uint, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("UIntArraySerde deserialization error (invalid length data)")
+	}
+	if len(data) < sizeBytes*length+n {
+		return nil, fmt.Errorf("UIntArraySerde deserialization error (invalid data)")
+	}
+	values := make([]uint, length)
+	for i := 0; i < length; i++ {
+		values[i] = uint(binary.BigEndian.Uint64(data[n:]))
+		n += sizeBytes
+	}
+	return values, nil
+}
+
+type StringArraySerde struct {
+}
+
+func (s *StringArraySerde) IsStub() bool {
+	return false
+}
+
+func (s *StringArraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.([]string)
+	if !ok {
+		return nil, fmt.Errorf("value is not []string")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *StringArraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *StringArraySerde) Serialize(value []string, b []byte) ([]byte, error) {
+	count := len(value)
+	b = slices.Grow(b, (count+1)*maxSizeLength)
+	offset := len(b)
+	b = b[:offset+maxSizeLength]
+	setSize(b[offset:offset+maxSizeLength], count)
+	for _, str := range value {
+		offset = len(b)
+		b = slices.Grow(b, maxSizeLength+len(str))
+		b = b[:offset+maxSizeLength+len(str)]
+		setSize(b[offset:offset+maxSizeLength], len(str))
+		copy(b[offset+maxSizeLength:], str)
+	}
+	return b, nil
+}
+
+func (s *StringArraySerde) Deserialize(data []byte) ([]string, error) {
+	count, n := getSize(data)
+	if n == 0 {
+		return nil, fmt.Errorf("StringArraySerde deserialization error (invalid count data)")
+	}
+	data = data[n:]
+	values := make([]string, count)
+	for i := 0; i < count; i++ {
+		length, n := getSize(data)
+		if n == 0 {
+			return nil, fmt.Errorf("StringArraySerde deserialization error (invalid element length)")
+		}
+		data = data[n:]
+		if len(data) < length {
+			return nil, fmt.Errorf("StringArraySerde deserialization error (invalid element data)")
+		}
+		values[i] = string(data[:length])
+		data = data[length:]
+	}
+	return values, nil
+}
+
+type StringSerde struct {
+}
+
+func (s *StringSerde) IsStub() bool {
+	return false
+}
+
+func (s *StringSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(string)
+	if !ok {
+		return nil, fmt.Errorf("value is not string")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *StringSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *StringSerde) Serialize(value string, b []byte) ([]byte, error) {
+	offset := len(b)
+	b = slices.Grow(b, maxSizeLength+len(value))
+	b = b[:offset+maxSizeLength+len(value)]
+	setSize(b[offset:offset+maxSizeLength], len(value))
+	copy(b[offset+maxSizeLength:], value)
+	return b, nil
+}
+
+func (s *StringSerde) Deserialize(data []byte) (string, error) {
+	length, n := getSize(data)
+	if n == 0 {
+		return "", fmt.Errorf("StringSerde deserialization error (invalid length data)")
+	}
+	if len(data) < n+length {
+		return "", fmt.Errorf("deserialization error StringSerde.Deserialize")
+	}
+	return string(data[n : n+length]), nil
+}
+
+type UIntSerde struct {
+}
+
+func (s *UIntSerde) IsStub() bool {
+	return false
+}
+
+func (s *UIntSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(uint)
+	if !ok {
+		return nil, fmt.Errorf("value is not uint")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UIntSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UIntSerde) Serialize(value uint, b []byte) ([]byte, error) {
+	b = slices.Grow(b, sizeBytes)
+	offset := len(b)
+	b = b[:offset+sizeBytes]
+	binary.BigEndian.PutUint64(b[offset:], uint64(value))
+	return b, nil
+}
+
+func (s *UIntSerde) Deserialize(data []byte) (uint, error) {
+	if len(data) < sizeBytes {
+		return 0, fmt.Errorf("deserialization error UIntSerde.Deserialize")
+	}
+	return uint(binary.BigEndian.Uint64(data)), nil
+}
+
+type UInt8Serde struct {
+}
+
+func (s *UInt8Serde) IsStub() bool {
+	return false
+}
+
+func (s *UInt8Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(uint8)
+	if !ok {
+		return nil, fmt.Errorf("value is not uint8")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UInt8Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UInt8Serde) Serialize(value uint8, b []byte) ([]byte, error) {
+	return append(b, value), nil
+}
+
+func (s *UInt8Serde) Deserialize(data []byte) (uint8, error) {
+	if len(data) < 1 {
+		return 0, fmt.Errorf("serialization error UInt8Serde.Deserialize")
+	}
+	return data[0], nil
+}
+
+type UInt16Serde struct {
+}
+
+func (s *UInt16Serde) IsStub() bool {
+	return false
+}
+
+func (s *UInt16Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(uint16)
+	if !ok {
+		return nil, fmt.Errorf("value is not uint16")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UInt16Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UInt16Serde) Serialize(value uint16, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 2)
+	offset := len(b)
+	b = b[:offset+2]
+	binary.BigEndian.PutUint16(b[offset:], value)
+	return b, nil
+}
+
+func (s *UInt16Serde) Deserialize(data []byte) (uint16, error) {
+	if len(data) < 2 {
+		return 0, fmt.Errorf("deserialization error UInt16Serde.Deserialize")
+	}
+	return binary.BigEndian.Uint16(data), nil
+}
+
+type UInt32Serde struct {
+}
+
+func (s *UInt32Serde) IsStub() bool {
+	return false
+}
+
+func (s *UInt32Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(uint32)
+	if !ok {
+		return nil, fmt.Errorf("value is not uint32")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UInt32Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UInt32Serde) Serialize(value uint32, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 4)
+	offset := len(b)
+	b = b[:offset+4]
+	binary.BigEndian.PutUint32(b[offset:], value)
+	return b, nil
+}
+
+func (s *UInt32Serde) Deserialize(data []byte) (uint32, error) {
+	if len(data) < 4 {
+		return 0, fmt.Errorf("deserialization error UInt32Serde.Deserialize")
+	}
+	return binary.BigEndian.Uint32(data), nil
+}
+
+type UInt64Serde struct {
+}
+
+func (s *UInt64Serde) IsStub() bool {
+	return false
+}
+
+func (s *UInt64Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(uint64)
+	if !ok {
+		return nil, fmt.Errorf("value is not uint64")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *UInt64Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *UInt64Serde) Serialize(value uint64, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 8)
+	offset := len(b)
+	b = b[:offset+8]
+	binary.BigEndian.PutUint64(b[offset:], value)
+	return b, nil
+}
+
+func (s *UInt64Serde) Deserialize(data []byte) (uint64, error) {
+	if len(data) < 8 {
+		return 0, fmt.Errorf("deserialization error UInt64Serde.Deserialize")
+	}
+	return binary.BigEndian.Uint64(data), nil
+}
+
+type IntSerde struct {
+}
+
+func (s *IntSerde) IsStub() bool {
+	return false
+}
+
+func (s *IntSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(int)
+	if !ok {
+		return nil, fmt.Errorf("value is not int")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *IntSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *IntSerde) Serialize(value int, b []byte) ([]byte, error) {
+	b = slices.Grow(b, sizeBytes)
+	offset := len(b)
+	b = b[:offset+sizeBytes]
+	binary.BigEndian.PutUint64(b[offset:], uint64(value)^(1<<63))
+	return b, nil
+}
+
+func (s *IntSerde) Deserialize(data []byte) (int, error) {
+	if len(data) < sizeBytes {
+		return 0, fmt.Errorf("deserialization error IntSerde.Deserialize")
+	}
+	return int(int64(binary.BigEndian.Uint64(data) ^ (1 << 63))), nil
+}
+
+type Int8Serde struct {
+}
+
+func (s *Int8Serde) IsStub() bool {
+	return false
+}
+
+func (s *Int8Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(int8)
+	if !ok {
+		return nil, fmt.Errorf("value is not int8")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int8Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int8Serde) Serialize(value int8, b []byte) ([]byte, error) {
+	return append(b, byte(value)), nil
+}
+
+func (s *Int8Serde) Deserialize(data []byte) (int8, error) {
+	if len(data) < 1 {
+		return 0, fmt.Errorf("deserialization error Int8Serde.Deserialize")
+	}
+	return int8(data[0]), nil
+}
+
+type Int16Serde struct {
+}
+
+func (s *Int16Serde) IsStub() bool {
+	return false
+}
+
+func (s *Int16Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(int16)
+	if !ok {
+		return nil, fmt.Errorf("value is not int16")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int16Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int16Serde) Serialize(value int16, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 2)
+	offset := len(b)
+	b = b[:offset+2]
+	binary.BigEndian.PutUint16(b[offset:], uint16(value)^0x8000)
+	return b, nil
+}
+
+func (s *Int16Serde) Deserialize(data []byte) (int16, error) {
+	if len(data) < 2 {
+		return 0, fmt.Errorf("deserialization error Int16Serde.Deserialize")
+	}
+	return int16(binary.BigEndian.Uint16(data) ^ 0x8000), nil
+}
+
+type Int32Serde struct {
+}
+
+func (s *Int32Serde) IsStub() bool {
+	return false
+}
+
+func (s *Int32Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(int32)
+	if !ok {
+		return nil, fmt.Errorf("value is not int32")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int32Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int32Serde) Serialize(value int32, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 4)
+	offset := len(b)
+	b = b[:offset+4]
+	binary.BigEndian.PutUint32(b[offset:], uint32(value)^0x80000000)
+	return b, nil
+}
+
+func (s *Int32Serde) Deserialize(data []byte) (int32, error) {
+	if len(data) < 4 {
+		return 0, fmt.Errorf("deserialization error Int32Serde.Deserialize")
+	}
+	return int32(binary.BigEndian.Uint32(data) ^ 0x80000000), nil
+}
+
+type Int64Serde struct {
+}
+
+func (s *Int64Serde) IsStub() bool {
+	return false
+}
+
+func (s *Int64Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(int64)
+	if !ok {
+		return nil, fmt.Errorf("value is not int64")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Int64Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Int64Serde) Serialize(value int64, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 8)
+	offset := len(b)
+	b = b[:offset+8]
+	binary.BigEndian.PutUint64(b[offset:], uint64(value)^0x8000000000000000)
+	return b, nil
+}
+
+func (s *Int64Serde) Deserialize(data []byte) (int64, error) {
+	if len(data) < 8 {
+		return 0, fmt.Errorf("deserialization error Int64Serde.Deserialize")
+	}
+	return int64(binary.BigEndian.Uint64(data) ^ 0x8000000000000000), nil
+}
+
+type BoolSerde struct {
+}
+
+func (s *BoolSerde) IsStub() bool {
+	return false
+}
+
+func (s *BoolSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(bool)
+	if !ok {
+		return nil, fmt.Errorf("value is not bool")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *BoolSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *BoolSerde) Serialize(value bool, b []byte) ([]byte, error) {
+	var v byte
+	if value {
+		v = 1
+	} else {
+		v = 0
+	}
+	return append(b, v), nil
+}
+
+func (s *BoolSerde) Deserialize(data []byte) (bool, error) {
+	if len(data) < 1 {
+		return false, fmt.Errorf("deserialization error BoolSerde.Deserialize")
+	}
+	return data[0] != 0, nil
+}
+
+type RuneSerde struct {
+}
+
+func (s *RuneSerde) IsStub() bool {
+	return false
+}
+
+func (s *RuneSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(rune)
+	if !ok {
+		return nil, fmt.Errorf("value is not rune")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *RuneSerde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *RuneSerde) Serialize(value rune, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 4)
+	offset := len(b)
+	b = b[:offset+4]
+	binary.BigEndian.PutUint32(b[offset:], uint32(value))
+	return b, nil
+}
+
+func (s *RuneSerde) Deserialize(data []byte) (rune, error) {
+	if len(data) < 4 {
+		return 0, fmt.Errorf("deserialization error RuneSerde.Deserialize")
+	}
+	return int32(binary.BigEndian.Uint32(data)), nil
+}
+
+type Float32Serde struct {
+}
+
+func (s *Float32Serde) IsStub() bool {
+	return false
+}
+
+func (s *Float32Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(float32)
+	if !ok {
+		return nil, fmt.Errorf("value is not float32")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Float32Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Float32Serde) Serialize(value float32, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 4)
+	offset := len(b)
+	b = b[:offset+4]
+	binary.BigEndian.PutUint32(b[offset:], math.Float32bits(value))
+	return b, nil
+}
+
+func (s *Float32Serde) Deserialize(data []byte) (float32, error) {
+	if len(data) < 4 {
+		return 0, fmt.Errorf("deserialization error Float32Serde.Deserialize")
+	}
+	return math.Float32frombits(binary.BigEndian.Uint32(data)), nil
+}
+
+type Float64Serde struct {
+}
+
+func (s *Float64Serde) IsStub() bool {
+	return false
+}
+
+func (s *Float64Serde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(float64)
+	if !ok {
+		return nil, fmt.Errorf("value is not float64")
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *Float64Serde) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *Float64Serde) Serialize(value float64, b []byte) ([]byte, error) {
+	b = slices.Grow(b, 8)
+	offset := len(b)
+	b = b[:offset+8]
+	binary.BigEndian.PutUint64(b[offset:], math.Float64bits(value))
+	return b, nil
+}
+
+func (s *Float64Serde) Deserialize(data []byte) (float64, error) {
+	if len(data) < 8 {
+		return 0, fmt.Errorf("deserialization error Float64Serde.Deserialize")
+	}
+	return math.Float64frombits(binary.BigEndian.Uint64(data)), nil
+}
+
+func makeDefaultSerde(valueType reflect.Type) (Serializer, error) {
+	switch valueType {
+	case GetSerdeType[int]():
+		{
+			var ser Serde[int] = &IntSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[int8]():
+		{
+			var ser Serde[int8] = &Int8Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[int16]():
+		{
+			var ser Serde[int16] = &Int16Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[int32]():
+		{
+			var ser Serde[int32] = &Int32Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[int64]():
+		{
+			var ser Serde[int64] = &Int64Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[uint]():
+		{
+			var ser Serde[uint] = &UIntSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[uint8]():
+		{
+			var ser Serde[uint8] = &UInt8Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[uint16]():
+		{
+			var ser Serde[uint16] = &UInt16Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[uint32]():
+		{
+			var ser Serde[uint32] = &UInt32Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[uint64]():
+		{
+			var ser Serde[uint64] = &UInt64Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]byte]():
+		{
+			var ser Serde[[]byte] = &BytesSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int]():
+		{
+			var ser Serde[[]int] = &IntArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]bool]():
+		{
+			var ser Serde[[]bool] = &FixedSizeTypeArraySerde[bool]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int32]():
+		{
+			var ser Serde[[]int32] = &Int32ArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int64]():
+		{
+			var ser Serde[[]int64] = &Int64ArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]int16]():
+		{
+			var ser Serde[[]int16] = &Int16ArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint]():
+		{
+			var ser Serde[[]uint] = &UIntArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint32]():
+		{
+			var ser Serde[[]uint32] = &FixedSizeTypeArraySerde[uint32]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint64]():
+		{
+			var ser Serde[[]uint64] = &FixedSizeTypeArraySerde[uint64]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]uint16]():
+		{
+			var ser Serde[[]uint16] = &FixedSizeTypeArraySerde[uint16]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]float32]():
+		{
+			var ser Serde[[]float32] = &FixedSizeTypeArraySerde[float32]{}
+			return ser, nil
+		}
+	case GetSerdeType[[]float64]():
+		{
+			var ser Serde[[]float64] = &FixedSizeTypeArraySerde[float64]{}
+			return ser, nil
+		}
+	case GetSerdeType[string]():
+		{
+			var ser Serde[string] = &StringSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[[]string]():
+		{
+			var ser Serde[[]string] = &StringArraySerde{}
+			return ser, nil
+		}
+	case GetSerdeType[bool]():
+		{
+			var ser Serde[bool] = &BoolSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[rune]():
+		{
+			var ser Serde[rune] = &RuneSerde{}
+			return ser, nil
+		}
+	case GetSerdeType[float32]():
+		{
+			var ser Serde[float32] = &Float32Serde{}
+			return ser, nil
+		}
+	case GetSerdeType[float64]():
+		{
+			var ser Serde[float64] = &Float64Serde{}
+			return ser, nil
+		}
+	}
+	return nil, fmt.Errorf("makeDefaultSerde unsupported type: %v", valueType)
+}
+
+type StubSerde[T any] struct {
+}
+
+func (s *StubSerde[T]) IsStub() bool {
+	return true
+}
+
+func (s *StubSerde[T]) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	v, ok := value.(T)
+	if !ok {
+		return nil, fmt.Errorf("value is not %s", GetSerdeType[T]().Name())
+	}
+	return s.Serialize(v, b)
+}
+
+func (s *StubSerde[T]) DeserializeObj(data []byte) (interface{}, error) {
+	return s.Deserialize(data)
+}
+
+func (s *StubSerde[T]) Serialize(T, []byte) ([]byte, error) {
+	return nil, fmt.Errorf("serde for type %q is not implemented", GetSerdeTypeName[T]())
+}
+
+func (s *StubSerde[T]) Deserialize([]byte) (T, error) {
+	var t T
+	return t, fmt.Errorf("serde for type %q is not implemented", GetSerdeTypeName[T]())
+}
+
+type arraySerde struct {
+	arrayType  reflect.Type
+	valueSerde Serializer
+}
+
+func (s *arraySerde) IsStub() bool {
+	return s.valueSerde.IsStub()
+}
+
+func (s *arraySerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	valueType := reflect.TypeOf(value)
+	if valueType == nil {
+		return nil, fmt.Errorf("value is nil, expected %s", s.arrayType.Name())
+	}
+	if !valueType.AssignableTo(s.arrayType) {
+		return nil, fmt.Errorf("value is not %s", s.arrayType.Name())
+	}
+	v := reflect.ValueOf(value)
+	count := v.Len()
+
+	data := slices.Grow(b, (count+1)*maxSizeLength)
+	countOffset := len(data)
+	data = data[:countOffset+maxSizeLength]
+	setSize(data[countOffset:countOffset+maxSizeLength], count)
+
+	for i := 0; i < count; i++ {
+		data = slices.Grow(data, maxSizeLength)
+		headerOffset := len(data)
+		data = data[:headerOffset+maxSizeLength]
+		var err error
+		data, err = s.valueSerde.SerializeObj(v.Index(i).Interface(), data)
+		if err != nil {
+			return nil, err
+		}
+		setSize(data[headerOffset:headerOffset+maxSizeLength], len(data)-headerOffset-maxSizeLength)
+	}
+	return data, nil
+}
+
+func (s *arraySerde) DeserializeObj(data []byte) (interface{}, error) {
+	v := reflect.MakeSlice(s.arrayType, 0, 0)
+
+	var count int
+	var n int
+	if count, n = getSize(data); n == 0 {
+		return nil, fmt.Errorf("DeserializeObj arraySerde error (invalid count data)")
+	}
+	data = data[n:]
+	for i := 0; i < count; i++ {
+		var length int
+		if length, n = getSize(data); n == 0 {
+			return nil, fmt.Errorf("DeserializeObj arraySerde error (invalid element length data)")
+		}
+		data = data[n:]
+		if len(data) < length {
+			return v, fmt.Errorf("DeserializeObj arraySerde error (invalid element data)")
+		}
+		var element interface{}
+		var err error
+		element, err = s.valueSerde.DeserializeObj(data[:length])
+		if err != nil {
+			return v, err
+		}
+		data = data[length:]
+		v = reflect.Append(v, reflect.ValueOf(element))
+	}
+	return v.Interface(), nil
+}
+
+type ArraySerde[T any] struct {
+	arraySerde
+}
+
+func (s *ArraySerde[T]) Serialize(value T, b []byte) ([]byte, error) {
+	return s.SerializeObj(reflect.ValueOf(value).Interface(), b)
+}
+
+func (s *ArraySerde[T]) Deserialize(data []byte) (T, error) {
+	var t T
+	v, err := s.DeserializeObj(data)
+	if err != nil {
+		return t, err
+	}
+	return v.(T), nil
+}
+
+type mapSerde struct {
+	mapType         reflect.Type
+	keyArraySerde   Serializer
+	valueArraySerde Serializer
+}
+
+func (s *mapSerde) IsStub() bool {
+	return s.valueArraySerde.IsStub() || s.keyArraySerde.IsStub()
+}
+
+func (s *mapSerde) SerializeObj(value interface{}, b []byte) ([]byte, error) {
+	if value == nil {
+		return nil, fmt.Errorf("value is nil, expected %s", s.mapType.Name())
+	}
+	v := reflect.ValueOf(value)
+
+	keys := v.MapKeys()
+	keyArray := reflect.MakeSlice(reflect.SliceOf(v.Type().Key()), v.Len(), v.Len())
+	valueArray := reflect.MakeSlice(reflect.SliceOf(v.Type().Elem()), v.Len(), v.Len())
+
+	for i, key := range keys {
+		keyArray.Index(i).Set(key)
+		valueArray.Index(i).Set(v.MapIndex(key))
+	}
+
+	b = slices.Grow(b, maxSizeLength)
+	keyHeaderOffset := len(b)
+	b = b[:keyHeaderOffset+maxSizeLength]
+	keyBytes, err := s.keyArraySerde.SerializeObj(keyArray.Interface(), b)
+	if err != nil {
+		return nil, err
+	}
+	setSize(keyBytes[keyHeaderOffset:keyHeaderOffset+maxSizeLength], len(keyBytes)-keyHeaderOffset-maxSizeLength)
+
+	keyBytes = slices.Grow(keyBytes, maxSizeLength)
+	valueHeaderOffset := len(keyBytes)
+	keyBytes = keyBytes[:valueHeaderOffset+maxSizeLength]
+	valueBytes, err := s.valueArraySerde.SerializeObj(valueArray.Interface(), keyBytes)
+	if err != nil {
+		return nil, err
+	}
+	setSize(valueBytes[valueHeaderOffset:valueHeaderOffset+maxSizeLength], len(valueBytes)-valueHeaderOffset-maxSizeLength)
+	return valueBytes, nil
+}
+
+func (s *mapSerde) DeserializeObj(data []byte) (interface{}, error) {
+	v := reflect.MakeMap(s.mapType)
+
+	var keysLength int
+	var n int
+	if keysLength, n = getSize(data); n == 0 {
+		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid keys length data)")
+	}
+	data = data[n:]
+	keys, err := s.keyArraySerde.DeserializeObj(data[:keysLength])
+	if err != nil {
+		return nil, err
+	}
+	data = data[keysLength:]
+
+	var valuesLength int
+	if valuesLength, n = getSize(data); n == 0 {
+		return nil, fmt.Errorf("mapSerde DeserializeObj error (invalid values length data)")
+	}
+	data = data[n:]
+	values, err := s.valueArraySerde.DeserializeObj(data[:valuesLength])
+	if err != nil {
+		return nil, err
+	}
+
+	keySlice := reflect.ValueOf(keys)
+	valueSlice := reflect.ValueOf(values)
+	for i := 0; i < keySlice.Len(); i++ {
+		key := keySlice.Index(i)
+		value := valueSlice.Index(i)
+		v.SetMapIndex(key, value)
+	}
+	return v.Interface(), nil
+}
+
+type MapSerde[T any] struct {
+	mapSerde
+}
+
+func (s *MapSerde[T]) Serialize(value T, b []byte) ([]byte, error) {
+	return s.SerializeObj(reflect.ValueOf(value).Interface(), b)
+}
+
+func (s *MapSerde[T]) Deserialize(data []byte) (T, error) {
+	var t T
+	v, err := s.DeserializeObj(data)
+	if err != nil {
+		return t, err
+	}
+	return v.(T), nil
+}

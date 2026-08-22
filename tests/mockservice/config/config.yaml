@@ -1,0 +1,10 @@
+dataConnectors:
+  httpServer:
+    host: "localhost"
+    port: 8081
+services:
+  incomeService:
+    grpcHost: "localhost"
+    grpcPort: 9201
+    httpHost: "localhost"
+    httpPort: 9091

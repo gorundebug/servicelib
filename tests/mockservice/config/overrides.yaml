@@ -1,0 +1,7 @@
+dataConnectors:
+  httpServer:
+    host: "127.0.0.1"
+services:
+  incomeService:
+    grpcHost: "127.0.0.1"
+    httpHost: "127.0.0.1"

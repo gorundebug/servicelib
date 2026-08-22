@@ -1,0 +1,7 @@
+local
+*.test
+*.prof
+.DS_Store
+git_commit_full.sh
+coverage.out
+.claude

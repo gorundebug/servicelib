@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream App Topology</title>
+    <style>
+        html, body {
+            background-color: #000000;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="graph"></div>
+<script>
+    const statusBase = window.location.href.replace(/\/+$/, '');
+    const dataUrl = statusBase + '/data';
+
+    function loadScript(src, onload) {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = onload;
+        document.head.appendChild(s);
+    }
+
+    function loadCSS(href) {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = href;
+        document.head.appendChild(l);
+    }
+
+    function initNetwork() {
+        const options = {
+            layout: {
+                hierarchical: {
+                    enabled: false,
+                    edgeMinimization: false
+                }
+            },
+            physics: {
+                enabled: false
+            },
+            nodes: {
+                font: {
+                    face: 'arial',
+                    size: 10
+                },
+                color: {
+                    highlight:{
+                        background: '#FFFFFF'
+                    }
+                }
+            },
+            edges:{
+                scaling:{
+                    label: true,
+                },
+                shadow: false,
+                smooth: false,
+                font: {
+                    face: 'arial',
+                    size: 10,
+                    color: '#ffffff',
+                    strokeWidth: 0
+                },
+                color: {
+                    highlight: '#00FF80'
+                }
+            },
+            autoResize: false,
+        };
+        const graphContainer = document.getElementById('graph');
+        const nodes = new vis.DataSet([]);
+        const edges = new vis.DataSet([]);
+        const network = new vis.Network(graphContainer, {
+            nodes: nodes,
+            edges: edges
+        }, options);
+        let initialized = false;
+
+        function replaceData(dataSet, items) {
+            const nextIds = new Set(items.map(item => item.id));
+            const removedIds = dataSet.getIds().filter(id => !nextIds.has(id));
+            if (removedIds.length > 0) {
+                dataSet.remove(removedIds);
+            }
+            dataSet.update(items);
+        }
+
+        function refreshNetwork() {
+            fetch(dataUrl, {cache: 'no-store'})
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    const nextNodes = result.nodes || [];
+                    const nextEdges = (result.edges || []).map(edge => ({
+                        ...edge,
+                        id: edge.id || `${edge.from}->${edge.to}`
+                    }));
+                    replaceData(nodes, nextNodes);
+                    replaceData(edges, nextEdges);
+                    if (!initialized && nextNodes.length > 0) {
+                        initialized = true;
+                        network.focus(nextNodes[0].id);
+                    }
+                })
+                .catch(error => {
+                    console.error('There was a problem with the fetch operation:', error);
+                })
+                .finally(() => {
+                    window.setTimeout(refreshNetwork, 1000);
+                });
+        }
+
+        refreshNetwork();
+    }
+
+    loadCSS(statusBase + '/vis.min.css');
+    loadScript(statusBase + '/vis.min.js', initNetwork);
+</script>
+</body>
+</html>
