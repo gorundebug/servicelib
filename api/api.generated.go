@@ -648,6 +648,12 @@ type KubernetesWorkloadType string
 // Links carry data from the upstream node (`from`) to the downstream node (`to`)
 // according to the specified delivery semantics.
 type Link struct {
+	// ActivityHeartbeatTimeout Temporal Activity heartbeat timeout in milliseconds; zero disables it.
+	ActivityHeartbeatTimeout *int `json:"activityHeartbeatTimeout,omitempty"`
+
+	// ActivityStartToCloseTimeout Temporal Activity start-to-close timeout in milliseconds for this DurableCall link.
+	ActivityStartToCloseTimeout *int `json:"activityStartToCloseTimeout,omitempty"`
+
 	// Async Value returned by the caller's `IsAsync`/`isAsync` method when
 	// `callSemantics` is `FunctionCall`. Ignored for all other call semantics.
 	Async *bool `json:"async,omitempty"`
@@ -668,6 +674,9 @@ type Link struct {
 	// Ignored for every other call semantics.
 	IdDataConnector *int `json:"idDataConnector,omitempty"`
 
+	// MaximumAttempts Maximum Temporal Activity attempts including the initial attempt.
+	MaximumAttempts *int `json:"maximumAttempts,omitempty"`
+
 	// PoolName Name of the worker pool to use when `callSemantics` is `TaskPool` or `PriorityTaskPool`.
 	// Must match a pool defined in `StreamApp.pools`.
 	PoolName *string `json:"poolName,omitempty"`
@@ -676,8 +685,14 @@ type Link struct {
 	// Ignored for other call semantics.
 	Priority *int `json:"priority,omitempty"`
 
+	// TaskQueue Temporal Task Queue used by this DurableCall link.
+	TaskQueue *string `json:"taskQueue,omitempty"`
+
 	// To ID of the downstream (consumer) stream node.
 	To int `json:"to"`
+
+	// WorkflowExecutionTimeout Temporal Workflow execution timeout in milliseconds; zero means SDK default.
+	WorkflowExecutionTimeout *int `json:"workflowExecutionTimeout,omitempty"`
 }
 
 // LogLevel Logging verbosity for the service runtime.

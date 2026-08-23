@@ -734,6 +734,25 @@ components:
           description: |
             Temporal data connector used when `callSemantics` is `DurableCall`.
             Ignored for every other call semantics.
+        taskQueue:
+          type: string
+          description: Temporal Task Queue used by this DurableCall link.
+        workflowExecutionTimeout:
+          type: integer
+          minimum: 0
+          description: Temporal Workflow execution timeout in milliseconds; zero means SDK default.
+        activityStartToCloseTimeout:
+          type: integer
+          minimum: 1
+          description: Temporal Activity start-to-close timeout in milliseconds for this DurableCall link.
+        activityHeartbeatTimeout:
+          type: integer
+          minimum: 0
+          description: Temporal Activity heartbeat timeout in milliseconds; zero disables it.
+        maximumAttempts:
+          type: integer
+          minimum: 1
+          description: Maximum Temporal Activity attempts including the initial attempt.
       required:
         - from
         - to

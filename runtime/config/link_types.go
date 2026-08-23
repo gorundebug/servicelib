@@ -50,7 +50,12 @@ func (*ParallelCallSemanticsConfig) GetType() api.CallSemantics {
 }
 
 type DurableCallSemanticsConfig struct {
-	IdDataConnector int `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	IdDataConnector             int    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	TaskQueue                   string `yaml:"taskQueue" mapstructure:"taskQueue"`
+	WorkflowExecutionTimeout    int    `yaml:"workflowExecutionTimeout,omitempty" mapstructure:"workflowExecutionTimeout"`
+	ActivityStartToCloseTimeout int    `yaml:"activityStartToCloseTimeout" mapstructure:"activityStartToCloseTimeout"`
+	ActivityHeartbeatTimeout    int    `yaml:"activityHeartbeatTimeout,omitempty" mapstructure:"activityHeartbeatTimeout"`
+	MaximumAttempts             int    `yaml:"maximumAttempts" mapstructure:"maximumAttempts"`
 }
 
 func (*DurableCallSemanticsConfig) GetType() api.CallSemantics {
@@ -130,6 +135,17 @@ func (l *LinkConfig) Validate() error {
 	}
 	if l.CallSemantics.DurableCall != nil && l.CallSemantics.DurableCall.IdDataConnector <= 0 {
 		return fmt.Errorf("link From: %d, To: %d durableCall requires a positive idDataConnector", l.From, l.To)
+	}
+	if durable := l.CallSemantics.DurableCall; durable != nil {
+		if durable.TaskQueue == "" {
+			return fmt.Errorf("link From: %d, To: %d durableCall requires taskQueue", l.From, l.To)
+		}
+		if durable.ActivityStartToCloseTimeout < 1 {
+			return fmt.Errorf("link From: %d, To: %d durableCall requires activityStartToCloseTimeout", l.From, l.To)
+		}
+		if durable.MaximumAttempts < 1 {
+			return fmt.Errorf("link From: %d, To: %d durableCall requires maximumAttempts", l.From, l.To)
+		}
 	}
 	return nil
 }

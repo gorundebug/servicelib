@@ -38,7 +38,10 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 		ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
 	}
 	link := &LinkConfig{From: 1, To: 2, CallSemantics: &CallSemanticsGroup{
-		DurableCall: &DurableCallSemanticsConfig{IdDataConnector: 7},
+		DurableCall: &DurableCallSemanticsConfig{
+			IdDataConnector: 7, TaskQueue: "automation",
+			ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
+		},
 	}}
 	cfg := &temporalTestConfig{
 		connectors: []DataConnectorConfig{connector},
@@ -54,6 +57,7 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 	require.Equal(t, "temporal:7233", *app.DataConnectors[0].Address)
 	require.Equal(t, "automation", *app.Endpoints[0].TaskQueue)
 	require.Equal(t, 7, *app.Links[0].IdDataConnector)
+	require.Equal(t, "automation", *app.Links[0].TaskQueue)
 	require.Equal(t, api.CallSemanticsDurableCall, app.Links[0].CallSemantics)
 }
 
@@ -61,7 +65,10 @@ func TestDurableCallRejectsNonTemporalConnector(t *testing.T) {
 	cfg := &temporalTestConfig{
 		connectors: []DataConnectorConfig{&CustomDataConnectorConfig{ID: 7, Name: "local"}},
 		links: []*LinkConfig{{From: 1, To: 2, CallSemantics: &CallSemanticsGroup{
-			DurableCall: &DurableCallSemanticsConfig{IdDataConnector: 7},
+			DurableCall: &DurableCallSemanticsConfig{
+				IdDataConnector: 7, TaskQueue: "automation",
+				ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
+			},
 		}}},
 	}
 

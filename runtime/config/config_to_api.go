@@ -387,8 +387,14 @@ func LinkConfigToAPI(l *LinkConfig) api.Link {
 			p := l.CallSemantics.PriorityTaskPool.Priority
 			link.Priority = &p
 		case l.CallSemantics.DurableCall != nil:
-			id := l.CallSemantics.DurableCall.IdDataConnector
+			durable := l.CallSemantics.DurableCall
+			id := durable.IdDataConnector
 			link.IdDataConnector = &id
+			link.TaskQueue = strOptPtr(durable.TaskQueue)
+			link.WorkflowExecutionTimeout = &durable.WorkflowExecutionTimeout
+			link.ActivityStartToCloseTimeout = &durable.ActivityStartToCloseTimeout
+			link.ActivityHeartbeatTimeout = &durable.ActivityHeartbeatTimeout
+			link.MaximumAttempts = &durable.MaximumAttempts
 		}
 	}
 	return link

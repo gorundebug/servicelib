@@ -42,6 +42,7 @@ type ServiceApp struct {
 	endpointConsumers map[int]RuntimeEndpointConsumer
 	dataSources       map[int]DataSource
 	dataSinks         map[int]DataSink
+	durableTransports map[int]DurableTransport
 	serdes            map[reflect.Type]serde.StreamSerializer
 	httpServer        *http.Server
 	mux               *http.ServeMux
@@ -249,6 +250,7 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
+	app.durableTransports = make(map[int]DurableTransport)
 
 	if dep != nil {
 		app.delayPool, err = dep.DelayPool(ctx, env)
@@ -353,6 +355,14 @@ func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 	app.dataSinks[dataSink.GetID()] = dataSink
 }
 
+func (app *ServiceApp) AddDurableTransport(transport DurableTransport) {
+	app.durableTransports[transport.GetID()] = transport
+}
+
+func (app *ServiceApp) GetDurableTransport(id int) DurableTransport {
+	return app.durableTransports[id]
+}
+
 func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, error) {
 	if ser, err := app.environment.GetSerde(valueType); err != nil {
 		return nil, fmt.Errorf("method GetSerde error for type: %s", valueType.Name())
@@ -379,6 +389,11 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		}
 	}
 
+	for _, transport := range app.durableTransports {
+		if err := transport.Start(ctx); err != nil {
+			return err
+		}
+	}
 	for _, v := range app.dataSources {
 		if err := v.Start(ctx); err != nil {
 			return err
@@ -521,6 +536,14 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			v.Stop(ctx)
+		}()
+	}
+
+	for _, transport := range app.durableTransports {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			transport.Stop(ctx)
 		}()
 	}
 

@@ -47,6 +47,8 @@ type RuntimeEnvironment interface {
 	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
+	AddDurableTransport(transport DurableTransport)
+	GetDurableTransport(id int) DurableTransport
 
 	Delay(ctx context.Context, duration time.Duration, f func()) error
 
@@ -56,6 +58,33 @@ type RuntimeEnvironment interface {
 	RegisterEndpointConsumer(consumer RuntimeEndpointConsumer)
 	RegisterStorage(storage store.Storage)
 	CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage
+}
+
+// DurableEnvelope is the portable payload crossing a DurableCall boundary.
+// It contains transport context only; the target node and business value keep
+// their existing types and interfaces.
+type DurableEnvelope struct {
+	Version          int    `json:"version"`
+	From             int    `json:"from"`
+	To               int    `json:"to"`
+	CallID           string `json:"callId"`
+	StreamID         string `json:"streamId,omitempty"`
+	Priority         int    `json:"priority"`
+	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
+	SamplingEnabled  bool   `json:"samplingEnabled,omitempty"`
+	Payload          []byte `json:"payload"`
+}
+
+type DurableLinkHandler func(context.Context, DurableEnvelope) error
+
+// DurableTransport is implemented by an external durable runtime such as
+// Temporal. RegisterLink associates transport identity with the existing
+// target consumer; it must not replace or wrap the target node itself.
+type DurableTransport interface {
+	environment.Lifecycle
+	DataConnector
+	RegisterLink(config.LinkID, DurableLinkHandler) error
+	SubmitLink(context.Context, config.LinkID, DurableEnvelope) error
 }
 
 type DelayFunc[T any] func(T) error
