@@ -8,15 +8,20 @@
 package datasource
 
 import (
-    "github.com/gorundebug/servicelib/datasource/grpc"
-    "github.com/gorundebug/servicelib/datasource/http"
-    "github.com/gorundebug/servicelib/datasource/kafka"
-    "github.com/gorundebug/servicelib/datasource/localsource"
-    "github.com/gorundebug/servicelib/runtime"
+	crondata "github.com/gorundebug/servicelib/datasource/cron"
+	"github.com/gorundebug/servicelib/datasource/grpc"
+	"github.com/gorundebug/servicelib/datasource/http"
+	"github.com/gorundebug/servicelib/datasource/kafka"
+	"github.com/gorundebug/servicelib/datasource/localsource"
+	"github.com/gorundebug/servicelib/runtime"
 )
 
+func GocronEndpointConsumer[R, E any](stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E]) (runtime.Consumer[runtime.ScheduleTrigger], error) {
+	return crondata.MakeGocronEndpointConsumer(stream)
+}
+
 func CustomEndpointConsumer[HandlerState, T, R, E any](stream runtime.TypedInputStream[T, R, E], dataProducer localsource.DataProducer[T], handler localsource.EndpointHandler[HandlerState, T, R, E]) (runtime.Consumer[T], error) {
-    return localsource.MakeCustomEndpointConsumer[HandlerState](stream, dataProducer, handler)
+	return localsource.MakeCustomEndpointConsumer[HandlerState](stream, dataProducer, handler)
 }
 
 func NetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](stream runtime.TypedInputStream[T, R, E], handler http.EndpointHandler[HandlerState, ReqT, ResR, T, R, E]) (runtime.Consumer[T], http.HTTPHandler, error) {
@@ -24,7 +29,7 @@ func NetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](stream runti
 }
 
 func SaramaKafkaEndpointConsumer[HandlerState, T, R, E any](stream runtime.TypedInputStream[T, R, E], handler kafka.EndpointHandler[HandlerState, T, R, E]) (runtime.Consumer[T], error) {
-    return kafka.MakeSaramaKafkaEndpointConsumer[HandlerState](stream, handler)
+	return kafka.MakeSaramaKafkaEndpointConsumer[HandlerState](stream, handler)
 }
 
 func GRPCNoStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](stream runtime.TypedInputStream[T, R, E], handler grpc.EndpointHandler[HandlerState, ReqT, ResR, T, R, E]) (runtime.Consumer[T], grpc.UnaryHandler[ReqT, ResR], error) {
