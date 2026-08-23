@@ -266,6 +266,12 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 		d.Address = strOptPtr(c.Address)
 		d.Namespace = strOptPtr(c.Namespace)
 		d.Identity = strOptPtr(c.Identity)
+		d.ApiKey = strOptPtr(c.APIKey)
+		d.TlsEnabled = boolOptPtr(c.TLSEnabled)
+		d.TlsServerName = strOptPtr(c.TLSServerName)
+		d.TlsCaFile = strOptPtr(c.TLSCAFile)
+		d.TlsCertFile = strOptPtr(c.TLSCertFile)
+		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
 		d.MaxConcurrentActivities = intOptPtr(c.MaxConcurrentActivities)
 		d.MaxConcurrentWorkflows = intOptPtr(c.MaxConcurrentWorkflows)
 	}

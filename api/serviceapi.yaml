@@ -946,6 +946,26 @@ components:
         identity:
           type: string
           description: Temporal client and Worker identity. Applies to Temporal connectors.
+        apiKey:
+          type: string
+          writeOnly: true
+          description: Temporal API key. Supply at runtime through an environment-backed override.
+        tlsEnabled:
+          type: boolean
+          description: Enables TLS for a Temporal connector.
+        tlsServerName:
+          type: string
+          description: Expected TLS server name for a Temporal connector.
+        tlsCaFile:
+          type: string
+          description: Path to a PEM CA bundle mounted into the service container.
+        tlsCertFile:
+          type: string
+          description: Path to a PEM client certificate for Temporal mTLS.
+        tlsKeyFile:
+          type: string
+          writeOnly: true
+          description: Path to the PEM private key paired with tlsCertFile.
         maxConcurrentActivities:
           type: integer
           minimum: 1

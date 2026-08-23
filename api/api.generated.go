@@ -249,6 +249,9 @@ type DataConnector struct {
 	// Address gRPC connection address.
 	Address *string `json:"address,omitempty"`
 
+	// ApiKey Temporal API key. Supply at runtime through an environment-backed override.
+	ApiKey *string `json:"apiKey,omitempty"`
+
 	// Async When true, the Kafka producer operates in async mode — messages are batched
 	// and acknowledged asynchronously. Applies to Kafka sink connectors.
 	Async *bool `json:"async,omitempty"`
@@ -425,6 +428,21 @@ type DataConnector struct {
 
 	// SecurityProtocol Kafka client transport security protocol.
 	SecurityProtocol *KafkaSecurityProtocol `json:"securityProtocol,omitempty"`
+
+	// TlsCaFile Path to a PEM CA bundle mounted into the service container.
+	TlsCaFile *string `json:"tlsCaFile,omitempty"`
+
+	// TlsCertFile Path to a PEM client certificate for Temporal mTLS.
+	TlsCertFile *string `json:"tlsCertFile,omitempty"`
+
+	// TlsEnabled Enables TLS for a Temporal connector.
+	TlsEnabled *bool `json:"tlsEnabled,omitempty"`
+
+	// TlsKeyFile Path to the PEM private key paired with tlsCertFile.
+	TlsKeyFile *string `json:"tlsKeyFile,omitempty"`
+
+	// TlsServerName Expected TLS server name for a Temporal connector.
+	TlsServerName *string `json:"tlsServerName,omitempty"`
 
 	// Type Type of external system the data connector connects to.
 	// - `HTTP` (1): HTTP server or client

@@ -110,6 +110,12 @@ type TemporalDataConnectorConfig struct {
 	Address                 string                          `yaml:"address" mapstructure:"address"`
 	Namespace               string                          `yaml:"namespace" mapstructure:"namespace"`
 	Identity                string                          `yaml:"identity,omitempty" mapstructure:"identity"`
+	APIKey                  string                          `yaml:"apiKey,omitempty" mapstructure:"apiKey"`
+	TLSEnabled              bool                            `yaml:"tlsEnabled,omitempty" mapstructure:"tlsEnabled"`
+	TLSServerName           string                          `yaml:"tlsServerName,omitempty" mapstructure:"tlsServerName"`
+	TLSCAFile               string                          `yaml:"tlsCaFile,omitempty" mapstructure:"tlsCaFile"`
+	TLSCertFile             string                          `yaml:"tlsCertFile,omitempty" mapstructure:"tlsCertFile"`
+	TLSKeyFile              string                          `yaml:"tlsKeyFile,omitempty" mapstructure:"tlsKeyFile"`
 	MaxConcurrentActivities int                             `yaml:"maxConcurrentActivities,omitempty" mapstructure:"maxConcurrentActivities"`
 	MaxConcurrentWorkflows  int                             `yaml:"maxConcurrentWorkflows,omitempty" mapstructure:"maxConcurrentWorkflows"`
 	Properties              map[string]interface{}          `yaml:",inline" mapstructure:",remain"`

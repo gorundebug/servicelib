@@ -11,8 +11,11 @@ package temporal
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -216,9 +219,11 @@ func (c *Connector) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	temporalClient, err := client.Dial(client.Options{
-		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
-	})
+	clientOptions, err := c.makeClientOptions(cfg)
+	if err != nil {
+		return err
+	}
+	temporalClient, err := client.Dial(clientOptions)
 	if err != nil {
 		return fmt.Errorf("connect Temporal data connector %q: %w", c.name, err)
 	}
@@ -303,6 +308,55 @@ func (c *Connector) Start(ctx context.Context) error {
 	c.workers = startedWorkers
 	c.started = true
 	return nil
+}
+
+func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
+	options := client.Options{
+		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
+	}
+	tlsConfigured := cfg.TLSEnabled || cfg.TLSServerName != "" || cfg.TLSCAFile != "" || cfg.TLSCertFile != "" || cfg.TLSKeyFile != ""
+	if tlsConfigured {
+		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: cfg.TLSServerName}
+		if cfg.TLSCAFile != "" {
+			pem, err := os.ReadFile(cfg.TLSCAFile)
+			if err != nil {
+				return options, fmt.Errorf("read Temporal CA file for connector %q: %w", c.name, err)
+			}
+			roots, err := x509.SystemCertPool()
+			if err != nil || roots == nil {
+				roots = x509.NewCertPool()
+			}
+			if !roots.AppendCertsFromPEM(pem) {
+				return options, fmt.Errorf("Temporal CA file for connector %q contains no certificates", c.name)
+			}
+			tlsConfig.RootCAs = roots
+		}
+		if cfg.TLSCertFile != "" {
+			certificate, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+			if err != nil {
+				return options, fmt.Errorf("load Temporal mTLS key pair for connector %q: %w", c.name, err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{certificate}
+		}
+		options.ConnectionOptions.TLS = tlsConfig
+	}
+	if cfg.APIKey != "" {
+		// The callback reads the current immutable snapshot so a secret-only
+		// configuration reload does not require caching credentials in a graph
+		// object. Enabling API-key auth from an initially empty value still
+		// requires reconnecting the client.
+		options.Credentials = client.NewAPIKeyDynamicCredentials(func(context.Context) (string, error) {
+			current, err := c.temporalConfig()
+			if err != nil {
+				return "", err
+			}
+			if current.APIKey == "" {
+				return "", fmt.Errorf("Temporal API key for connector %q is empty", c.name)
+			}
+			return current.APIKey, nil
+		})
+	}
+	return options, nil
 }
 
 func (c *Connector) Stop(context.Context) {

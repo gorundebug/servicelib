@@ -29,6 +29,7 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 		ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
 		Address: "temporal:7233", Namespace: "default", Identity: "automation",
 		MaxConcurrentActivities: 2, MaxConcurrentWorkflows: 3,
+		APIKey: "secret", TLSEnabled: true, TLSServerName: "temporal.example.com",
 	}
 	endpoint := &TemporalEndpointConfig{
 		ID: 11, Name: "scheduledJob", IdDataConnector: 7, Enabled: true,
@@ -56,6 +57,9 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 	require.Equal(t, api.DataConnectorTypeTemporal, app.DataConnectors[0].Type)
 	require.Equal(t, "temporal:7233", *app.DataConnectors[0].Address)
 	require.Equal(t, "automation", *app.Endpoints[0].TaskQueue)
+	require.Equal(t, "secret", *app.DataConnectors[0].ApiKey)
+	require.True(t, *app.DataConnectors[0].TlsEnabled)
+	require.Equal(t, "temporal.example.com", *app.DataConnectors[0].TlsServerName)
 	require.Equal(t, 7, *app.Links[0].IdDataConnector)
 	require.Equal(t, "automation", *app.Links[0].TaskQueue)
 	require.Equal(t, api.CallSemanticsDurableCall, app.Links[0].CallSemantics)
@@ -109,4 +113,14 @@ func TestTemporalEndpointRejectsNonTemporalConnector(t *testing.T) {
 	}
 	_, err := NewRuntimeConfig(cfg)
 	require.ErrorContains(t, err, "requires a Temporal data connector")
+}
+
+func TestTemporalConnectorRejectsIncompleteMTLSKeyPair(t *testing.T) {
+	cfg := &temporalTestConfig{connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+		ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+		Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		TLSEnabled: true, TLSCertFile: "/secrets/client.crt",
+	}}}
+	_, err := NewRuntimeConfig(cfg)
+	require.ErrorContains(t, err, "both tlsCertFile and tlsKeyFile")
 }

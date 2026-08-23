@@ -357,6 +357,24 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.Identity != nil {
 				dcObj["identity"] = *dc.Identity
 			}
+			if dc.ApiKey != nil {
+				dcObj["apiKey"] = *dc.ApiKey
+			}
+			if dc.TlsEnabled != nil {
+				dcObj["tlsEnabled"] = *dc.TlsEnabled
+			}
+			if dc.TlsServerName != nil {
+				dcObj["tlsServerName"] = *dc.TlsServerName
+			}
+			if dc.TlsCaFile != nil {
+				dcObj["tlsCaFile"] = *dc.TlsCaFile
+			}
+			if dc.TlsCertFile != nil {
+				dcObj["tlsCertFile"] = *dc.TlsCertFile
+			}
+			if dc.TlsKeyFile != nil {
+				dcObj["tlsKeyFile"] = *dc.TlsKeyFile
+			}
 			if dc.MaxConcurrentActivities != nil {
 				dcObj["maxConcurrentActivities"] = *dc.MaxConcurrentActivities
 			}

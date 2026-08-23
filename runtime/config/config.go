@@ -181,6 +181,12 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 			if temporalConnector.MaxConcurrentActivities < 1 || temporalConnector.MaxConcurrentWorkflows < 1 {
 				return nil, fmt.Errorf("Temporal data connector %q requires positive worker capacities", temporalConnector.Name)
 			}
+			if (temporalConnector.TLSCertFile == "") != (temporalConnector.TLSKeyFile == "") {
+				return nil, fmt.Errorf("Temporal data connector %q requires both tlsCertFile and tlsKeyFile", temporalConnector.Name)
+			}
+			if (temporalConnector.TLSCAFile != "" || temporalConnector.TLSCertFile != "" || temporalConnector.TLSServerName != "") && !temporalConnector.TLSEnabled {
+				return nil, fmt.Errorf("Temporal data connector %q requires tlsEnabled when TLS files or server name are configured", temporalConnector.Name)
+			}
 			switch temporalConnector.Implementation {
 			case api.DataConnectorImplementationTemporalGo,
 				api.DataConnectorImplementationTemporalPython,
