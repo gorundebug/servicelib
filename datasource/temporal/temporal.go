@@ -1,0 +1,262 @@
+/*
+ * Copyright (c) 2026 Sergey Alexeev
+ * Email: sergeyalexeev@yahoo.com
+ *
+ * Licensed under the MIT License. See LICENSE for details.
+ */
+
+// Package temporal adapts official Temporal Activity tasks to ordinary input
+// streams. It contains transport lifecycle only; business nodes are unchanged.
+package temporal
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	runtimetemporal "github.com/gorundebug/servicelib/runtime/temporal"
+)
+
+type StreamContext[T, R, E any] = runtime.StreamContext[T, R, E]
+
+// EndpointHandler is the user-visible lifecycle at a Temporal input boundary.
+// ConsumeMessage emits the already typed job into the existing graph. The
+// framework, not the handler, correlates the graph result by StreamID.
+type EndpointHandler[HandlerState, T, R, E any] interface {
+	BeginRequest(context.Context, StreamContext[T, R, E]) (context.Context, HandlerState, error)
+	ConsumeMessage(context.Context, StreamContext[T, R, E], HandlerState, T) error
+	EndRequest(context.Context, StreamContext[T, R, E], error, HandlerState)
+}
+
+type inputDataSource struct{ *runtime.InputDataSource }
+
+func (*inputDataSource) Start(context.Context) error { return nil }
+func (*inputDataSource) Stop(context.Context)        {}
+
+type inputEndpoint struct{ *runtime.DataSourceEndpoint }
+
+type resultConsumer[R any] struct{ consume func(context.Context, R) }
+
+func (c *resultConsumer[R]) Consume(ctx context.Context, value R) { c.consume(ctx, value) }
+
+type endpointConsumer[HandlerState, T, R, E any] struct {
+	*runtime.DataSourceEndpointConsumer[T, R, E]
+	handler   EndpointHandler[HandlerState, T, R, E]
+	sc        StreamContext[T, R, E]
+	decode    func(runtimetemporal.EndpointEnvelope) (T, error)
+	resultSer runtime.TypedSerializedStream[R]
+	mu        sync.Mutex
+	pending   map[string]chan R
+	tracer    tracing.Tracer
+}
+
+func (ec *endpointConsumer[HandlerState, T, R, E]) GetID() int { return ec.Endpoint().GetID() }
+
+func (ec *endpointConsumer[HandlerState, T, R, E]) FunctionImplementation() interface{} {
+	return ec.handler
+}
+
+func (ec *endpointConsumer[HandlerState, T, R, E]) consumeResult(ctx context.Context, value R) {
+	sid, ok := runtime.StreamIdFromContext(ctx)
+	if !ok {
+		ec.Endpoint().OnMissingStreamID(ctx)
+		return
+	}
+	ec.mu.Lock()
+	result := ec.pending[sid.GetID()]
+	ec.mu.Unlock()
+	if result == nil {
+		ec.Endpoint().OnLateResult(ctx, sid.GetID())
+		return
+	}
+	select {
+	case result <- value:
+	default:
+		ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), sid.GetID())
+	}
+}
+
+func (ec *endpointConsumer[HandlerState, T, R, E]) handle(
+	activityCtx context.Context,
+	envelope runtimetemporal.EndpointEnvelope,
+) (result runtimetemporal.EndpointResult, err error) {
+	value, err := ec.decode(envelope)
+	if err != nil {
+		return result, err
+	}
+	ctx, cancel := endpointContext(activityCtx, envelope)
+	defer cancel()
+	var span tracing.Span
+	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
+		ctx, span = ec.tracer.Start(ctx, "temporal.input",
+			tracing.StringAttr("stream", ec.Stream().GetName()),
+			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
+		)
+		defer span.End()
+	}
+	handlerCtx, state, err := ec.handler.BeginRequest(ctx, ec.sc)
+	if err != nil {
+		ec.Endpoint().OnBeginRequestFailed(ctx, err)
+		tracing.SpanError(span, err)
+		return result, err
+	}
+	start := ec.Endpoint().OnRequestStart(handlerCtx)
+	defer func() {
+		ec.handler.EndRequest(handlerCtx, ec.sc, err, state)
+		ec.Endpoint().OnRequestEnd(handlerCtx, start, err)
+	}()
+
+	hasResult := ec.resultSer != nil
+	var resultCh chan R
+	if hasResult {
+		resultCh = make(chan R, 1)
+		ec.mu.Lock()
+		if _, exists := ec.pending[envelope.StreamID]; exists {
+			ec.mu.Unlock()
+			return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
+		}
+		ec.pending[envelope.StreamID] = resultCh
+		ec.mu.Unlock()
+		ec.Endpoint().OnPendingAdd(handlerCtx, envelope.StreamID)
+		defer func() {
+			ec.mu.Lock()
+			delete(ec.pending, envelope.StreamID)
+			ec.mu.Unlock()
+			ec.Endpoint().OnPendingRemove(handlerCtx, envelope.StreamID)
+		}()
+	}
+
+	if err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, state, value); err != nil {
+		tracing.SpanError(span, err)
+		return result, err
+	}
+	if !hasResult {
+		return result, nil
+	}
+	select {
+	case value := <-resultCh:
+		result.Payload, err = ec.resultSer.GetSerde().Serialize(value)
+		return result, err
+	case <-handlerCtx.Done():
+		return result, handlerCtx.Err()
+	}
+}
+
+func endpointContext(parent context.Context, envelope runtimetemporal.EndpointEnvelope) (context.Context, context.CancelFunc) {
+	ctx := runtime.WithStreamId(parent, envelope.StreamID)
+	ctx = runtime.WithPriority(ctx, envelope.Priority)
+	if envelope.SamplingEnabled {
+		ctx = tracing.EnableSampling(ctx)
+	}
+	if envelope.DeadlineUnixNano > 0 {
+		deadline := time.Unix(0, envelope.DeadlineUnixNano)
+		if current, ok := ctx.Deadline(); !ok || deadline.Before(current) {
+			return context.WithDeadline(ctx, deadline)
+		}
+	}
+	return ctx, func() {}
+}
+
+func getOrCreateDataSource(id int, env runtime.RuntimeEnvironment) (runtime.DataSource, *runtimetemporal.Connector, error) {
+	connector, err := runtimetemporal.MakeConnector(id, env)
+	if err != nil {
+		return nil, nil, err
+	}
+	if existing := env.GetDataSource(id); existing != nil {
+		return existing, connector, nil
+	}
+	cfg := env.RuntimeConfig().GetDataConnectorByID(id)
+	base, err := runtime.MakeInputDataSource(cfg, env)
+	if err != nil {
+		return nil, nil, err
+	}
+	ds := &inputDataSource{InputDataSource: base}
+	env.AddDataSource(ds)
+	return ds, connector, nil
+}
+
+func makeEndpointConsumer[HandlerState, T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	handler EndpointHandler[HandlerState, T, R, E],
+	decode func(runtimetemporal.EndpointEnvelope) (T, error),
+) (runtime.Consumer[T], error) {
+	if handler == nil {
+		return nil, fmt.Errorf("handler is nil for Temporal endpoint stream %q", stream.GetName())
+	}
+	env := stream.GetRuntimeEnvironment()
+	configured := env.RuntimeConfig().GetEndpointConfigByID(stream.GetEndpointId())
+	cfg, ok := configured.(*config.TemporalEndpointConfig)
+	if !ok {
+		return nil, fmt.Errorf("endpoint id=%d is not Temporal", stream.GetEndpointId())
+	}
+	ds, connector, err := getOrCreateDataSource(cfg.IdDataConnector, env)
+	if err != nil {
+		return nil, err
+	}
+	if ds.GetEndpoint(cfg.ID) != nil {
+		return nil, fmt.Errorf("Temporal source endpoint %q already exists", cfg.Name)
+	}
+	base, err := runtime.MakeDataSourceEndpoint(ds, cfg.ID, env)
+	if err != nil {
+		return nil, err
+	}
+	ep := &inputEndpoint{DataSourceEndpoint: base}
+	ds.AddEndpoint(ep)
+	consumer := &endpointConsumer[HandlerState, T, R, E]{
+		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](ep, stream),
+		handler:                    handler, decode: decode, pending: make(map[string]chan R),
+		resultSer: stream.GetResultStream(),
+	}
+	if tracer := env.Tracing(); tracer != nil {
+		consumer.tracer = tracer.Tracer(env.ServiceConfig().Name)
+	}
+	consumer.sc = runtime.MakeStreamContext[T, R, E](
+		stream, stream.GetResultStream(), runtime.CollectFunc[T](consumer.Consume),
+		runtime.CollectFunc[E](stream.GetErrorStream().Consume),
+	)
+	if consumer.resultSer != nil {
+		stream.SetResultConsumer(&resultConsumer[R]{consume: consumer.consumeResult})
+	}
+	if err := connector.RegisterEndpoint(cfg.ID, consumer.handle); err != nil {
+		return nil, err
+	}
+	env.RegisterEndpointConsumer(consumer)
+	return consumer, nil
+}
+
+// MakeEndpointConsumer registers one on-demand typed Temporal endpoint.
+func MakeEndpointConsumer[HandlerState, T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	handler EndpointHandler[HandlerState, T, R, E],
+) (runtime.Consumer[T], error) {
+	serde := stream.GetSerde()
+	return makeEndpointConsumer(stream, handler, func(envelope runtimetemporal.EndpointEnvelope) (T, error) {
+		return serde.Deserialize(envelope.Payload)
+	})
+}
+
+// MakeScheduleEndpointConsumer registers the same endpoint contract for a
+// Temporal Schedule. The transport supplies ScheduleTrigger; no cron node or
+// transport-specific business function is added to the graph.
+func MakeScheduleEndpointConsumer[HandlerState, R, E any](
+	stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E],
+	handler EndpointHandler[HandlerState, runtime.ScheduleTrigger, R, E],
+) (runtime.Consumer[runtime.ScheduleTrigger], error) {
+	return makeEndpointConsumer(stream, handler, func(envelope runtimetemporal.EndpointEnvelope) (runtime.ScheduleTrigger, error) {
+		if !envelope.Scheduled || envelope.ScheduleID == "" || envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
+			return runtime.ScheduleTrigger{}, fmt.Errorf("invalid Temporal schedule envelope for endpoint %d", envelope.EndpointID)
+		}
+		return runtime.NewScheduleTrigger(
+			envelope.EndpointID, envelope.ScheduleID,
+			time.Unix(0, envelope.ScheduledAtNano), time.Unix(0, envelope.FiredAtNano),
+			runtime.ScheduleBackendTemporal,
+		), nil
+	})
+}
+
+var _ runtime.DataSource = (*inputDataSource)(nil)
+var _ runtime.InputEndpoint = (*inputEndpoint)(nil)

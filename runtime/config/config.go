@@ -174,6 +174,50 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		}
 		runtimeCfg.dataConnectorsByID[v.GetID()] = v
 		runtimeCfg.dataConnectorsByName[v.GetName()] = v
+		if temporalConnector, ok := v.(*TemporalDataConnectorConfig); ok {
+			if temporalConnector.Address == "" || temporalConnector.Namespace == "" {
+				return nil, fmt.Errorf("Temporal data connector %q requires address and namespace", temporalConnector.Name)
+			}
+			if temporalConnector.MaxConcurrentActivities < 1 || temporalConnector.MaxConcurrentWorkflows < 1 {
+				return nil, fmt.Errorf("Temporal data connector %q requires positive worker capacities", temporalConnector.Name)
+			}
+			switch temporalConnector.Implementation {
+			case api.DataConnectorImplementationTemporalGo,
+				api.DataConnectorImplementationTemporalPython,
+				api.DataConnectorImplementationTemporalTypeScript:
+			default:
+				return nil, fmt.Errorf("Temporal data connector %q has unsupported implementation %q", temporalConnector.Name, temporalConnector.Implementation)
+			}
+		}
+	}
+	for _, endpoint := range config.GetEndpoints() {
+		temporalEndpoint, ok := endpoint.(*TemporalEndpointConfig)
+		if !ok {
+			continue
+		}
+		connector := runtimeCfg.dataConnectorsByID[temporalEndpoint.IdDataConnector]
+		if connector == nil || connector.GetType() != api.DataConnectorTypeTemporal {
+			return nil, fmt.Errorf("Temporal endpoint %q requires a Temporal data connector id=%d", temporalEndpoint.Name, temporalEndpoint.IdDataConnector)
+		}
+		if temporalEndpoint.TaskQueue == "" {
+			return nil, fmt.Errorf("Temporal endpoint %q requires taskQueue", temporalEndpoint.Name)
+		}
+		if temporalEndpoint.ActivityStartToCloseTimeout < 1 {
+			return nil, fmt.Errorf("Temporal endpoint %q requires activityStartToCloseTimeout", temporalEndpoint.Name)
+		}
+		if temporalEndpoint.MaximumAttempts < 1 {
+			return nil, fmt.Errorf("Temporal endpoint %q requires maximumAttempts", temporalEndpoint.Name)
+		}
+		if temporalEndpoint.Schedule != "" {
+			if temporalEndpoint.ScheduleID == "" || temporalEndpoint.Timezone == "" {
+				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires scheduleId and timezone", temporalEndpoint.Name)
+			}
+			if temporalEndpoint.OverlapPolicy == "" || temporalEndpoint.MissedRunPolicy == "" {
+				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires overlapPolicy and missedRunPolicy", temporalEndpoint.Name)
+			}
+		} else if temporalEndpoint.ScheduleID != "" || temporalEndpoint.Timezone != "" {
+			return nil, fmt.Errorf("on-demand Temporal endpoint %q cannot configure scheduleId or timezone without schedule", temporalEndpoint.Name)
+		}
 	}
 	for _, v := range config.GetPools() {
 		if _, exists := runtimeCfg.poolByName[v.Name]; exists {

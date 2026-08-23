@@ -543,7 +543,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			transport.Stop(ctx)
+			transport.StopAdmission(ctx)
 		}()
 	}
 
@@ -617,6 +617,12 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 		<-done
+	}
+
+	// Durable clients remain open until every sink submission has drained.
+	// Their Activity Workers were stopped with the admission sources above.
+	for _, transport := range app.durableTransports {
+		transport.Stop(ctx)
 	}
 
 	if err := app.metricsEngine.Shutdown(ctx); err != nil {

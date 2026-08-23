@@ -82,3 +82,31 @@ func TestDurableCallRequiresConnector(t *testing.T) {
 	}}
 	require.ErrorContains(t, link.Validate(), "positive idDataConnector")
 }
+
+func TestTemporalEndpointRequiresCompleteScheduleIdentity(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "scheduledJob", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", Schedule: "*/5 * * * *",
+			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+	_, err := NewRuntimeConfig(cfg)
+	require.ErrorContains(t, err, "requires scheduleId and timezone")
+}
+
+func TestTemporalEndpointRejectsNonTemporalConnector(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&CustomDataConnectorConfig{ID: 7, Name: "custom"}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "job", IdDataConnector: 7, TaskQueue: "automation",
+			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+	_, err := NewRuntimeConfig(cfg)
+	require.ErrorContains(t, err, "requires a Temporal data connector")
+}

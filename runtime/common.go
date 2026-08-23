@@ -83,6 +83,7 @@ type DurableLinkHandler func(context.Context, DurableEnvelope) error
 type DurableTransport interface {
 	environment.Lifecycle
 	DataConnector
+	StopAdmission(context.Context)
 	RegisterLink(config.LinkID, DurableLinkHandler) error
 	SubmitLink(context.Context, config.LinkID, DurableEnvelope) error
 }
