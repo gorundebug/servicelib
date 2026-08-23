@@ -28,7 +28,6 @@ const (
 	DataConnectorImplementationAsioGRPC                 DataConnectorImplementation = "asio/grpc"
 	DataConnectorImplementationBoostBeastHTTP           DataConnectorImplementation = "boost/beast-http"
 	DataConnectorImplementationConfluentKafkaJavaScript DataConnectorImplementation = "confluent/kafka-javascript"
-	DataConnectorImplementationCppLibcron               DataConnectorImplementation = "cpp/libcron"
 	DataConnectorImplementationFunction                 DataConnectorImplementation = "function"
 	DataConnectorImplementationGoGocron                 DataConnectorImplementation = "go/gocron"
 	DataConnectorImplementationGoogleGRPC               DataConnectorImplementation = "google/grpc"

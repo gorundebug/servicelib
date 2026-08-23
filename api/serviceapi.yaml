@@ -784,7 +784,6 @@ components:
               'python/apscheduler',
               'rust/croner',
               'node/croner',
-              'cpp/libcron',
               'temporal/go',
               'temporal/python',
               'temporal/typescript'
@@ -813,7 +812,6 @@ components:
         - PythonAPScheduler
         - RustCroner
         - NodeCroner
-        - CppLibcron
         - TemporalGo
         - TemporalPython
         - TemporalTypeScript
