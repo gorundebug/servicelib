@@ -13,11 +13,20 @@ import (
 	"github.com/gorundebug/servicelib/datasource/http"
 	"github.com/gorundebug/servicelib/datasource/kafka"
 	"github.com/gorundebug/servicelib/datasource/localsource"
+	temporalsource "github.com/gorundebug/servicelib/datasource/temporal"
 	"github.com/gorundebug/servicelib/runtime"
 )
 
 func GocronEndpointConsumer[R, E any](stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E]) (runtime.Consumer[runtime.ScheduleTrigger], error) {
 	return crondata.MakeGocronEndpointConsumer(stream)
+}
+
+func TemporalEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E]) (runtime.Consumer[T], error) {
+	return temporalsource.MakeDirectEndpointConsumer(stream)
+}
+
+func TemporalScheduleEndpointConsumer[R, E any](stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E]) (runtime.Consumer[runtime.ScheduleTrigger], error) {
+	return temporalsource.MakeDirectScheduleEndpointConsumer(stream)
 }
 
 func CustomEndpointConsumer[HandlerState, T, R, E any](stream runtime.TypedInputStream[T, R, E], dataProducer localsource.DataProducer[T], handler localsource.EndpointHandler[HandlerState, T, R, E]) (runtime.Consumer[T], error) {

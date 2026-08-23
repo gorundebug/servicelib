@@ -31,6 +31,30 @@ type EndpointHandler[HandlerState, T any] interface {
 	EndRequest(context.Context, runtime.Stream, error, HandlerState)
 }
 
+type directEndpointHandler[T any] struct{}
+
+func (directEndpointHandler[T]) GetExecutionID(ctx context.Context, _ T) string {
+	if id, ok := runtime.StreamIdFromContext(ctx); ok {
+		return id.GetID()
+	}
+	return ""
+}
+
+func (directEndpointHandler[T]) BeginRequest(
+	ctx context.Context,
+	_ runtime.Stream,
+) (context.Context, struct{}) {
+	return ctx, struct{}{}
+}
+
+func (directEndpointHandler[T]) EndRequest(
+	context.Context,
+	runtime.Stream,
+	error,
+	struct{},
+) {
+}
+
 type outputDataSink struct {
 	*runtime.OutputDataSink
 	wg sync.WaitGroup
@@ -245,6 +269,15 @@ func MakeEndpointConsumer[HandlerState, T, E any](
 	return consumer, nil
 }
 
+// MakeDirectEndpointConsumer creates the generated submission-only Temporal
+// sink. Its stable execution identity is the existing stream ID; no endpoint
+// business function is introduced by the transport.
+func MakeDirectEndpointConsumer[T, E any](
+	stream runtime.TypedSinkStream[T, E],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumer[struct{}](stream, directEndpointHandler[T]{})
+}
+
 // MakeEndpointConsumerWithResult creates a Temporal sink that waits for and
 // emits the endpoint Workflow result.
 func MakeEndpointConsumerWithResult[HandlerState, T, R, E any](
@@ -267,6 +300,14 @@ func MakeEndpointConsumerWithResult[HandlerState, T, R, E any](
 	}
 	stream.SetSinkConsumer(consumer)
 	return consumer, nil
+}
+
+// MakeDirectEndpointConsumerWithResult creates the generated Temporal sink
+// that waits for the existing endpoint result boundary.
+func MakeDirectEndpointConsumerWithResult[T, R, E any](
+	stream runtime.TypedSinkStreamWithResult[T, R, E],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumerWithResult[struct{}](stream, directEndpointHandler[T]{})
 }
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) Start(context.Context) error { return nil }

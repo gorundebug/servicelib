@@ -32,6 +32,37 @@ type EndpointHandler[HandlerState, T, R, E any] interface {
 	EndRequest(context.Context, StreamContext[T, R, E], error, HandlerState)
 }
 
+// directEndpointHandler is the transport-only adapter used by generated
+// Temporal inputs. It performs no business work: the acquired Activity simply
+// activates the existing input stream and the normal graph owns everything
+// downstream of that boundary.
+type directEndpointHandler[T, R, E any] struct{}
+
+func (directEndpointHandler[T, R, E]) BeginRequest(
+	ctx context.Context,
+	_ StreamContext[T, R, E],
+) (context.Context, struct{}, error) {
+	return ctx, struct{}{}, nil
+}
+
+func (directEndpointHandler[T, R, E]) ConsumeMessage(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+	_ struct{},
+	value T,
+) error {
+	sc.Collect(ctx, value)
+	return nil
+}
+
+func (directEndpointHandler[T, R, E]) EndRequest(
+	context.Context,
+	StreamContext[T, R, E],
+	error,
+	struct{},
+) {
+}
+
 type inputDataSource struct{ *runtime.InputDataSource }
 
 func (*inputDataSource) Start(context.Context) error { return nil }
@@ -239,6 +270,15 @@ func MakeEndpointConsumer[HandlerState, T, R, E any](
 	})
 }
 
+// MakeDirectEndpointConsumer registers a generated on-demand Temporal input
+// without inventing a transport-specific business function. The Activity calls
+// the ordinary input consumer directly.
+func MakeDirectEndpointConsumer[T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumer[struct{}](stream, directEndpointHandler[T, R, E]{})
+}
+
 // MakeScheduleEndpointConsumer registers the same endpoint contract for a
 // Temporal Schedule. The transport supplies ScheduleTrigger; no cron node or
 // transport-specific business function is added to the graph.
@@ -256,6 +296,18 @@ func MakeScheduleEndpointConsumer[HandlerState, R, E any](
 			runtime.ScheduleBackendTemporal,
 		), nil
 	})
+}
+
+// MakeDirectScheduleEndpointConsumer is the generated Temporal Schedule
+// adapter. ScheduleTrigger is emitted into the same ordinary input graph used
+// by every other DataSource implementation.
+func MakeDirectScheduleEndpointConsumer[R, E any](
+	stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E],
+) (runtime.Consumer[runtime.ScheduleTrigger], error) {
+	return MakeScheduleEndpointConsumer[struct{}](
+		stream,
+		directEndpointHandler[runtime.ScheduleTrigger, R, E]{},
+	)
 }
 
 var _ runtime.DataSource = (*inputDataSource)(nil)
