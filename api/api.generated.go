@@ -12,6 +12,7 @@ import (
 
 // Defines values for CallSemantics.
 const (
+	CallSemanticsDurableCall      CallSemantics = 6
 	CallSemanticsFunctionCall     CallSemantics = 2
 	CallSemanticsInherited        CallSemantics = 1
 	CallSemanticsParallelCall     CallSemantics = 5
@@ -27,16 +28,24 @@ const (
 	DataConnectorImplementationAsioGRPC                 DataConnectorImplementation = "asio/grpc"
 	DataConnectorImplementationBoostBeastHTTP           DataConnectorImplementation = "boost/beast-http"
 	DataConnectorImplementationConfluentKafkaJavaScript DataConnectorImplementation = "confluent/kafka-javascript"
+	DataConnectorImplementationCppLibcron               DataConnectorImplementation = "cpp/libcron"
 	DataConnectorImplementationFunction                 DataConnectorImplementation = "function"
+	DataConnectorImplementationGoGocron                 DataConnectorImplementation = "go/gocron"
 	DataConnectorImplementationGoogleGRPC               DataConnectorImplementation = "google/grpc"
 	DataConnectorImplementationGrpcJS                   DataConnectorImplementation = "grpc/grpc-js"
 	DataConnectorImplementationIBMsarama                DataConnectorImplementation = "IBM/Sarama"
 	DataConnectorImplementationLibrdkafka               DataConnectorImplementation = "librdkafka"
 	DataConnectorImplementationNetHTTP                  DataConnectorImplementation = "net/http"
+	DataConnectorImplementationNodeCroner               DataConnectorImplementation = "node/croner"
 	DataConnectorImplementationNodeHTTP                 DataConnectorImplementation = "node/http"
+	DataConnectorImplementationPythonAPScheduler        DataConnectorImplementation = "python/apscheduler"
 	DataConnectorImplementationRustAxum                 DataConnectorImplementation = "rust/axum"
+	DataConnectorImplementationRustCroner               DataConnectorImplementation = "rust/croner"
 	DataConnectorImplementationRustRdkafka              DataConnectorImplementation = "rust/rdkafka"
 	DataConnectorImplementationRustTonic                DataConnectorImplementation = "rust/tonic"
+	DataConnectorImplementationTemporalGo               DataConnectorImplementation = "temporal/go"
+	DataConnectorImplementationTemporalPython           DataConnectorImplementation = "temporal/python"
+	DataConnectorImplementationTemporalTypeScript       DataConnectorImplementation = "temporal/typescript"
 	DataConnectorImplementationUndefined                DataConnectorImplementation = ""
 	DataConnectorImplementationUserverGRPC              DataConnectorImplementation = "userver/grpc"
 	DataConnectorImplementationUserverHTTP              DataConnectorImplementation = "userver/http"
@@ -45,10 +54,12 @@ const (
 
 // Defines values for DataConnectorType.
 const (
+	DataConnectorTypeCron      DataConnectorType = 5
 	DataConnectorTypeCustom    DataConnectorType = 4
 	DataConnectorTypeGRPC      DataConnectorType = 2
 	DataConnectorTypeHTTP      DataConnectorType = 1
 	DataConnectorTypeKafka     DataConnectorType = 3
+	DataConnectorTypeTemporal  DataConnectorType = 6
 	DataConnectorTypeUndefined DataConnectorType = 0
 )
 
@@ -172,6 +183,18 @@ const (
 	ProgrammingLanguageUndefined  ProgrammingLanguage = 0
 )
 
+// Defines values for ScheduleMissedRunPolicy.
+const (
+	ScheduleMissedRunPolicyFireOnce ScheduleMissedRunPolicy = "FireOnce"
+	ScheduleMissedRunPolicySkip     ScheduleMissedRunPolicy = "Skip"
+)
+
+// Defines values for ScheduleOverlapPolicy.
+const (
+	ScheduleOverlapPolicyAllow ScheduleOverlapPolicy = "Allow"
+	ScheduleOverlapPolicySkip  ScheduleOverlapPolicy = "Skip"
+)
+
 // Defines values for TransformationType.
 const (
 	TransformationTypeCase            TransformationType = 12
@@ -215,6 +238,7 @@ const (
 // - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 // - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
 // - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
+// - `DurableCall` (6): execute the link as an independently identified Temporal Workflow/Activity operation
 type CallSemantics int
 
 // DataConnector Configuration for a connection to an external system. A data connector represents
@@ -307,6 +331,9 @@ type DataConnector struct {
 	// Id Unique identifier for this data connector within the topology.
 	Id int `json:"id"`
 
+	// Identity Temporal client and Worker identity. Applies to Temporal connectors.
+	Identity *string `json:"identity,omitempty"`
+
 	// Implementation The specific library used to implement a data connector.
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
@@ -328,6 +355,12 @@ type DataConnector struct {
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
+	// MaxConcurrentActivities Maximum Activity slots owned by this Temporal connector's Worker.
+	MaxConcurrentActivities *int `json:"maxConcurrentActivities,omitempty"`
+
+	// MaxConcurrentWorkflows Maximum Workflow slots owned by this Temporal connector's Worker.
+	MaxConcurrentWorkflows *int `json:"maxConcurrentWorkflows,omitempty"`
+
 	// Module Contract module containing generated gRPC protobuf types for this connector.
 	// Used to resolve the correct generated bindings for each target language.
 	// Applies to gRPC connectors.
@@ -335,6 +368,9 @@ type DataConnector struct {
 
 	// Name Human-readable connector name used in the visual designer and in generated server/client struct names.
 	Name string `json:"name"`
+
+	// Namespace Temporal namespace. Applies to Temporal connectors.
+	Namespace *string `json:"namespace,omitempty"`
 
 	// Password Kafka SASL password. Supply at runtime through the generated environment override.
 	Password *string `json:"password,omitempty"`
@@ -395,6 +431,8 @@ type DataConnector struct {
 	// - `gRPC` (2): gRPC server or client
 	// - `Kafka` (3): Kafka cluster
 	// - `Custom` (4): in-process local connector for testing or internal pipelines
+	// - `Cron` (5): process-local cron scheduler
+	// - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
 	Type DataConnectorType `json:"type"`
 
 	// TypeScriptImplementation The specific library used to implement a data connector.
@@ -461,6 +499,8 @@ type DataConnectorImplementation string
 // - `gRPC` (2): gRPC server or client
 // - `Kafka` (3): Kafka cluster
 // - `Custom` (4): in-process local connector for testing or internal pipelines
+// - `Cron` (5): process-local cron scheduler
+// - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
 type DataConnectorType int
 
 // DataType Primitive or composite data type for a named type. Controls generated serde code
@@ -473,15 +513,21 @@ type DataType string
 // or a gRPC method. Each Input or Sink stream node references exactly one endpoint.
 // The endpoint determines the handler interface that the code generator produces.
 type Endpoint struct {
+	// ActivityHeartbeatTimeout Temporal Activity heartbeat timeout in milliseconds; zero disables it.
+	ActivityHeartbeatTimeout *int `json:"activityHeartbeatTimeout,omitempty"`
+
+	// ActivityStartToCloseTimeout Temporal Activity start-to-close timeout in milliseconds.
+	ActivityStartToCloseTimeout *int `json:"activityStartToCloseTimeout,omitempty"`
+
 	// ConsumerGroup Kafka consumer group ID. Applies to Kafka source endpoints.
 	ConsumerGroup *string `json:"consumerGroup,omitempty"`
 
 	// CreateTopic When true, the generated service attempts to create the Kafka topic on startup if it does not exist.
 	CreateTopic *bool `json:"createTopic,omitempty"`
 
-	// Enabled Controls whether a Kafka endpoint starts its transport integration.
+	// Enabled Controls whether an endpoint starts its transport integration.
 	// When omitted or false, the endpoint remains in the execution graph but its
-	// Kafka consumer transport is not started.
+	// external transport or scheduler is not started.
 	Enabled *bool `json:"enabled,omitempty"`
 
 	// FunctionDescription Doc comment added to the generated handler struct.
@@ -517,11 +563,20 @@ type Endpoint struct {
 	// IdDataConnector ID of the data connector this endpoint belongs to.
 	IdDataConnector int `json:"idDataConnector"`
 
+	// MaximumAttempts Maximum Temporal Activity attempts including the initial attempt.
+	MaximumAttempts *int `json:"maximumAttempts,omitempty"`
+
 	// MethodName gRPC method name as defined in the proto file. Applies to gRPC endpoints.
 	MethodName *string `json:"methodName,omitempty"`
 
+	// MissedRunPolicy Portable policy for a firing delayed while the scheduler process is running.
+	MissedRunPolicy *ScheduleMissedRunPolicy `json:"missedRunPolicy,omitempty"`
+
 	// Name Human-readable endpoint name shown in the visual designer.
 	Name string `json:"name"`
+
+	// OverlapPolicy Portable policy for a firing that overlaps a still-running firing.
+	OverlapPolicy *ScheduleOverlapPolicy `json:"overlapPolicy,omitempty"`
 
 	// Partitions Number of partitions for the Kafka topic (used when createTopic is true).
 	Partitions *int `json:"partitions,omitempty"`
@@ -536,8 +591,23 @@ type Endpoint struct {
 	// ReplicationFactor Kafka topic replication factor (used when createTopic is true).
 	ReplicationFactor *int `json:"replicationFactor,omitempty"`
 
+	// Schedule Cron expression for a local Cron endpoint or an optional Temporal Schedule.
+	Schedule *string `json:"schedule,omitempty"`
+
+	// ScheduleId Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.
+	ScheduleId *string `json:"scheduleId,omitempty"`
+
+	// TaskQueue Temporal Task Queue used by this durable endpoint.
+	TaskQueue *string `json:"taskQueue,omitempty"`
+
+	// Timezone IANA timezone used to evaluate the schedule.
+	Timezone *string `json:"timezone,omitempty"`
+
 	// Topic Kafka topic name. Applies to Kafka endpoints.
 	Topic *string `json:"topic,omitempty"`
+
+	// WorkflowExecutionTimeout Temporal Workflow execution timeout in milliseconds; zero means SDK default.
+	WorkflowExecutionTimeout *int `json:"workflowExecutionTimeout,omitempty"`
 }
 
 // Environment Deployment environment for the service. Controls which observability engines
@@ -588,10 +658,15 @@ type Link struct {
 	// - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 	// - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
 	// - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
+	// - `DurableCall` (6): execute the link as an independently identified Temporal Workflow/Activity operation
 	CallSemantics CallSemantics `json:"callSemantics"`
 
 	// From ID of the upstream (producer) stream node.
 	From int `json:"from"`
+
+	// IdDataConnector Temporal data connector used when `callSemantics` is `DurableCall`.
+	// Ignored for every other call semantics.
+	IdDataConnector *int `json:"idDataConnector,omitempty"`
 
 	// PoolName Name of the worker pool to use when `callSemantics` is `TaskPool` or `PriorityTaskPool`.
 	// Must match a pool defined in `StreamApp.pools`.
@@ -658,6 +733,12 @@ type ProjectSettings struct {
 	RepoPath *string `json:"repoPath,omitempty"`
 }
 
+// ScheduleMissedRunPolicy Portable policy for a firing delayed while the scheduler process is running.
+type ScheduleMissedRunPolicy string
+
+// ScheduleOverlapPolicy Portable policy for a firing that overlaps a still-running firing.
+type ScheduleOverlapPolicy string
+
 // Service A single microservice in the topology. Each stream node belongs to exactly one service.
 // The service defines the runtime configuration (ports, timeouts, logging) and the
 // Go module path used for code generation.
@@ -671,6 +752,7 @@ type Service struct {
 	// - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
 	// - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
 	// - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
+	// - `DurableCall` (6): execute the link as an independently identified Temporal Workflow/Activity operation
 	DefaultCallSemantics CallSemantics `json:"defaultCallSemantics"`
 
 	// DefaultGrpcTimeout Default gRPC call timeout in milliseconds.

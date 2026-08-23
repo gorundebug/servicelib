@@ -440,7 +440,8 @@ components:
         - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
         - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
         - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
-      enum: [ 0, 1, 2, 3, 4, 5 ]
+        - `DurableCall` (6): execute the link as an independently identified Temporal Workflow/Activity operation
+      enum: [ 0, 1, 2, 3, 4, 5, 6 ]
       x-enum-varnames:
         - Undefined
         - Inherited
@@ -448,6 +449,7 @@ components:
         - TaskPool
         - PriorityTaskPool
         - ParallelCall
+        - DurableCall
 
     DataConnectorType:
       type: integer
@@ -457,13 +459,17 @@ components:
         - `gRPC` (2): gRPC server or client
         - `Kafka` (3): Kafka cluster
         - `Custom` (4): in-process local connector for testing or internal pipelines
-      enum: [ 0, 1, 2, 3, 4 ]
+        - `Cron` (5): process-local cron scheduler
+        - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
+      enum: [ 0, 1, 2, 3, 4, 5, 6 ]
       x-enum-varnames:
         - Undefined
         - HTTP
         - gRPC
         - Kafka
         - Custom
+        - Cron
+        - Temporal
 
     ProcessPattern:
       type: integer
@@ -723,6 +729,11 @@ components:
           description: |
             Message priority for `PriorityTaskPool` delivery. Higher values are processed first.
             Ignored for other call semantics.
+        idDataConnector:
+          type: integer
+          description: |
+            Temporal data connector used when `callSemantics` is `DurableCall`.
+            Ignored for every other call semantics.
       required:
         - from
         - to
@@ -768,7 +779,15 @@ components:
               'rust/rdkafka',
               'node/http',
               'grpc/grpc-js',
-              'confluent/kafka-javascript'
+              'confluent/kafka-javascript',
+              'go/gocron',
+              'python/apscheduler',
+              'rust/croner',
+              'node/croner',
+              'cpp/libcron',
+              'temporal/go',
+              'temporal/python',
+              'temporal/typescript'
       ]
       x-enum-varnames:
         - Undefined
@@ -790,6 +809,14 @@ components:
         - NodeHTTP
         - GrpcJS
         - ConfluentKafkaJavaScript
+        - GoGocron
+        - PythonAPScheduler
+        - RustCroner
+        - NodeCroner
+        - CppLibcron
+        - TemporalGo
+        - TemporalPython
+        - TemporalTypeScript
 
     DataConnector:
       type: object
@@ -896,6 +923,20 @@ components:
             Contract module containing generated gRPC protobuf types for this connector.
             Used to resolve the correct generated bindings for each target language.
             Applies to gRPC connectors.
+        namespace:
+          type: string
+          description: Temporal namespace. Applies to Temporal connectors.
+        identity:
+          type: string
+          description: Temporal client and Worker identity. Applies to Temporal connectors.
+        maxConcurrentActivities:
+          type: integer
+          minimum: 1
+          description: Maximum Activity slots owned by this Temporal connector's Worker.
+        maxConcurrentWorkflows:
+          type: integer
+          minimum: 1
+          description: Maximum Workflow slots owned by this Temporal connector's Worker.
       required:
         - id
         - name
@@ -918,6 +959,16 @@ components:
         - PLAIN
         - SCRAMSHA256
         - SCRAMSHA512
+
+    ScheduleOverlapPolicy:
+      type: string
+      description: Portable policy for a firing that overlaps a still-running firing.
+      enum: [ 'Allow', 'Skip' ]
+
+    ScheduleMissedRunPolicy:
+      type: string
+      description: Portable policy for a firing delayed while the scheduler process is running.
+      enum: [ 'Skip', 'FireOnce' ]
 
     Endpoint:
       type: object
@@ -942,9 +993,9 @@ components:
         enabled:
           type: boolean
           description: |
-            Controls whether a Kafka endpoint starts its transport integration.
+            Controls whether an endpoint starts its transport integration.
             When omitted or false, the endpoint remains in the execution graph but its
-            Kafka consumer transport is not started.
+            external transport or scheduler is not started.
         httpMethodType:
           $ref: '#/components/schemas/HTTPMethodType'
         path:
@@ -996,6 +1047,38 @@ components:
         methodName:
           type: string
           description: gRPC method name as defined in the proto file. Applies to gRPC endpoints.
+        schedule:
+          type: string
+          description: Cron expression for a local Cron endpoint or an optional Temporal Schedule.
+        scheduleId:
+          type: string
+          description: Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.
+        timezone:
+          type: string
+          description: IANA timezone used to evaluate the schedule.
+        overlapPolicy:
+          $ref: '#/components/schemas/ScheduleOverlapPolicy'
+        missedRunPolicy:
+          $ref: '#/components/schemas/ScheduleMissedRunPolicy'
+        taskQueue:
+          type: string
+          description: Temporal Task Queue used by this durable endpoint.
+        workflowExecutionTimeout:
+          type: integer
+          minimum: 0
+          description: Temporal Workflow execution timeout in milliseconds; zero means SDK default.
+        activityStartToCloseTimeout:
+          type: integer
+          minimum: 1
+          description: Temporal Activity start-to-close timeout in milliseconds.
+        activityHeartbeatTimeout:
+          type: integer
+          minimum: 0
+          description: Temporal Activity heartbeat timeout in milliseconds; zero disables it.
+        maximumAttempts:
+          type: integer
+          minimum: 1
+          description: Maximum Temporal Activity attempts including the initial attempt.
       required:
         - id
         - name
