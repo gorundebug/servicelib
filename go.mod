@@ -6,6 +6,7 @@ require (
 	github.com/IBM/sarama v1.50.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-co-op/gocron/v2 v2.18.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/xid v1.6.0
 	github.com/sirupsen/logrus v1.9.4
@@ -64,7 +65,6 @@ require (
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
