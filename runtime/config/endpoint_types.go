@@ -84,6 +84,61 @@ func (e *KafkaEndpointConfig) GetName() string                     { return e.Na
 func (e *KafkaEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
 func (e *KafkaEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
+// CronEndpointConfig is one concrete local cron item.
+type CronEndpointConfig struct {
+	ID                       int                         `yaml:"id" mapstructure:"id"`
+	Name                     string                      `yaml:"name" mapstructure:"name"`
+	IdDataConnector          int                         `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	Enabled                  bool                        `yaml:"enabled" mapstructure:"enabled"`
+	Schedule                 string                      `yaml:"schedule" mapstructure:"schedule"`
+	Timezone                 string                      `yaml:"timezone" mapstructure:"timezone"`
+	OverlapPolicy            api.ScheduleOverlapPolicy   `yaml:"overlapPolicy" mapstructure:"overlapPolicy"`
+	MissedRunPolicy          api.ScheduleMissedRunPolicy `yaml:"missedRunPolicy" mapstructure:"missedRunPolicy"`
+	FunctionName             string                      `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	FunctionPackage          string                      `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	PublicFunction           bool                        `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription      string                      `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup string                      `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule           string                      `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties               map[string]interface{}      `yaml:",inline" mapstructure:",remain"`
+}
+
+func (e *CronEndpointConfig) GetID() int                          { return e.ID }
+func (e *CronEndpointConfig) GetName() string                     { return e.Name }
+func (e *CronEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *CronEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
+
+// TemporalEndpointConfig is one typed durable job contract and optionally one
+// Temporal Schedule. It does not own the connector or cache its mutable config.
+type TemporalEndpointConfig struct {
+	ID                          int                         `yaml:"id" mapstructure:"id"`
+	Name                        string                      `yaml:"name" mapstructure:"name"`
+	IdDataConnector             int                         `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	Enabled                     bool                        `yaml:"enabled" mapstructure:"enabled"`
+	TaskQueue                   string                      `yaml:"taskQueue" mapstructure:"taskQueue"`
+	Schedule                    string                      `yaml:"schedule,omitempty" mapstructure:"schedule"`
+	ScheduleID                  string                      `yaml:"scheduleId,omitempty" mapstructure:"scheduleId"`
+	Timezone                    string                      `yaml:"timezone,omitempty" mapstructure:"timezone"`
+	OverlapPolicy               api.ScheduleOverlapPolicy   `yaml:"overlapPolicy,omitempty" mapstructure:"overlapPolicy"`
+	MissedRunPolicy             api.ScheduleMissedRunPolicy `yaml:"missedRunPolicy,omitempty" mapstructure:"missedRunPolicy"`
+	WorkflowExecutionTimeout    int                         `yaml:"workflowExecutionTimeout,omitempty" mapstructure:"workflowExecutionTimeout"`
+	ActivityStartToCloseTimeout int                         `yaml:"activityStartToCloseTimeout" mapstructure:"activityStartToCloseTimeout"`
+	ActivityHeartbeatTimeout    int                         `yaml:"activityHeartbeatTimeout,omitempty" mapstructure:"activityHeartbeatTimeout"`
+	MaximumAttempts             int                         `yaml:"maximumAttempts" mapstructure:"maximumAttempts"`
+	FunctionName                string                      `yaml:"functionName,omitempty" mapstructure:"functionName"`
+	FunctionPackage             string                      `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
+	PublicFunction              bool                        `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
+	FunctionDescription         string                      `yaml:"functionDescription,omitempty" mapstructure:"functionDescription"`
+	FunctionInitializerGroup    string                      `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
+	FunctionModule              string                      `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
+	Properties                  map[string]interface{}      `yaml:",inline" mapstructure:",remain"`
+}
+
+func (e *TemporalEndpointConfig) GetID() int                          { return e.ID }
+func (e *TemporalEndpointConfig) GetName() string                     { return e.Name }
+func (e *TemporalEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *TemporalEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
+
 // CustomEndpointConfig is the configuration for a custom endpoint.
 type CustomEndpointConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`

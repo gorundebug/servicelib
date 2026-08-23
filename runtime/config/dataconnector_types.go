@@ -84,6 +84,49 @@ func (d *KafkaDataConnectorConfig) GetImplementation() api.DataConnectorImplemen
 }
 func (d *KafkaDataConnectorConfig) GetProperty(name string) interface{} { return d.Properties[name] }
 
+// CronDataConnectorConfig configures a process-local cron scheduler.
+type CronDataConnectorConfig struct {
+	ID             int                             `yaml:"id" mapstructure:"id"`
+	Name           string                          `yaml:"name" mapstructure:"name"`
+	Implementation api.DataConnectorImplementation `yaml:"implementation" mapstructure:"implementation"`
+	Properties     map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
+}
+
+func (d *CronDataConnectorConfig) GetID() int                     { return d.ID }
+func (d *CronDataConnectorConfig) GetName() string                { return d.Name }
+func (d *CronDataConnectorConfig) GetType() api.DataConnectorType { return api.DataConnectorTypeCron }
+func (d *CronDataConnectorConfig) GetImplementation() api.DataConnectorImplementation {
+	return d.Implementation
+}
+func (d *CronDataConnectorConfig) GetProperty(name string) interface{} { return d.Properties[name] }
+
+// TemporalDataConnectorConfig configures one Temporal client and its Workers.
+// Connection and capacity fields are reloadable runtime policy; graph objects
+// retain only this connector's immutable ID.
+type TemporalDataConnectorConfig struct {
+	ID                      int                             `yaml:"id" mapstructure:"id"`
+	Name                    string                          `yaml:"name" mapstructure:"name"`
+	Implementation          api.DataConnectorImplementation `yaml:"implementation" mapstructure:"implementation"`
+	Address                 string                          `yaml:"address" mapstructure:"address"`
+	Namespace               string                          `yaml:"namespace" mapstructure:"namespace"`
+	Identity                string                          `yaml:"identity,omitempty" mapstructure:"identity"`
+	MaxConcurrentActivities int                             `yaml:"maxConcurrentActivities,omitempty" mapstructure:"maxConcurrentActivities"`
+	MaxConcurrentWorkflows  int                             `yaml:"maxConcurrentWorkflows,omitempty" mapstructure:"maxConcurrentWorkflows"`
+	Properties              map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
+}
+
+func (d *TemporalDataConnectorConfig) GetID() int      { return d.ID }
+func (d *TemporalDataConnectorConfig) GetName() string { return d.Name }
+func (d *TemporalDataConnectorConfig) GetType() api.DataConnectorType {
+	return api.DataConnectorTypeTemporal
+}
+func (d *TemporalDataConnectorConfig) GetImplementation() api.DataConnectorImplementation {
+	return d.Implementation
+}
+func (d *TemporalDataConnectorConfig) GetProperty(name string) interface{} {
+	return d.Properties[name]
+}
+
 // CustomDataConnectorConfig is the configuration for a custom data connector.
 type CustomDataConnectorConfig struct {
 	ID             int                             `yaml:"id" mapstructure:"id"`

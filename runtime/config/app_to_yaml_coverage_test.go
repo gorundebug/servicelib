@@ -24,11 +24,12 @@ import (
 // appToYamlOnlyKeys are string literals used as map keys in app_to_yaml.go
 // that have no corresponding field in api.StreamApp or its nested types.
 var appToYamlOnlyKeys = map[string]string{
-	"source":      "idSource serialised as stream name ref",
-	"sources":     "idSources serialised as stream name refs",
-	"endpoint":    "idEndpoint serialised as endpoint name ref",
-	"pipelines":   "structural grouping section — not an api.StreamApp field",
-	"errorStream": "frontend-only visual reference; not an api.Stream field",
+	"source":        "idSource serialised as stream name ref",
+	"sources":       "idSources serialised as stream name refs",
+	"endpoint":      "idEndpoint serialised as endpoint name ref",
+	"dataConnector": "DurableCall idDataConnector serialised as data connector name ref",
+	"pipelines":     "structural grouping section — not an api.StreamApp field",
+	"errorStream":   "frontend-only visual reference; not an api.Stream field",
 }
 
 // appToYamlExceptions lists api.StreamApp struct field JSON tag names that
@@ -37,7 +38,7 @@ var appToYamlExceptions = map[string]string{
 	// IDs are auto-assigned on import; never written back.
 	"id":              "auto-assigned, not written",
 	"idService":       "derived from nesting under service section",
-	"idDataConnector": "derived from nesting under dataConnector section",
+	"idDataConnector": "derived from endpoint nesting or written as a DurableCall dataConnector name ref",
 	// ID-references written under renamed keys.
 	"idSource":   `written as "source"`,
 	"idSources":  `written as "sources"`,

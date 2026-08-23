@@ -262,6 +262,12 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 		d.SaslMechanism = &c.SaslMechanism
 		d.Username = strOptPtr(c.Username)
 		d.Password = strOptPtr(c.Password)
+	case *TemporalDataConnectorConfig:
+		d.Address = strOptPtr(c.Address)
+		d.Namespace = strOptPtr(c.Namespace)
+		d.Identity = strOptPtr(c.Identity)
+		d.MaxConcurrentActivities = intOptPtr(c.MaxConcurrentActivities)
+		d.MaxConcurrentWorkflows = intOptPtr(c.MaxConcurrentWorkflows)
 	}
 	return d
 }
@@ -310,6 +316,48 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		e.CreateTopic = boolOptPtr(c.CreateTopic)
 		e.Partitions = intOptPtr(c.Partitions)
 		e.ReplicationFactor = intOptPtr(c.ReplicationFactor)
+	case *CronEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.Schedule = strOptPtr(c.Schedule)
+		e.Timezone = strOptPtr(c.Timezone)
+		if c.OverlapPolicy != "" {
+			p := c.OverlapPolicy
+			e.OverlapPolicy = &p
+		}
+		if c.MissedRunPolicy != "" {
+			p := c.MissedRunPolicy
+			e.MissedRunPolicy = &p
+		}
+		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
+	case *TemporalEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.TaskQueue = strOptPtr(c.TaskQueue)
+		e.Schedule = strOptPtr(c.Schedule)
+		e.ScheduleId = strOptPtr(c.ScheduleID)
+		e.Timezone = strOptPtr(c.Timezone)
+		if c.OverlapPolicy != "" {
+			p := c.OverlapPolicy
+			e.OverlapPolicy = &p
+		}
+		if c.MissedRunPolicy != "" {
+			p := c.MissedRunPolicy
+			e.MissedRunPolicy = &p
+		}
+		e.WorkflowExecutionTimeout = intOptPtr(c.WorkflowExecutionTimeout)
+		e.ActivityStartToCloseTimeout = intOptPtr(c.ActivityStartToCloseTimeout)
+		e.ActivityHeartbeatTimeout = intOptPtr(c.ActivityHeartbeatTimeout)
+		e.MaximumAttempts = intOptPtr(c.MaximumAttempts)
+		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
 	case *CustomEndpointConfig:
 		e.FunctionName = strOptPtr(c.FunctionName)
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
@@ -338,6 +386,9 @@ func LinkConfigToAPI(l *LinkConfig) api.Link {
 			link.PoolName = strOptPtr(l.CallSemantics.PriorityTaskPool.PoolName)
 			p := l.CallSemantics.PriorityTaskPool.Priority
 			link.Priority = &p
+		case l.CallSemantics.DurableCall != nil:
+			id := l.CallSemantics.DurableCall.IdDataConnector
+			link.IdDataConnector = &id
 		}
 	}
 	return link

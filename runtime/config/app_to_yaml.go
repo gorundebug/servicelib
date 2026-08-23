@@ -138,6 +138,11 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 	}
 
 	epKey := make(map[int]string, len(app.Endpoints))
+	dcKey := make(map[int]string, len(app.DataConnectors))
+	for i := range app.DataConnectors {
+		dc := &app.DataConnectors[i]
+		dcKey[dc.Id] = ToCamelCaseFirstLower(dc.Name)
+	}
 	dcEndpoints := make(map[int][]api.Endpoint)
 	for i := range app.Endpoints {
 		ep := &app.Endpoints[i]
@@ -346,6 +351,18 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.Module != nil {
 				dcObj["module"] = *dc.Module
 			}
+			if dc.Namespace != nil {
+				dcObj["namespace"] = *dc.Namespace
+			}
+			if dc.Identity != nil {
+				dcObj["identity"] = *dc.Identity
+			}
+			if dc.MaxConcurrentActivities != nil {
+				dcObj["maxConcurrentActivities"] = *dc.MaxConcurrentActivities
+			}
+			if dc.MaxConcurrentWorkflows != nil {
+				dcObj["maxConcurrentWorkflows"] = *dc.MaxConcurrentWorkflows
+			}
 			if eps, ok := dcEndpoints[dc.Id]; ok && len(eps) > 0 {
 				epsNode := make(map[string]interface{})
 				for _, ep := range eps {
@@ -381,6 +398,36 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					}
 					if ep.MethodName != nil {
 						epObj["methodName"] = *ep.MethodName
+					}
+					if ep.Schedule != nil {
+						epObj["schedule"] = *ep.Schedule
+					}
+					if ep.ScheduleId != nil {
+						epObj["scheduleId"] = *ep.ScheduleId
+					}
+					if ep.Timezone != nil {
+						epObj["timezone"] = *ep.Timezone
+					}
+					if ep.OverlapPolicy != nil {
+						epObj["overlapPolicy"] = string(*ep.OverlapPolicy)
+					}
+					if ep.MissedRunPolicy != nil {
+						epObj["missedRunPolicy"] = string(*ep.MissedRunPolicy)
+					}
+					if ep.TaskQueue != nil {
+						epObj["taskQueue"] = *ep.TaskQueue
+					}
+					if ep.WorkflowExecutionTimeout != nil {
+						epObj["workflowExecutionTimeout"] = *ep.WorkflowExecutionTimeout
+					}
+					if ep.ActivityStartToCloseTimeout != nil {
+						epObj["activityStartToCloseTimeout"] = *ep.ActivityStartToCloseTimeout
+					}
+					if ep.ActivityHeartbeatTimeout != nil {
+						epObj["activityHeartbeatTimeout"] = *ep.ActivityHeartbeatTimeout
+					}
+					if ep.MaximumAttempts != nil {
+						epObj["maximumAttempts"] = *ep.MaximumAttempts
 					}
 					if ep.FunctionName != nil {
 						epObj["functionName"] = *ep.FunctionName
@@ -569,6 +616,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					}
 					if l.Priority != nil {
 						lNode["priority"] = *l.Priority
+					}
+					if l.IdDataConnector != nil {
+						lNode["dataConnector"] = dcKey[*l.IdDataConnector]
 					}
 					linksNode[fmt.Sprintf("link%d", i+1)] = lNode
 				}
