@@ -21,7 +21,6 @@ import (
 	tally "github.com/uber-go/tally/v4"
 	promreporter "github.com/uber-go/tally/v4/prometheus"
 	"go.temporal.io/sdk/client"
-	contribtally "go.temporal.io/sdk/contrib/tally"
 )
 
 const sdkMetricsBindAddressEnvironment = "TEMPORAL_SDK_METRICS_BIND_ADDRESS"
@@ -32,6 +31,44 @@ var sdkMetrics = struct {
 	handler client.MetricsHandler
 	closer  io.Closer
 }{}
+
+var temporalPrometheusSanitizeOptions = tally.SanitizeOptions{
+	NameCharacters:       tally.ValidCharacters{Ranges: tally.AlphanumericRange, Characters: []rune{'_'}},
+	KeyCharacters:        tally.ValidCharacters{Ranges: tally.AlphanumericRange, Characters: []rune{'_'}},
+	ValueCharacters:      tally.ValidCharacters{Ranges: tally.AlphanumericRange, Characters: []rune{'_'}},
+	ReplacementCharacter: tally.DefaultReplacementCharacter,
+}
+
+// temporalMetricsHandler is the narrow adapter from Temporal's public metrics
+// contract to the Tally reporter used by Temporal's Prometheus integration.
+// Keeping the adapter here avoids the retired contrib/tally module, whose old
+// dependency graph conflicts with modern split google.golang.org/genproto
+// modules.
+type temporalMetricsHandler struct {
+	scope tally.Scope
+}
+
+func (h temporalMetricsHandler) WithTags(tags map[string]string) client.MetricsHandler {
+	return temporalMetricsHandler{scope: h.scope.Tagged(tags)}
+}
+
+func (h temporalMetricsHandler) Counter(name string) client.MetricsCounter {
+	if !strings.HasSuffix(name, "_total") {
+		name += "_total"
+	}
+	return h.scope.Counter(name)
+}
+
+func (h temporalMetricsHandler) Gauge(name string) client.MetricsGauge {
+	return h.scope.Gauge(name)
+}
+
+func (h temporalMetricsHandler) Timer(name string) client.MetricsTimer {
+	if !strings.HasSuffix(name, "_seconds") {
+		name += "_seconds"
+	}
+	return h.scope.Timer(name)
+}
 
 // sdkMetricsHandler enables the official Temporal SDK metrics only when the
 // deployment explicitly provides a bind address. The exporter is process-wide:
@@ -67,10 +104,10 @@ func sdkMetricsHandler() (client.MetricsHandler, error) {
 	})
 	scope, closer := tally.NewRootScope(tally.ScopeOptions{
 		CachedReporter:  reporter,
-		SanitizeOptions: &contribtally.PrometheusSanitizeOptions,
+		SanitizeOptions: &temporalPrometheusSanitizeOptions,
 		Separator:       promreporter.DefaultSeparator,
 	}, time.Second)
-	handler := contribtally.NewMetricsHandler(contribtally.NewPrometheusNamingScope(scope))
+	handler := temporalMetricsHandler{scope: scope}
 	server := &http.Server{
 		Handler:           reporter.HTTPHandler(),
 		ReadHeaderTimeout: 5 * time.Second,
