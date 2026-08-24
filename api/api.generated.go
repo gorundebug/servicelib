@@ -28,6 +28,7 @@ const (
 	DataConnectorImplementationAsioGRPC                 DataConnectorImplementation = "asio/grpc"
 	DataConnectorImplementationBoostBeastHTTP           DataConnectorImplementation = "boost/beast-http"
 	DataConnectorImplementationConfluentKafkaJavaScript DataConnectorImplementation = "confluent/kafka-javascript"
+	DataConnectorImplementationCppLibcron               DataConnectorImplementation = "cpp/libcron"
 	DataConnectorImplementationFunction                 DataConnectorImplementation = "function"
 	DataConnectorImplementationGoGocron                 DataConnectorImplementation = "go/gocron"
 	DataConnectorImplementationGoogleGRPC               DataConnectorImplementation = "google/grpc"
@@ -281,6 +282,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	CppBoostImplementation *DataConnectorImplementation `json:"cppBoostImplementation,omitempty"`
 
 	// CppUserverImplementation The specific library used to implement a data connector.
@@ -302,6 +304,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	CppUserverImplementation *DataConnectorImplementation `json:"cppUserverImplementation,omitempty"`
 
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
@@ -326,6 +329,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	GoImplementation *DataConnectorImplementation `json:"goImplementation,omitempty"`
 
 	// Host Hostname or IP address. Applies to HTTP and gRPC connectors.
@@ -356,6 +360,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
 	// MaxConcurrentActivities Maximum Activity slots owned by this Temporal connector's Worker.
@@ -400,6 +405,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	PythonImplementation *DataConnectorImplementation `json:"pythonImplementation,omitempty"`
 
 	// RustImplementation The specific library used to implement a data connector.
@@ -421,6 +427,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	RustImplementation *DataConnectorImplementation `json:"rustImplementation,omitempty"`
 
 	// SaslMechanism Kafka SASL authentication mechanism.
@@ -472,6 +479,7 @@ type DataConnector struct {
 	// - `node/http`: Node.js core HTTP transport
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	TypeScriptImplementation *DataConnectorImplementation `json:"typeScriptImplementation,omitempty"`
 
 	// UseDedicatedListener When true, this HTTP connector starts its own dedicated listener.
@@ -510,6 +518,7 @@ type DataConnector struct {
 // - `node/http`: Node.js core HTTP transport
 // - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 // - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.
@@ -618,7 +627,7 @@ type Endpoint struct {
 	// TaskQueue Temporal Task Queue used by this durable endpoint.
 	TaskQueue *string `json:"taskQueue,omitempty"`
 
-	// Timezone IANA timezone used to evaluate the schedule.
+	// Timezone Timezone used to evaluate the schedule. The portable contract accepts only UTC.
 	Timezone *string `json:"timezone,omitempty"`
 
 	// Topic Kafka topic name. Applies to Kafka endpoints.

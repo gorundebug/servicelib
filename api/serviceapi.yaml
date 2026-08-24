@@ -780,6 +780,7 @@ components:
         - `node/http`: Node.js core HTTP transport
         - `grpc/grpc-js`: official pure-JavaScript gRPC transport
         - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
+        - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
       enum: [ '',
               'net/http',
               'function',
@@ -803,6 +804,7 @@ components:
               'python/apscheduler',
               'rust/croner',
               'node/croner',
+              'cpp/libcron',
               'temporal/go',
               'temporal/python',
               'temporal/typescript'
@@ -831,6 +833,7 @@ components:
         - PythonAPScheduler
         - RustCroner
         - NodeCroner
+        - CppLibcron
         - TemporalGo
         - TemporalPython
         - TemporalTypeScript
@@ -1092,7 +1095,7 @@ components:
           description: Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.
         timezone:
           type: string
-          description: IANA timezone used to evaluate the schedule.
+          description: Timezone used to evaluate the schedule. The portable contract accepts only UTC.
         overlapPolicy:
           $ref: '#/components/schemas/ScheduleOverlapPolicy'
         missedRunPolicy:
