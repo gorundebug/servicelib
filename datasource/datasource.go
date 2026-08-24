@@ -17,16 +17,16 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 )
 
-func GocronEndpointConsumer[R, E any](stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E]) (runtime.Consumer[runtime.ScheduleTrigger], error) {
-	return crondata.MakeGocronEndpointConsumer(stream)
+func GocronEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E], function runtime.ScheduleEndpointFunction[T]) (runtime.Consumer[T], error) {
+	return crondata.MakeGocronEndpointConsumer(stream, function)
 }
 
 func TemporalEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E]) (runtime.Consumer[T], error) {
 	return temporalsource.MakeDirectEndpointConsumer(stream)
 }
 
-func TemporalScheduleEndpointConsumer[R, E any](stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E]) (runtime.Consumer[runtime.ScheduleTrigger], error) {
-	return temporalsource.MakeDirectScheduleEndpointConsumer(stream)
+func TemporalScheduleEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E], function runtime.ScheduleEndpointFunction[T]) (runtime.Consumer[T], error) {
+	return temporalsource.MakeScheduleFunctionEndpointConsumer(stream, function)
 }
 
 func CustomEndpointConsumer[HandlerState, T, R, E any](stream runtime.TypedInputStream[T, R, E], dataProducer localsource.DataProducer[T], handler localsource.EndpointHandler[HandlerState, T, R, E]) (runtime.Consumer[T], error) {

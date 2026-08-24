@@ -34,22 +34,33 @@ type dataSource struct {
 	started   bool
 }
 
-type endpoint[R, E any] struct {
+type endpoint[T, R, E any] struct {
 	*runtime.DataSourceEndpoint
-	consumer *endpointConsumer[R, E]
+	consumer *endpointConsumer[T, R, E]
 	job      gocron.Job
 	tracker  *portableCron
 }
 
-type endpointConsumer[R, E any] struct {
-	*runtime.DataSourceEndpointConsumer[runtime.ScheduleTrigger, R, E]
+type endpointConsumer[T, R, E any] struct {
+	*runtime.DataSourceEndpointConsumer[T, R, E]
+	function runtime.ScheduleEndpointFunction[T]
+	out      runtime.Collect[T]
 }
 
-func (ec *endpointConsumer[R, E]) GetID() int { return ec.Endpoint().GetID() }
+func (ec *endpointConsumer[T, R, E]) GetID() int { return ec.Endpoint().GetID() }
 
-func (ec *endpointConsumer[R, E]) FunctionImplementation() interface{} { return nil }
+func (ec *endpointConsumer[T, R, E]) FunctionImplementation() interface{} {
+	return ec.function
+}
 
-func (ep *endpoint[R, E]) register(scheduler gocron.Scheduler) error {
+func (ec *endpointConsumer[T, R, E]) onTrigger(
+	ctx context.Context,
+	trigger runtime.ScheduleTrigger,
+) {
+	ec.function.OnTrigger(ctx, trigger, ec.out)
+}
+
+func (ep *endpoint[T, R, E]) register(scheduler gocron.Scheduler) error {
 	cfg, ok := ep.GetConfig().(*config.CronEndpointConfig)
 	if !ok {
 		return fmt.Errorf("invalid config type for cron endpoint %q", ep.GetName())
@@ -84,7 +95,7 @@ func cronExpression(expression, timezone string) string {
 	return "CRON_TZ=" + strings.TrimSpace(timezone) + " " + strings.TrimSpace(expression)
 }
 
-func (ep *endpoint[R, E]) fire(ctx context.Context) {
+func (ep *endpoint[T, R, E]) fire(ctx context.Context) {
 	firedAt := time.Now().UTC()
 	if ep.tracker == nil {
 		return
@@ -95,7 +106,7 @@ func (ep *endpoint[R, E]) fire(ctx context.Context) {
 	}
 	ctx = runtime.WithStreamId(ctx, runtime.NewStreamID())
 	start := ep.OnRequestStart(ctx)
-	ep.consumer.Consume(ctx, runtime.NewScheduleTrigger(
+	ep.consumer.onTrigger(ctx, runtime.NewScheduleTrigger(
 		ep.GetID(), ep.GetName(), scheduledAt, firedAt, runtime.ScheduleBackendLocal,
 	))
 	ep.OnRequestEnd(ctx, start, nil)
@@ -249,11 +260,15 @@ func getOrCreateDataSource(id int, environment runtime.RuntimeEnvironment) (runt
 	return ds, nil
 }
 
-// MakeGocronEndpointConsumer attaches one scheduled endpoint directly to the
-// existing input stream. No transport-specific business function is inserted.
-func MakeGocronEndpointConsumer[R, E any](
-	stream runtime.TypedInputStream[runtime.ScheduleTrigger, R, E],
-) (runtime.Consumer[runtime.ScheduleTrigger], error) {
+// MakeGocronEndpointConsumer binds one scheduled endpoint function to the
+// existing typed input stream.
+func MakeGocronEndpointConsumer[T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	function runtime.ScheduleEndpointFunction[T],
+) (runtime.Consumer[T], error) {
+	if function == nil {
+		return nil, fmt.Errorf("cron endpoint function is nil for stream %q", stream.GetName())
+	}
 	environment := stream.GetRuntimeEnvironment()
 	endpointConfig := environment.RuntimeConfig().GetEndpointConfigByID(stream.GetEndpointId())
 	cfg, ok := endpointConfig.(*config.CronEndpointConfig)
@@ -271,10 +286,12 @@ func MakeGocronEndpointConsumer[R, E any](
 	if err != nil {
 		return nil, err
 	}
-	consumer := &endpointConsumer[R, E]{
-		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[runtime.ScheduleTrigger, R, E](baseEndpoint, stream),
+	consumer := &endpointConsumer[T, R, E]{
+		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](baseEndpoint, stream),
+		function:                   function,
 	}
-	ep := &endpoint[R, E]{DataSourceEndpoint: baseEndpoint, consumer: consumer}
+	consumer.out = runtime.CollectFunc[T](consumer.Consume)
+	ep := &endpoint[T, R, E]{DataSourceEndpoint: baseEndpoint, consumer: consumer}
 	ds.AddEndpoint(ep)
 	environment.RegisterEndpointConsumer(consumer)
 	return consumer, nil

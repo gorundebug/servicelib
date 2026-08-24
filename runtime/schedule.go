@@ -8,11 +8,19 @@
 package runtime
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"time"
 )
+
+// ScheduleEndpointFunction is the explicit user-owned conversion boundary
+// shared by local Cron and Temporal Schedule endpoints. The transport supplies
+// the trigger; only values emitted to out enter the ordinary input graph.
+type ScheduleEndpointFunction[T any] interface {
+	OnTrigger(context.Context, ScheduleTrigger, Collect[T])
+}
 
 type ScheduleBackend string
 
