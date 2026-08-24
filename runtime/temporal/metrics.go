@@ -58,7 +58,9 @@ func sdkMetricsHandler() (client.MetricsHandler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen for Temporal SDK metrics on %q: %w", address, err)
 	}
-	reporter := promreporter.NewReporter(promreporter.Options{})
+	reporter := promreporter.NewReporter(promreporter.Options{
+		DefaultTimerType: promreporter.HistogramTimerType,
+	})
 	scope, closer := tally.NewRootScope(tally.ScopeOptions{
 		CachedReporter:  reporter,
 		SanitizeOptions: &contribtally.PrometheusSanitizeOptions,
