@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	prometheus "github.com/prometheus/client_golang/prometheus"
 	tally "github.com/uber-go/tally/v4"
 	promreporter "github.com/uber-go/tally/v4/prometheus"
 	"go.temporal.io/sdk/client"
@@ -58,8 +59,11 @@ func sdkMetricsHandler() (client.MetricsHandler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen for Temporal SDK metrics on %q: %w", address, err)
 	}
+	registry := prometheus.NewRegistry()
 	reporter := promreporter.NewReporter(promreporter.Options{
 		DefaultTimerType: promreporter.HistogramTimerType,
+		Registerer:       registry,
+		Gatherer:         registry,
 	})
 	scope, closer := tally.NewRootScope(tally.ScopeOptions{
 		CachedReporter:  reporter,
