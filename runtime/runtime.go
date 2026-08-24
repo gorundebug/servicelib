@@ -646,12 +646,12 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 			return nil, fmt.Errorf("durable transport for Temporal connector id=%d is not registered", cs.IdDataConnector)
 		}
 		ser := source.GetSerde()
-		if err := transport.RegisterLink(linkID, func(_ context.Context, envelope DurableEnvelope) error {
+		if err := transport.RegisterLink(linkID, func(activityCtx context.Context, envelope DurableEnvelope) error {
 			value, err := ser.Deserialize(envelope.Payload)
 			if err != nil {
 				return fmt.Errorf("deserialize durable link %d->%d payload: %w", linkID.From, linkID.To, err)
 			}
-			activityCtx, cancel := durableEnvelopeContext(envelope)
+			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope)
 			defer cancel()
 			consumer.Consume(activityCtx, value)
 			return nil
@@ -752,8 +752,8 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 
 func (c *durableCaller[T]) IsAsync() bool { return true }
 
-func durableEnvelopeContext(envelope DurableEnvelope) (context.Context, context.CancelFunc) {
-	ctx := context.Background()
+func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope) (context.Context, context.CancelFunc) {
+	ctx := parent
 	ctx = context.WithValue(ctx, durableInvocationScopeKey, &durableInvocationScope{
 		parentID: envelope.CallID,
 		counts:   make(map[string]uint64),
