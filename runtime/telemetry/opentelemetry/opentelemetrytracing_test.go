@@ -14,10 +14,37 @@ import (
 	"testing"
 
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 )
+
+func TestTracingCarrierRoundTrip(t *testing.T) {
+	previous := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	defer otel.SetTextMapPropagator(previous)
+
+	traceID, err := oteltrace.TraceIDFromHex("0102030405060708090a0b0c0d0e0f10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spanID, err := oteltrace.SpanIDFromHex("0102030405060708")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spanContext := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+		TraceID: traceID, SpanID: spanID, TraceFlags: oteltrace.FlagsSampled,
+	})
+	impl := &tracingImpl{}
+	carrier := map[string]string{}
+	impl.Inject(oteltrace.ContextWithSpanContext(context.Background(), spanContext), carrier)
+	extracted := oteltrace.SpanContextFromContext(impl.Extract(context.Background(), carrier))
+	if extracted.TraceID() != traceID || extracted.SpanID() != spanID || !extracted.IsSampled() {
+		t.Fatalf("unexpected extracted span context: %v", extracted)
+	}
+}
 
 type countingStatsHandler struct {
 	tagRPC    int

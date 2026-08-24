@@ -651,7 +651,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 			if err != nil {
 				return fmt.Errorf("deserialize durable link %d->%d payload: %w", linkID.From, linkID.To, err)
 			}
-			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope)
+			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope, env.Tracing())
 			defer cancel()
 			consumer.Consume(activityCtx, value)
 			return nil
@@ -741,6 +741,10 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 		StreamID: streamID.GetID(), Priority: priority,
 		SamplingEnabled: tracing.SamplingEnabled(ctx), Payload: payload,
 	}
+	if engine := c.source.GetEnvironment().Tracing(); engine != nil {
+		envelope.TraceCarrier = make(map[string]string)
+		engine.Inject(ctx, envelope.TraceCarrier)
+	}
 	if deadline, present := ctx.Deadline(); present {
 		envelope.DeadlineUnixNano = deadline.UTC().UnixNano()
 	}
@@ -752,8 +756,11 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 
 func (c *durableCaller[T]) IsAsync() bool { return true }
 
-func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope) (context.Context, context.CancelFunc) {
+func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
 	ctx := parent
+	if engine != nil && len(envelope.TraceCarrier) > 0 {
+		ctx = engine.Extract(ctx, envelope.TraceCarrier)
+	}
 	ctx = context.WithValue(ctx, durableInvocationScopeKey, &durableInvocationScope{
 		parentID: envelope.CallID,
 		counts:   make(map[string]uint64),

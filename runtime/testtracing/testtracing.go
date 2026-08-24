@@ -152,6 +152,8 @@ func (e *TestTracing) Shutdown(_ context.Context) error { return nil }
 func (e *TestTracing) Tracer(_ string) tracing.Tracer {
 	return &testTracer{engine: e}
 }
+func (e *TestTracing) Inject(_ context.Context, _ map[string]string)                    {}
+func (e *TestTracing) Extract(ctx context.Context, _ map[string]string) context.Context { return ctx }
 
 // ── noopStats ─────────────────────────────────────────────────────────────────
 

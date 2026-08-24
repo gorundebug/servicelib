@@ -64,15 +64,16 @@ type RuntimeEnvironment interface {
 // It contains transport context only; the target node and business value keep
 // their existing types and interfaces.
 type DurableEnvelope struct {
-	Version          int    `json:"version"`
-	From             int    `json:"from"`
-	To               int    `json:"to"`
-	CallID           string `json:"callId"`
-	StreamID         string `json:"streamId,omitempty"`
-	Priority         int    `json:"priority"`
-	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
-	SamplingEnabled  bool   `json:"samplingEnabled,omitempty"`
-	Payload          []byte `json:"payload"`
+	Version          int               `json:"version"`
+	From             int               `json:"from"`
+	To               int               `json:"to"`
+	CallID           string            `json:"callId"`
+	StreamID         string            `json:"streamId,omitempty"`
+	Priority         int               `json:"priority"`
+	DeadlineUnixNano int64             `json:"deadlineUnixNano,omitempty"`
+	SamplingEnabled  bool              `json:"samplingEnabled,omitempty"`
+	TraceCarrier     map[string]string `json:"traceCarrier,omitempty"`
+	Payload          []byte            `json:"payload"`
 }
 
 type DurableLinkHandler func(context.Context, DurableEnvelope) error

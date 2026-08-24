@@ -12,13 +12,13 @@ func TestDurableChildCallIDsAreStableAcrossActivityRetry(t *testing.T) {
 	link := config.LinkID{From: 11, To: 12}
 	envelope := DurableEnvelope{CallID: "parent-call"}
 
-	firstAttempt, cancelFirst := durableEnvelopeContext(context.Background(), envelope)
+	firstAttempt, cancelFirst := durableEnvelopeContext(context.Background(), envelope, nil)
 	defer cancelFirst()
 	first := nextDurableCallID(firstAttempt, link, []byte("same-value"))
 	second := nextDurableCallID(firstAttempt, link, []byte("same-value"))
 	require.NotEqual(t, first, second, "equal emissions are separate logical calls")
 
-	retryAttempt, cancelRetry := durableEnvelopeContext(context.Background(), envelope)
+	retryAttempt, cancelRetry := durableEnvelopeContext(context.Background(), envelope, nil)
 	defer cancelRetry()
 	require.Equal(t, first, nextDurableCallID(retryAttempt, link, []byte("same-value")))
 	require.Equal(t, second, nextDurableCallID(retryAttempt, link, []byte("same-value")))
@@ -26,7 +26,7 @@ func TestDurableChildCallIDsAreStableAcrossActivityRetry(t *testing.T) {
 
 func TestDurableActivityCancellationReachesTargetContext(t *testing.T) {
 	parent, cancelParent := context.WithCancel(context.Background())
-	ctx, cancelEnvelope := durableEnvelopeContext(parent, DurableEnvelope{CallID: "call"})
+	ctx, cancelEnvelope := durableEnvelopeContext(parent, DurableEnvelope{CallID: "call"}, nil)
 	cancelParent()
 	defer cancelEnvelope()
 	require.ErrorIs(t, ctx.Err(), context.Canceled)

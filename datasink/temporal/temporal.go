@@ -160,6 +160,10 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 		StreamID: streamID, Priority: priority,
 		SamplingEnabled: tracing.SamplingEnabled(handlerCtx), Payload: payload,
 	}
+	if engine := ec.stream.GetRuntimeEnvironment().Tracing(); engine != nil {
+		envelope.TraceCarrier = make(map[string]string)
+		engine.Inject(handlerCtx, envelope.TraceCarrier)
+	}
 	if deadline, ok := handlerCtx.Deadline(); ok {
 		envelope.DeadlineUnixNano = deadline.UTC().UnixNano()
 	}

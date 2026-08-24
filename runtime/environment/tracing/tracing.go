@@ -65,6 +65,8 @@ type Tracer interface {
 
 type Tracing interface {
 	Tracer(name string) Tracer
+	Inject(context.Context, map[string]string)
+	Extract(context.Context, map[string]string) context.Context
 }
 
 type noopSpan struct{}

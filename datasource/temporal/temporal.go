@@ -83,6 +83,7 @@ type endpointConsumer[HandlerState, T, R, E any] struct {
 	mu        sync.Mutex
 	pending   map[string]chan R
 	tracer    tracing.Tracer
+	tracing   tracing.Tracing
 }
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) GetID() int { return ec.Endpoint().GetID() }
@@ -119,7 +120,7 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) handle(
 	if err != nil {
 		return result, err
 	}
-	ctx, cancel := endpointContext(activityCtx, envelope)
+	ctx, cancel := endpointContext(activityCtx, envelope, ec.tracing)
 	defer cancel()
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
@@ -177,8 +178,12 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) handle(
 	}
 }
 
-func endpointContext(parent context.Context, envelope runtimetemporal.EndpointEnvelope) (context.Context, context.CancelFunc) {
-	ctx := runtime.WithStreamId(parent, envelope.StreamID)
+func endpointContext(parent context.Context, envelope runtimetemporal.EndpointEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
+	ctx := parent
+	if engine != nil && len(envelope.TraceCarrier) > 0 {
+		ctx = engine.Extract(ctx, envelope.TraceCarrier)
+	}
+	ctx = runtime.WithStreamId(ctx, envelope.StreamID)
 	ctx = runtime.WithPriority(ctx, envelope.Priority)
 	if envelope.SamplingEnabled {
 		ctx = tracing.EnableSampling(ctx)
@@ -243,6 +248,7 @@ func makeEndpointConsumer[HandlerState, T, R, E any](
 		resultSer: stream.GetResultStream(),
 	}
 	if tracer := env.Tracing(); tracer != nil {
+		consumer.tracing = tracer
 		consumer.tracer = tracer.Tracer(env.ServiceConfig().Name)
 	}
 	consumer.sc = runtime.MakeStreamContext[T, R, E](

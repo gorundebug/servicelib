@@ -125,6 +125,14 @@ func (tr *tracingImpl) Tracer(name string) tracing.Tracer {
 	return &tracerImpl{t: tr.provider.Tracer(name)}
 }
 
+func (tr *tracingImpl) Inject(ctx context.Context, carrier map[string]string) {
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(carrier))
+}
+
+func (tr *tracingImpl) Extract(ctx context.Context, carrier map[string]string) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(carrier))
+}
+
 // ── samplingGRPCServerHandler ─────────────────────────────────────────────────
 
 // samplingGRPCServerHandler enables per-request tracing when the caller sends
