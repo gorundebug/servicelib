@@ -318,6 +318,11 @@ func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (
 	options := client.Options{
 		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
 	}
+	metricsHandler, err := sdkMetricsHandler()
+	if err != nil {
+		return options, err
+	}
+	options.MetricsHandler = metricsHandler
 	tlsConfigured := cfg.TLSEnabled || cfg.TLSServerName != "" || cfg.TLSCAFile != "" || cfg.TLSCertFile != "" || cfg.TLSKeyFile != ""
 	if tlsConfigured {
 		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: cfg.TLSServerName}
