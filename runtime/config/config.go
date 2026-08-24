@@ -197,6 +197,15 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		}
 	}
 	for _, endpoint := range config.GetEndpoints() {
+		if cronEndpoint, ok := endpoint.(*CronEndpointConfig); ok {
+			connector := runtimeCfg.dataConnectorsByID[cronEndpoint.IdDataConnector]
+			if connector == nil || connector.GetType() != api.DataConnectorTypeCron {
+				return nil, fmt.Errorf("Cron endpoint %q requires a Cron data connector id=%d", cronEndpoint.Name, cronEndpoint.IdDataConnector)
+			}
+			if cronEndpoint.Timezone != "UTC" {
+				return nil, fmt.Errorf("Cron endpoint %q requires timezone UTC", cronEndpoint.Name)
+			}
+		}
 		temporalEndpoint, ok := endpoint.(*TemporalEndpointConfig)
 		if !ok {
 			continue
@@ -217,6 +226,9 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		if temporalEndpoint.Schedule != "" {
 			if temporalEndpoint.ScheduleID == "" || temporalEndpoint.Timezone == "" {
 				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires scheduleId and timezone", temporalEndpoint.Name)
+			}
+			if temporalEndpoint.Timezone != "UTC" {
+				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires timezone UTC", temporalEndpoint.Name)
 			}
 			if temporalEndpoint.OverlapPolicy == "" || temporalEndpoint.MissedRunPolicy == "" {
 				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires overlapPolicy and missedRunPolicy", temporalEndpoint.Name)

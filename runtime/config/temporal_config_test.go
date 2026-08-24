@@ -103,6 +103,38 @@ func TestTemporalEndpointRequiresCompleteScheduleIdentity(t *testing.T) {
 	require.ErrorContains(t, err, "requires scheduleId and timezone")
 }
 
+func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
+	cron := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&CronDataConnectorConfig{
+			ID: 7, Name: "cron", Implementation: api.DataConnectorImplementationGoGocron,
+		}},
+		endpoints: []EndpointConfig{&CronEndpointConfig{
+			ID: 11, Name: "tick", IdDataConnector: 7, Enabled: true,
+			Schedule: "*/5 * * * *", Timezone: "Europe/Moscow",
+			OverlapPolicy: api.ScheduleOverlapPolicySkip,
+			MissedRunPolicy: api.ScheduleMissedRunPolicySkip,
+		}},
+	}
+	_, err := NewRuntimeConfig(cron)
+	require.ErrorContains(t, err, "requires timezone UTC")
+
+	temporal := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "scheduled", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", Schedule: "*/5 * * * *", ScheduleID: "scheduled",
+			Timezone: "Europe/Moscow", OverlapPolicy: api.ScheduleOverlapPolicySkip,
+			MissedRunPolicy: api.ScheduleMissedRunPolicySkip,
+			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+	_, err = NewRuntimeConfig(temporal)
+	require.ErrorContains(t, err, "requires timezone UTC")
+}
+
 func TestTemporalEndpointRejectsNonTemporalConnector(t *testing.T) {
 	cfg := &temporalTestConfig{
 		connectors: []DataConnectorConfig{&CustomDataConnectorConfig{ID: 7, Name: "custom"}},
