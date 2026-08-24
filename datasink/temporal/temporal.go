@@ -107,10 +107,14 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) SetSinkCallback(callback runt
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) Consume(ctx context.Context, value T) {
 	ec.dataSink.wg.Add(1)
-	go func() {
-		defer ec.dataSink.wg.Done()
-		ec.submit(ctx, value)
-	}()
+	defer ec.dataSink.wg.Done()
+
+	// Durable acceptance is part of consuming a Temporal sink value. In
+	// particular, an upstream Temporal Activity must not finish (and cancel its
+	// context) before the next Workflow has been accepted by the server. The
+	// target graph still runs through its ordinary input consumer; only the
+	// transport boundary is synchronous here.
+	ec.submit(ctx, value)
 }
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, value T) {
