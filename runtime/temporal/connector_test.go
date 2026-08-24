@@ -3,6 +3,7 @@ package temporal
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
@@ -10,6 +11,20 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime"
 )
+
+func TestScheduledTimeUsesTemporalScheduleWorkflowIDSuffix(t *testing.T) {
+	fallback := time.Date(2026, 8, 24, 12, 35, 1, 0, time.UTC)
+	got := scheduledTimeFromWorkflowID(
+		"servicegen/schedule/1/3-2026-08-24T12:30:00.123456789Z", fallback,
+	)
+	want := time.Date(2026, 8, 24, 12, 30, 0, 123456789, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("scheduled time = %s, want %s", got, want)
+	}
+	if got := scheduledTimeFromWorkflowID("manual-workflow", fallback); !got.Equal(fallback) {
+		t.Fatalf("fallback scheduled time = %s, want %s", got, fallback)
+	}
+}
 
 func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite

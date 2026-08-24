@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -36,6 +37,8 @@ import (
 
 const durableWorkflowType = "servicegen.durable-link.v1"
 const endpointWorkflowType = "servicegen.temporal-endpoint.v1"
+
+var scheduleWorkflowIDSuffix = regexp.MustCompile(`-(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)$`)
 
 const (
 	durableMemoManagedBy = "servicegen.managedBy"
@@ -689,7 +692,9 @@ func temporalEndpointWorkflow(ctx workflow.Context, request endpointWorkflowRequ
 		info := workflow.GetInfo(ctx)
 		request.Envelope.ExecutionID = info.WorkflowExecution.ID
 		request.Envelope.StreamID = info.WorkflowExecution.ID
-		request.Envelope.ScheduledAtNano = info.WorkflowStartTime.UTC().UnixNano()
+		request.Envelope.ScheduledAtNano = scheduledTimeFromWorkflowID(
+			info.WorkflowExecution.ID, info.WorkflowStartTime,
+		).UnixNano()
 	}
 	options := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Duration(request.ActivityStartToCloseMillis) * time.Millisecond,
@@ -700,6 +705,16 @@ func temporalEndpointWorkflow(ctx workflow.Context, request endpointWorkflowRequ
 	var result EndpointResult
 	err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, &result)
 	return result, err
+}
+
+func scheduledTimeFromWorkflowID(id string, fallback time.Time) time.Time {
+	match := scheduleWorkflowIDSuffix.FindStringSubmatch(id)
+	if len(match) == 2 {
+		if scheduledAt, err := time.Parse(time.RFC3339Nano, match[1]); err == nil {
+			return scheduledAt.UTC()
+		}
+	}
+	return fallback.UTC()
 }
 
 func durableLinkWorkflow(ctx workflow.Context, request durableWorkflowRequest) error {
