@@ -682,6 +682,17 @@ type durableCaller[T any] struct {
 	serde     serde.StreamSerde[T]
 }
 
+func (c *durableCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
+	if !c.samplingEnabled(ctx) {
+		return ctx, noopSpan{}
+	}
+	return c.tracer.Start(ctx, "stream.call",
+		tracing.StringAttr("from", c.fromName),
+		tracing.StringAttr("to", c.toName),
+		tracing.StringAttr("type", "durable"),
+	)
+}
+
 type durableInvocationScope struct {
 	parentID string
 	mu       sync.Mutex
@@ -725,8 +736,11 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 	if c.messagesCounter != nil {
 		c.messagesCounter.Inc(ctx)
 	}
+	ctx, span := c.startSpan(ctx)
+	defer span.End()
 	payload, err := c.serde.Serialize(value)
 	if err != nil {
+		tracing.SpanError(span, err)
 		c.source.GetEnvironment().Log().Error(ctx, "durable call serialization failed", log.Err(err))
 		return
 	}
@@ -750,6 +764,7 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 	}
 	envelope.CallID = nextDurableCallID(ctx, c.linkID, payload)
 	if err := c.transport.SubmitLink(ctx, c.linkID, envelope); err != nil {
+		tracing.SpanError(span, err)
 		c.source.GetEnvironment().Log().Error(ctx, "durable call submission failed", log.Err(err))
 	}
 }
