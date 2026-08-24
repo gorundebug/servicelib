@@ -74,9 +74,9 @@ lib.dashboard(
     lib.ts(
       title='Temporal Client Request Latency p50 / p95 / p99',
       targets=[
-        lib.hQuantileBy(0.50, 'temporal_request_latency', 'operation', sdkFilter, 'p50 {{operation}}'),
-        lib.hQuantileBy(0.95, 'temporal_request_latency', 'operation', sdkFilter, 'p95 {{operation}}'),
-        lib.hQuantileBy(0.99, 'temporal_request_latency', 'operation', sdkFilter, 'p99 {{operation}}'),
+        lib.hQuantileBy(0.50, 'temporal_request_latency_seconds', 'operation', sdkFilter, 'p50 {{operation}}'),
+        lib.hQuantileBy(0.95, 'temporal_request_latency_seconds', 'operation', sdkFilter, 'p95 {{operation}}'),
+        lib.hQuantileBy(0.99, 'temporal_request_latency_seconds', 'operation', sdkFilter, 'p99 {{operation}}'),
       ],
       w=24, h=8,
       unit='s',
@@ -87,9 +87,9 @@ lib.dashboard(
     lib.ts(
       title='Queue Wait p50 / p95 / p99',
       targets=[
-        lib.hQuantileBy(0.50, 'temporal_activity_schedule_to_start_latency', 'activity_type, task_queue', durableFilter, 'p50 {{activity_type}}'),
-        lib.hQuantileBy(0.95, 'temporal_activity_schedule_to_start_latency', 'activity_type, task_queue', durableFilter, 'p95 {{activity_type}}'),
-        lib.hQuantileBy(0.99, 'temporal_activity_schedule_to_start_latency', 'activity_type, task_queue', durableFilter, 'p99 {{activity_type}}'),
+        lib.hQuantileBy(0.50, 'temporal_activity_schedule_to_start_latency_seconds', 'activity_type, task_queue', durableFilter, 'p50 {{activity_type}}'),
+        lib.hQuantileBy(0.95, 'temporal_activity_schedule_to_start_latency_seconds', 'activity_type, task_queue', durableFilter, 'p95 {{activity_type}}'),
+        lib.hQuantileBy(0.99, 'temporal_activity_schedule_to_start_latency_seconds', 'activity_type, task_queue', durableFilter, 'p99 {{activity_type}}'),
       ],
       w=12, h=8,
       unit='s',
@@ -98,9 +98,9 @@ lib.dashboard(
     lib.ts(
       title='Activity Execution p50 / p95 / p99',
       targets=[
-        lib.hQuantileBy(0.50, 'temporal_activity_execution_latency', 'activity_type, task_queue', durableFilter, 'p50 {{activity_type}}'),
-        lib.hQuantileBy(0.95, 'temporal_activity_execution_latency', 'activity_type, task_queue', durableFilter, 'p95 {{activity_type}}'),
-        lib.hQuantileBy(0.99, 'temporal_activity_execution_latency', 'activity_type, task_queue', durableFilter, 'p99 {{activity_type}}'),
+        lib.hQuantileBy(0.50, 'temporal_activity_execution_latency_seconds', 'activity_type, task_queue', durableFilter, 'p50 {{activity_type}}'),
+        lib.hQuantileBy(0.95, 'temporal_activity_execution_latency_seconds', 'activity_type, task_queue', durableFilter, 'p95 {{activity_type}}'),
+        lib.hQuantileBy(0.99, 'temporal_activity_execution_latency_seconds', 'activity_type, task_queue', durableFilter, 'p99 {{activity_type}}'),
       ],
       w=12, h=8,
       unit='s',
@@ -109,8 +109,8 @@ lib.dashboard(
     lib.ts(
       title='Activity Failures and Cancellations',
       targets=[
-        lib.rate('temporal_activity_execution_failed', durableFilter, 'failed {{activity_type}}'),
-        lib.rate('temporal_activity_execution_cancelled', durableFilter, 'cancelled {{activity_type}}'),
+        lib.rate('temporal_activity_execution_failed_total', durableFilter, 'failed {{activity_type}}'),
+        lib.rate('temporal_activity_execution_cancelled_total', durableFilter, 'cancelled {{activity_type}}'),
       ],
       w=24, h=8,
       unit='ops',
