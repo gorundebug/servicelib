@@ -25,6 +25,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/spf13/viper"
 
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
@@ -63,6 +64,8 @@ type ServiceExecutionRuntime interface {
 	getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics)
 	registerLinkInfo(linkID config.LinkID, callSemantics config.CallSemanticsConfig)
+	registerDurableContinuation(fromName, toName string, handler DurableContinuationHandler) error
+	ResumeDurableContinuation(context.Context, DurableContinuation) error
 	beginParallel()
 	endParallel()
 }
@@ -681,8 +684,68 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 
 	env.GetRuntime().registerConsumeStatistics(linkID, consumeStat)
 	env.GetRuntime().registerLinkInfo(linkID, callSemantics)
+	if source.GetConfig().GetType() == api.TransformationTypeDelay {
+		ser := source.GetSerde()
+		delegate := streamCaller
+		if err := env.GetRuntime().registerDurableContinuation(fromName, toName, func(ctx context.Context, continuation DurableContinuation) error {
+			value, err := ser.Deserialize(continuation.Payload)
+			if err != nil {
+				return fmt.Errorf("deserialize durable continuation %s->%s: %w", fromName, toName, err)
+			}
+			delegate.Consume(ctx, value)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		streamCaller = &durableDelayCaller[T]{
+			delegate: delegate, serde: ser, source: source,
+			fromName: fromName, toName: toName,
+		}
+	}
 	return streamCaller, nil
 }
+
+type durableDelayCaller[T any] struct {
+	delegate Caller[T]
+	serde    serde.StreamSerde[T]
+	source   TypedStream[T]
+	fromName string
+	toName   string
+}
+
+func (c *durableDelayCaller[T]) Consume(ctx context.Context, value T) {
+	durable, present := DurableCallContextFromContext(ctx)
+	if !present {
+		c.delegate.Consume(ctx, value)
+		return
+	}
+	durable.mu.Lock()
+	pending := !durable.delayAt.IsZero() && !durable.completed
+	durable.mu.Unlock()
+	if !pending {
+		c.delegate.Consume(ctx, value)
+		return
+	}
+	payload, err := c.serde.Serialize(value)
+	if err != nil {
+		wrapped := fmt.Errorf("serialize durable continuation %s->%s: %w", c.fromName, c.toName, err)
+		if completionErr := DurableCallError(ctx, wrapped); completionErr != nil {
+			c.source.GetEnvironment().Log().Error(ctx, "durable continuation failure could not complete Activity", log.Err(completionErr))
+		}
+		c.source.GetEnvironment().Log().Error(ctx, "durable continuation serialization failed", log.Err(wrapped))
+		return
+	}
+	captured, err := CaptureDurableContinuation(ctx, c.fromName, c.toName, payload)
+	if err != nil {
+		c.source.GetEnvironment().Log().Error(ctx, "durable continuation capture failed", log.Err(err))
+		return
+	}
+	if !captured {
+		c.delegate.Consume(ctx, value)
+	}
+}
+
+func (c *durableDelayCaller[T]) IsAsync() bool { return c.delegate.IsAsync() }
 
 type durableCaller[T any] struct {
 	caller[T]

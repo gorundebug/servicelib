@@ -154,3 +154,32 @@ func TestDurableCallLifecycleIsRecordedOnActivitySpan(t *testing.T) {
 		spans[0].Events[1].Name,
 	})
 }
+
+func TestDurableDelayReturnsSerializableContinuation(t *testing.T) {
+	durable := NewDurableCallContext("call-1", nil, nil)
+	result, err := RunDurableCallActivityWithResult(context.Background(), durable, func(ctx context.Context) error {
+		ctx = WithStreamId(ctx, "stream-1")
+		ctx = WithPriority(ctx, 7)
+		active, err := BeginDurableDelay(ctx, time.Hour)
+		require.NoError(t, err)
+		require.True(t, active)
+		captured, err := CaptureDurableContinuation(ctx, "Delay", "After Delay", []byte("value"))
+		require.NoError(t, err)
+		require.True(t, captured)
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Continuation)
+	require.Equal(t, "Delay", result.Continuation.FromName)
+	require.Equal(t, "After Delay", result.Continuation.ToName)
+	require.Equal(t, "call-1/delay", result.Continuation.CallID)
+	require.Equal(t, "stream-1", result.Continuation.StreamID)
+	require.Equal(t, 7, result.Continuation.Priority)
+	require.Equal(t, []byte("value"), result.Continuation.Payload)
+}
+
+func TestBeginDurableDelayKeepsOrdinaryContextLocal(t *testing.T) {
+	active, err := BeginDurableDelay(context.Background(), time.Hour)
+	require.NoError(t, err)
+	require.False(t, active)
+}

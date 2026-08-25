@@ -55,11 +55,11 @@ func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testin
 	)
 	const activityType = "automation_service.durable.source.target.v1"
 	environment.RegisterActivityWithOptions(
-		func(_ context.Context, envelope runtime.DurableEnvelope) error {
+		func(_ context.Context, envelope runtime.DurableEnvelope) (runtime.DurableActivityResult, error) {
 			if envelope.CallID != "logical-call" || envelope.From != 2 || envelope.To != 3 {
 				t.Fatalf("unexpected durable envelope: %+v", envelope)
 			}
-			return nil
+			return runtime.DurableActivityResult{}, nil
 		},
 		activity.RegisterOptions{Name: activityType},
 	)
@@ -83,11 +83,11 @@ func TestTemporalEndpointWorkflowPreservesOnDemandEnvelopeAndResult(t *testing.T
 	)
 	const activityType = "Temporal.endpoint.DurableJob.v1"
 	environment.RegisterActivityWithOptions(
-		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+		func(_ context.Context, envelope EndpointEnvelope) (endpointActivityResult, error) {
 			if envelope.EndpointID != 7 || envelope.ExecutionID != "job-1" || envelope.StreamID != "request-1" || envelope.Scheduled {
 				t.Fatalf("unexpected endpoint envelope: %+v", envelope)
 			}
-			return EndpointResult{Payload: []byte("result")}, nil
+			return endpointActivityResult{Result: EndpointResult{Payload: []byte("result")}}, nil
 		},
 		activity.RegisterOptions{Name: activityType},
 	)
@@ -118,11 +118,11 @@ func TestTemporalScheduleWorkflowCreatesExecutionIdentity(t *testing.T) {
 	)
 	const activityType = "Temporal.endpoint.TemporalSchedule.v1"
 	environment.RegisterActivityWithOptions(
-		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+		func(_ context.Context, envelope EndpointEnvelope) (endpointActivityResult, error) {
 			if !envelope.Scheduled || envelope.ScheduleID != "schedule-8" || envelope.ExecutionID == "" || envelope.StreamID != envelope.ExecutionID || envelope.ScheduledAtNano == 0 {
 				t.Fatalf("unexpected scheduled envelope: %+v", envelope)
 			}
-			return EndpointResult{}, nil
+			return endpointActivityResult{}, nil
 		},
 		activity.RegisterOptions{Name: activityType},
 	)
@@ -135,5 +135,46 @@ func TestTemporalScheduleWorkflowCreatesExecutionIdentity(t *testing.T) {
 	})
 	if err := environment.GetWorkflowError(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDurableWorkflowResumesAfterTemporalTimer(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterWorkflowWithOptions(
+		durableLinkWorkflow, workflow.RegisterOptions{Name: durableWorkflowType},
+	)
+	const initialActivity = "automation_service.durable.source.delay.v1"
+	const continuationActivity = "automation_service.durable_continuation.temporal.v1"
+	environment.RegisterActivityWithOptions(
+		func(context.Context, runtime.DurableEnvelope) (runtime.DurableActivityResult, error) {
+			return runtime.DurableActivityResult{Continuation: &runtime.DurableContinuation{
+				Version: 1, FromName: "Delay", ToName: "After Delay", CallID: "call-1/delay",
+				WakeAtUnixNano: time.Now().UTC().Add(time.Hour).UnixNano(), Payload: []byte("value"),
+			}}, nil
+		},
+		activity.RegisterOptions{Name: initialActivity},
+	)
+	resumed := false
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, continuation runtime.DurableContinuation) (runtime.DurableActivityResult, error) {
+			resumed = true
+			if continuation.FromName != "Delay" || continuation.ToName != "After Delay" || string(continuation.Payload) != "value" {
+				t.Fatalf("unexpected continuation: %+v", continuation)
+			}
+			return runtime.DurableActivityResult{}, nil
+		},
+		activity.RegisterOptions{Name: continuationActivity},
+	)
+	environment.ExecuteWorkflow(durableWorkflowType, durableWorkflowRequest{
+		ActivityType: initialActivity, ContinuationActivityType: continuationActivity,
+		ActivityStartToCloseMillis: 1_000, MaximumAttempts: 1,
+		Envelope: runtime.DurableEnvelope{Version: 1, From: 1, To: 2, CallID: "call-1"},
+	})
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	if !resumed {
+		t.Fatal("continuation Activity was not executed")
 	}
 }

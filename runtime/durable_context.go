@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
@@ -41,7 +42,30 @@ const (
 	DurableCallEventMissingOutcome  DurableCallEvent = "missing_outcome"
 	DurableCallEventDuplicateResult DurableCallEvent = "duplicate_terminal"
 	DurableCallEventLateHeartbeat   DurableCallEvent = "late_heartbeat"
+	DurableCallEventSuspended       DurableCallEvent = "suspended"
 )
+
+// DurableContinuation is the serialized boundary between two Activity
+// executions separated by a durable timer. Stream names are immutable graph
+// identities; generated numeric IDs are deliberately not persisted in
+// Temporal history.
+type DurableContinuation struct {
+	Version          int    `json:"version"`
+	FromName         string `json:"fromName"`
+	ToName           string `json:"toName"`
+	CallID           string `json:"callId"`
+	StreamID         string `json:"streamId,omitempty"`
+	Priority         int    `json:"priority"`
+	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
+	WakeAtUnixNano   int64  `json:"wakeAtUnixNano"`
+	Payload          []byte `json:"payload"`
+}
+
+// DurableActivityResult is returned to the durable transport when an
+// Activity either completes normally or suspends at a Delay node.
+type DurableActivityResult struct {
+	Continuation *DurableContinuation `json:"continuation,omitempty"`
+}
 
 // DurableCallDiagnostics receives state transitions without coupling the
 // portable runtime context to Temporal, a logger, metrics or a tracing SDK.
@@ -60,16 +84,85 @@ var durableCallContextKey = durableCallContextKeyType{}
 type DurableCallContext struct {
 	parentID string
 
-	mu        sync.Mutex
-	counts    map[string]uint64
-	completed bool
-	outcome   error
-	done      chan struct{}
+	mu           sync.Mutex
+	counts       map[string]uint64
+	completed    bool
+	outcome      error
+	done         chan struct{}
+	delayAt      time.Time
+	continuation *DurableContinuation
 
 	heartbeat   DurableCallHeartbeatRecorder
 	diagnostics DurableCallDiagnostics
 	span        tracing.Span
 	spanEnded   bool
+}
+
+// BeginDurableDelay marks the current Activity for durable suspension. It
+// returns false outside a DurableCall Activity, preserving ordinary Delay
+// behavior without a transport/config lookup on the local path.
+func BeginDurableDelay(ctx context.Context, duration time.Duration) (bool, error) {
+	durable, ok := DurableCallContextFromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	if duration <= 0 {
+		return false, nil
+	}
+	durable.mu.Lock()
+	defer durable.mu.Unlock()
+	if durable.completed {
+		return true, ErrDurableCallAlreadyCompleted
+	}
+	if !durable.delayAt.IsZero() {
+		return true, errors.New("durable delay is already pending")
+	}
+	durable.delayAt = time.Now().UTC().Add(duration)
+	return true, nil
+}
+
+// CaptureDurableContinuation is called by the outgoing caller of a Delay
+// stream. The caller owns the serde and target identity, while Delay itself
+// remains independent of both.
+func CaptureDurableContinuation(
+	ctx context.Context,
+	fromName string,
+	toName string,
+	payload []byte,
+) (bool, error) {
+	durable, ok := DurableCallContextFromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	durable.mu.Lock()
+	if durable.delayAt.IsZero() {
+		durable.mu.Unlock()
+		return false, nil
+	}
+	if durable.completed {
+		durable.mu.Unlock()
+		return true, ErrDurableCallAlreadyCompleted
+	}
+	streamID, _ := StreamIdFromContext(ctx)
+	priority, _ := PriorityFromContext(ctx)
+	continuation := &DurableContinuation{
+		Version: 1, FromName: fromName, ToName: toName,
+		CallID:   durable.parentID + "/delay",
+		Priority: priority, WakeAtUnixNano: durable.delayAt.UnixNano(),
+		Payload: append([]byte(nil), payload...),
+	}
+	if streamID != nil {
+		continuation.StreamID = streamID.GetID()
+	}
+	if deadline, present := ctx.Deadline(); present {
+		continuation.DeadlineUnixNano = deadline.UTC().UnixNano()
+	}
+	durable.completed = true
+	durable.continuation = continuation
+	durable.mu.Unlock()
+	durable.report(ctx, DurableCallEventSuspended, nil)
+	close(durable.done)
+	return true, nil
 }
 
 // NewDurableCallContext constructs processing-side Activity state. Transport
@@ -270,8 +363,20 @@ func RunDurableCallActivity(
 	durable *DurableCallContext,
 	invoke func(context.Context) error,
 ) error {
+	_, err := RunDurableCallActivityWithResult(ctx, durable, invoke)
+	return err
+}
+
+// RunDurableCallActivityWithResult additionally exposes a durable Delay
+// continuation to transport adapters. Existing callers retain the original
+// error-only API above.
+func RunDurableCallActivityWithResult(
+	ctx context.Context,
+	durable *DurableCallContext,
+	invoke func(context.Context) error,
+) (DurableActivityResult, error) {
 	if durable == nil {
-		return errors.New("durable call context is nil")
+		return DurableActivityResult{}, errors.New("durable call context is nil")
 	}
 	activityCtx := WithDurableCallContext(ctx, durable)
 	defer durable.finishSpan()
@@ -290,6 +395,7 @@ func RunDurableCallActivity(
 	<-durable.done
 	durable.mu.Lock()
 	outcome := durable.outcome
+	continuation := durable.continuation
 	durable.mu.Unlock()
-	return outcome
+	return DurableActivityResult{Continuation: continuation}, outcome
 }

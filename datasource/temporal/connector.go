@@ -106,6 +106,12 @@ func durableLinkActivityType(serviceName, sourceName, targetName string) string 
 	)
 }
 
+func durableContinuationActivityType(serviceName, connectorName string) string {
+	return fmt.Sprintf("%s.durable_continuation.%s.v1",
+		temporalIdentityName(serviceName), temporalIdentityName(connectorName),
+	)
+}
+
 func durableLinkWorkflowID(serviceName, sourceName, targetName, callID string) string {
 	return fmt.Sprintf("%s/durable/%s/%s/%s",
 		temporalIdentityName(serviceName),
@@ -145,6 +151,7 @@ func temporalEndpointOwner(connectorName, endpointName string) string {
 
 type durableWorkflowRequest struct {
 	ActivityType               string                  `json:"activityType"`
+	ContinuationActivityType   string                  `json:"continuationActivityType"`
 	ActivityStartToCloseMillis int                     `json:"activityStartToCloseMillis"`
 	ActivityHeartbeatMillis    int                     `json:"activityHeartbeatMillis,omitempty"`
 	MaximumAttempts            int32                   `json:"maximumAttempts"`
@@ -179,11 +186,17 @@ type connectorEndpointHandler func(context.Context, EndpointEnvelope) (EndpointR
 
 type endpointWorkflowRequest struct {
 	ActivityType               string           `json:"activityType"`
+	ContinuationActivityType   string           `json:"continuationActivityType"`
 	ActivityStartToCloseMillis int              `json:"activityStartToCloseMillis"`
 	ActivityHeartbeatMillis    int              `json:"activityHeartbeatMillis,omitempty"`
 	MaximumAttempts            int32            `json:"maximumAttempts"`
 	Priority                   int              `json:"priority"`
 	Envelope                   EndpointEnvelope `json:"envelope"`
+}
+
+type endpointActivityResult struct {
+	Durable runtime.DurableActivityResult `json:"durable"`
+	Result  EndpointResult                `json:"result"`
 }
 
 type linkRegistration struct {
@@ -374,9 +387,10 @@ func (c *Connector) Start(ctx context.Context) error {
 		return fmt.Errorf("connect Temporal data connector %q: %w", c.name, err)
 	}
 	type queueWorker struct {
-		worker             worker.Worker
-		durableRegistered  bool
-		endpointRegistered bool
+		worker                 worker.Worker
+		durableRegistered      bool
+		endpointRegistered     bool
+		continuationRegistered bool
 	}
 	workersByQueue := make(map[string]*queueWorker)
 	getWorker := func(taskQueue string) *queueWorker {
@@ -390,17 +404,45 @@ func (c *Connector) Start(ctx context.Context) error {
 		}
 		return registered
 	}
+	registerContinuation := func(registered *queueWorker) {
+		if registered.continuationRegistered {
+			return
+		}
+		registered.worker.RegisterActivityWithOptions(
+			func(activityCtx context.Context, continuation runtime.DurableContinuation) (runtime.DurableActivityResult, error) {
+				if continuation.Version != 1 || continuation.CallID == "" || continuation.FromName == "" || continuation.ToName == "" {
+					return runtime.DurableActivityResult{}, errors.New("invalid durable continuation envelope")
+				}
+				ctx, cancel := durableContinuationContext(activityCtx, continuation)
+				defer cancel()
+				durable := runtime.NewDurableCallContext(
+					continuation.CallID,
+					func(ctx context.Context, details any) error {
+						activity.RecordHeartbeat(ctx, details)
+						return nil
+					},
+					c.durableCallDiagnostics("continuation", continuation.FromName+":"+continuation.ToName),
+				)
+				return runtime.RunDurableCallActivityWithResult(ctx, durable, func(ctx context.Context) error {
+					return c.environment.GetRuntime().ResumeDurableContinuation(ctx, continuation)
+				})
+			},
+			activity.RegisterOptions{Name: durableContinuationActivityType(c.environment.ServiceConfig().Name, c.name)},
+		)
+		registered.continuationRegistered = true
+	}
 	for _, registration := range c.linkRegistrations {
 		registered := getWorker(registration.config.TaskQueue)
+		registerContinuation(registered)
 		if !registered.durableRegistered {
 			registered.worker.RegisterWorkflowWithOptions(durableLinkWorkflow, workflow.RegisterOptions{Name: durableWorkflowType})
 			registered.durableRegistered = true
 		}
 		registration := registration
 		registered.worker.RegisterActivityWithOptions(
-			func(activityCtx context.Context, envelope runtime.DurableEnvelope) error {
+			func(activityCtx context.Context, envelope runtime.DurableEnvelope) (runtime.DurableActivityResult, error) {
 				if envelope.Version != 1 || envelope.From != registration.id.From || envelope.To != registration.id.To || envelope.CallID == "" {
-					return fmt.Errorf("invalid durable envelope for link %d->%d", registration.id.From, registration.id.To)
+					return runtime.DurableActivityResult{}, fmt.Errorf("invalid durable envelope for link %d->%d", registration.id.From, registration.id.To)
 				}
 				durable := runtime.NewDurableCallContext(
 					envelope.CallID,
@@ -410,7 +452,7 @@ func (c *Connector) Start(ctx context.Context) error {
 					},
 					c.durableCallDiagnostics("link", fmt.Sprintf("%d:%d", registration.id.From, registration.id.To)),
 				)
-				return runtime.RunDurableCallActivity(activityCtx, durable, func(ctx context.Context) error {
+				return runtime.RunDurableCallActivityWithResult(activityCtx, durable, func(ctx context.Context) error {
 					return registration.handler(ctx, envelope)
 				})
 			},
@@ -422,19 +464,21 @@ func (c *Connector) Start(ctx context.Context) error {
 			continue
 		}
 		registered := getWorker(registration.config.TaskQueue)
+		registerContinuation(registered)
 		if !registered.endpointRegistered {
 			registered.worker.RegisterWorkflowWithOptions(temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType})
 			registered.endpointRegistered = true
 		}
 		registration := registration
 		registered.worker.RegisterActivityWithOptions(
-			func(activityCtx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			func(activityCtx context.Context, envelope EndpointEnvelope) (endpointActivityResult, error) {
 				if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.ExecutionID == "" {
-					return EndpointResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
+					return endpointActivityResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
 				}
 				envelope.FiredAtNano = time.Now().UTC().UnixNano()
 				if !envelope.Scheduled {
-					return registration.handler(activityCtx, envelope)
+					result, err := registration.handler(activityCtx, envelope)
+					return endpointActivityResult{Result: result}, err
 				}
 				durable := runtime.NewDurableCallContext(
 					envelope.ExecutionID,
@@ -445,12 +489,12 @@ func (c *Connector) Start(ctx context.Context) error {
 					c.durableCallDiagnostics("schedule", fmt.Sprintf("%d", registration.id)),
 				)
 				var result EndpointResult
-				err := runtime.RunDurableCallActivity(activityCtx, durable, func(ctx context.Context) error {
+				durableResult, err := runtime.RunDurableCallActivityWithResult(activityCtx, durable, func(ctx context.Context) error {
 					var invokeErr error
 					result, invokeErr = registration.handler(ctx, envelope)
 					return invokeErr
 				})
-				return result, err
+				return endpointActivityResult{Durable: durableResult, Result: result}, err
 			},
 			activity.RegisterOptions{Name: registration.activityType},
 		)
@@ -574,6 +618,7 @@ func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Cl
 	owner := temporalEndpointOwner(c.name, cfg.Name)
 	request := endpointWorkflowRequest{
 		ActivityType:               registration.activityType,
+		ContinuationActivityType:   durableContinuationActivityType(c.environment.ServiceConfig().Name, c.name),
 		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
 		ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
 		MaximumAttempts:            int32(cfg.MaximumAttempts),
@@ -674,6 +719,7 @@ func (c *Connector) SubmitLink(ctx context.Context, id config.LinkID, envelope r
 	}
 	request := durableWorkflowRequest{
 		ActivityType:               registration.activityType,
+		ContinuationActivityType:   durableContinuationActivityType(c.environment.ServiceConfig().Name, c.name),
 		ActivityStartToCloseMillis: registration.config.ActivityStartToCloseTimeout,
 		ActivityHeartbeatMillis:    registration.config.ActivityHeartbeatTimeout,
 		MaximumAttempts:            int32(registration.config.MaximumAttempts),
@@ -749,6 +795,7 @@ func (c *Connector) SubmitEndpoint(
 	envelope.EndpointID = endpointID
 	request := endpointWorkflowRequest{
 		ActivityType:               temporalEndpointActivityType(c.name, cfg.Name),
+		ContinuationActivityType:   durableContinuationActivityType(c.environment.ServiceConfig().Name, c.name),
 		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
 		ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
 		MaximumAttempts:            int32(cfg.MaximumAttempts),
@@ -885,9 +932,14 @@ func temporalEndpointWorkflow(ctx workflow.Context, request endpointWorkflowRequ
 		RetryPolicy:         &sdktemporal.RetryPolicy{MaximumAttempts: request.MaximumAttempts},
 		Priority:            sdktemporal.Priority{PriorityKey: request.Priority},
 	}
-	var result EndpointResult
-	err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, &result)
-	return result, err
+	var result endpointActivityResult
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, &result); err != nil {
+		return EndpointResult{}, err
+	}
+	if err := runDurableContinuations(ctx, options, request.ContinuationActivityType, result.Durable); err != nil {
+		return EndpointResult{}, err
+	}
+	return result.Result, nil
 }
 
 func scheduledTimeFromWorkflowID(id string, fallback time.Time) time.Time {
@@ -907,5 +959,45 @@ func durableLinkWorkflow(ctx workflow.Context, request durableWorkflowRequest) e
 		RetryPolicy:         &sdktemporal.RetryPolicy{MaximumAttempts: request.MaximumAttempts},
 		Priority:            sdktemporal.Priority{PriorityKey: request.Priority},
 	}
-	return workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, nil)
+	var result runtime.DurableActivityResult
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, &result); err != nil {
+		return err
+	}
+	return runDurableContinuations(ctx, options, request.ContinuationActivityType, result)
+}
+
+func runDurableContinuations(
+	ctx workflow.Context,
+	options workflow.ActivityOptions,
+	activityType string,
+	result runtime.DurableActivityResult,
+) error {
+	for result.Continuation != nil {
+		continuation := *result.Continuation
+		wakeAt := time.Unix(0, continuation.WakeAtUnixNano).UTC()
+		if delay := wakeAt.Sub(workflow.Now(ctx).UTC()); delay > 0 {
+			if err := workflow.Sleep(ctx, delay); err != nil {
+				return err
+			}
+		}
+		result = runtime.DurableActivityResult{}
+		if err := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, options), activityType, continuation,
+		).Get(ctx, &result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func durableContinuationContext(parent context.Context, continuation runtime.DurableContinuation) (context.Context, context.CancelFunc) {
+	ctx := parent
+	if continuation.StreamID != "" {
+		ctx = runtime.WithStreamId(ctx, continuation.StreamID)
+	}
+	ctx = runtime.WithPriority(ctx, continuation.Priority)
+	if continuation.DeadlineUnixNano > 0 {
+		return context.WithDeadline(ctx, time.Unix(0, continuation.DeadlineUnixNano).UTC())
+	}
+	return ctx, func() {}
 }

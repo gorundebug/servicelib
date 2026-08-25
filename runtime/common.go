@@ -75,6 +75,7 @@ type DurableEnvelope struct {
 }
 
 type DurableLinkHandler func(context.Context, DurableEnvelope) error
+type DurableContinuationHandler func(context.Context, DurableContinuation) error
 
 // DurableTransport is implemented by an external durable runtime such as
 // Temporal. RegisterLink associates transport identity with the existing
