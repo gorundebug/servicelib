@@ -258,20 +258,6 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 			return nil, fmt.Errorf("duplicate link from=%d to=%d", v.From, v.To)
 		}
 		runtimeCfg.linksByID[id] = v
-		var semantics CallSemanticsConfig
-		if v.CallSemantics != nil {
-			semantics = v.CallSemantics.Get()
-		}
-		if durable := semantics; durable != nil && durable.GetType() == api.CallSemanticsDurableCall {
-			durableConfig := durable.(*DurableCallSemanticsConfig)
-			connector := runtimeCfg.dataConnectorsByID[durableConfig.IdDataConnector]
-			if connector == nil {
-				return nil, fmt.Errorf("durable link from=%d to=%d references unknown data connector id=%d", v.From, v.To, durableConfig.IdDataConnector)
-			}
-			if connector.GetType() != api.DataConnectorTypeTemporal {
-				return nil, fmt.Errorf("durable link from=%d to=%d requires a Temporal data connector, got type %d", v.From, v.To, connector.GetType())
-			}
-		}
 	}
 	return runtimeCfg, nil
 }

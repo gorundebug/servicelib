@@ -27,7 +27,7 @@ var appToYamlOnlyKeys = map[string]string{
 	"source":        "idSource serialised as stream name ref",
 	"sources":       "idSources serialised as stream name refs",
 	"endpoint":      "idEndpoint serialised as endpoint name ref",
-	"dataConnector": "DurableCall idDataConnector serialised as data connector name ref",
+	"dataConnector": "endpoint idDataConnector serialised as data connector name ref",
 	"pipelines":     "structural grouping section — not an api.StreamApp field",
 	"errorStream":   "frontend-only visual reference; not an api.Stream field",
 }
@@ -38,7 +38,7 @@ var appToYamlExceptions = map[string]string{
 	// IDs are auto-assigned on import; never written back.
 	"id":              "auto-assigned, not written",
 	"idService":       "derived from nesting under service section",
-	"idDataConnector": "derived from endpoint nesting or written as a DurableCall dataConnector name ref",
+	"idDataConnector": "derived from endpoint nesting and written as a dataConnector name ref",
 	// ID-references written under renamed keys.
 	"idSource":   `written as "source"`,
 	"idSources":  `written as "sources"`,

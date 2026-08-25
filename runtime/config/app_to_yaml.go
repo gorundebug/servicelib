@@ -638,24 +638,6 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					if l.Priority != nil {
 						lNode["priority"] = *l.Priority
 					}
-					if l.IdDataConnector != nil {
-						lNode["dataConnector"] = dcKey[*l.IdDataConnector]
-					}
-					if l.TaskQueue != nil {
-						lNode["taskQueue"] = *l.TaskQueue
-					}
-					if l.WorkflowExecutionTimeout != nil {
-						lNode["workflowExecutionTimeout"] = *l.WorkflowExecutionTimeout
-					}
-					if l.ActivityStartToCloseTimeout != nil {
-						lNode["activityStartToCloseTimeout"] = *l.ActivityStartToCloseTimeout
-					}
-					if l.ActivityHeartbeatTimeout != nil {
-						lNode["activityHeartbeatTimeout"] = *l.ActivityHeartbeatTimeout
-					}
-					if l.MaximumAttempts != nil {
-						lNode["maximumAttempts"] = *l.MaximumAttempts
-					}
 					linksNode[fmt.Sprintf("link%d", i+1)] = lNode
 				}
 				svcObj["links"] = linksNode

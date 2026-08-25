@@ -47,8 +47,8 @@ type RuntimeEnvironment interface {
 	GetDataSource(id int) DataSource
 	AddDataSink(dataSink DataSink)
 	GetDataSink(id int) DataSink
-	AddDurableTransport(transport DurableTransport)
-	GetDurableTransport(id int) DurableTransport
+	AddManagedDataConnector(connector ManagedDataConnector)
+	GetManagedDataConnector(id int) ManagedDataConnector
 
 	Delay(ctx context.Context, duration time.Duration, f func()) error
 
@@ -60,32 +60,13 @@ type RuntimeEnvironment interface {
 	CreateKeyValueJoinStorage(storageType api.JoinStorageType, cfg store.JoinStorageConfig, stream Stream) store.Storage
 }
 
-// DurableEnvelope is the portable payload crossing a DurableCall boundary.
-// It contains transport context only; the target node and business value keep
-// their existing types and interfaces.
-type DurableEnvelope struct {
-	Version          int    `json:"version"`
-	From             int    `json:"from"`
-	To               int    `json:"to"`
-	CallID           string `json:"callId"`
-	StreamID         string `json:"streamId,omitempty"`
-	Priority         int    `json:"priority"`
-	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
-	Payload          []byte `json:"payload"`
-}
-
-type DurableLinkHandler func(context.Context, DurableEnvelope) error
-type DurableContinuationHandler func(context.Context, DurableContinuation) error
-
-// DurableTransport is implemented by an external durable runtime such as
-// Temporal. RegisterLink associates transport identity with the existing
-// target consumer; it must not replace or wrap the target node itself.
-type DurableTransport interface {
+// ManagedDataConnector owns shared transport lifecycle when source and sink
+// endpoints use the same external connection. It is not a graph call
+// semantics and never registers or invokes stream links.
+type ManagedDataConnector interface {
 	environment.Lifecycle
 	DataConnector
 	StopAdmission(context.Context)
-	RegisterLink(config.LinkID, DurableLinkHandler) error
-	SubmitLink(context.Context, config.LinkID, DurableEnvelope) error
 }
 
 type DelayFunc[T any] func(T) error

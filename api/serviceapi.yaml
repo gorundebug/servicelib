@@ -440,8 +440,7 @@ components:
         - `TaskPool` (3): enqueue to a named FIFO worker pool; decouples producer from consumer
         - `PriorityTaskPool` (4): enqueue to a named priority worker pool; higher-priority messages are processed first
         - `ParallelCall` (5): spawn a new goroutine for each message; fully parallel, no pool overhead
-        - `DurableCall` (6): execute the link as an independently identified Temporal Workflow/Activity operation
-      enum: [ 0, 1, 2, 3, 4, 5, 6 ]
+      enum: [ 0, 1, 2, 3, 4, 5 ]
       x-enum-varnames:
         - Undefined
         - Inherited
@@ -449,7 +448,6 @@ components:
         - TaskPool
         - PriorityTaskPool
         - ParallelCall
-        - DurableCall
 
     DataConnectorType:
       type: integer
@@ -729,30 +727,6 @@ components:
           description: |
             Message priority for `PriorityTaskPool` delivery. Higher values are processed first.
             Ignored for other call semantics.
-        idDataConnector:
-          type: integer
-          description: |
-            Temporal data connector used when `callSemantics` is `DurableCall`.
-            Ignored for every other call semantics.
-        taskQueue:
-          type: string
-          description: Temporal Task Queue used by this DurableCall link.
-        workflowExecutionTimeout:
-          type: integer
-          minimum: 0
-          description: Temporal Workflow execution timeout in milliseconds; zero means SDK default.
-        activityStartToCloseTimeout:
-          type: integer
-          minimum: 1
-          description: Temporal Activity start-to-close timeout in milliseconds for this DurableCall link.
-        activityHeartbeatTimeout:
-          type: integer
-          minimum: 0
-          description: Temporal Activity heartbeat timeout in milliseconds; zero disables it.
-        maximumAttempts:
-          type: integer
-          minimum: 1
-          description: Maximum Temporal Activity attempts including the initial attempt.
       required:
         - from
         - to

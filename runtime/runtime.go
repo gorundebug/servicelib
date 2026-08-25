@@ -10,8 +10,6 @@ package runtime
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,13 +17,11 @@ import (
 	"regexp"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/xid"
 	"github.com/spf13/viper"
 
-	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
@@ -64,8 +60,6 @@ type ServiceExecutionRuntime interface {
 	getRegisteredSerializer(tp reflect.Type) serde.StreamSerializer
 	registerConsumeStatistics(linkID config.LinkID, statistics ConsumeStatistics)
 	registerLinkInfo(linkID config.LinkID, callSemantics config.CallSemanticsConfig)
-	registerDurableContinuation(fromName, toName string, handler DurableContinuationHandler) error
-	ResumeDurableContinuation(context.Context, DurableContinuation) error
 	beginParallel()
 	endParallel()
 }
@@ -643,213 +637,13 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 		}
 		streamCaller = c
 
-	case *config.DurableCallSemanticsConfig:
-		transport := env.GetDurableTransport(cs.IdDataConnector)
-		if transport == nil {
-			return nil, fmt.Errorf("durable transport for Temporal connector id=%d is not registered", cs.IdDataConnector)
-		}
-		ser := source.GetSerde()
-		if err := transport.RegisterLink(linkID, func(activityCtx context.Context, envelope DurableEnvelope) error {
-			value, err := ser.Deserialize(envelope.Payload)
-			if err != nil {
-				return fmt.Errorf("deserialize durable link %d->%d payload: %w", linkID.From, linkID.To, err)
-			}
-			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope)
-			defer cancel()
-			if tr != nil && tracing.SamplingEnabled(activityCtx) {
-				var span tracing.Span
-				activityCtx, span = tr.Start(activityCtx, "temporal.activity",
-					tracing.StringAttr("boundary", "durable_call"),
-					tracing.StringAttr("from", fromName),
-					tracing.StringAttr("to", toName),
-				)
-				BindDurableCallSpan(activityCtx, span)
-			}
-			consumer.Consume(activityCtx, value)
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-		streamCaller = &durableCaller[T]{
-			caller: caller[T]{
-				source: source, consumer: consumer, fromName: fromName, toName: toName,
-				statistics: consumeStat, messagesCounter: messagesCounter, tracer: tr,
-			},
-			linkID: linkID, transport: transport, serde: ser,
-		}
-
 	default:
 		return nil, fmt.Errorf("undefined callSemantics type [%T]", callSemantics)
 	}
 
 	env.GetRuntime().registerConsumeStatistics(linkID, consumeStat)
 	env.GetRuntime().registerLinkInfo(linkID, callSemantics)
-	if source.GetConfig().GetType() == api.TransformationTypeDelay {
-		ser := source.GetSerde()
-		delegate := streamCaller
-		if err := env.GetRuntime().registerDurableContinuation(fromName, toName, func(ctx context.Context, continuation DurableContinuation) error {
-			value, err := ser.Deserialize(continuation.Payload)
-			if err != nil {
-				return fmt.Errorf("deserialize durable continuation %s->%s: %w", fromName, toName, err)
-			}
-			delegate.Consume(ctx, value)
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-		streamCaller = &durableDelayCaller[T]{
-			delegate: delegate, serde: ser, source: source,
-			fromName: fromName, toName: toName,
-		}
-	}
 	return streamCaller, nil
-}
-
-type durableDelayCaller[T any] struct {
-	delegate Caller[T]
-	serde    serde.StreamSerde[T]
-	source   TypedStream[T]
-	fromName string
-	toName   string
-}
-
-func (c *durableDelayCaller[T]) Consume(ctx context.Context, value T) {
-	durable, present := DurableCallContextFromContext(ctx)
-	if !present {
-		c.delegate.Consume(ctx, value)
-		return
-	}
-	durable.mu.Lock()
-	pending := !durable.delayAt.IsZero() && !durable.completed
-	durable.mu.Unlock()
-	if !pending {
-		c.delegate.Consume(ctx, value)
-		return
-	}
-	payload, err := c.serde.Serialize(value)
-	if err != nil {
-		wrapped := fmt.Errorf("serialize durable continuation %s->%s: %w", c.fromName, c.toName, err)
-		if completionErr := DurableCallError(ctx, wrapped); completionErr != nil {
-			c.source.GetEnvironment().Log().Error(ctx, "durable continuation failure could not complete Activity", log.Err(completionErr))
-		}
-		c.source.GetEnvironment().Log().Error(ctx, "durable continuation serialization failed", log.Err(wrapped))
-		return
-	}
-	var traceCarrier map[string]string
-	if tracingEngine := c.source.GetEnvironment().Tracing(); tracingEngine != nil && tracing.SamplingEnabled(ctx) {
-		traceCarrier = make(map[string]string)
-		tracingEngine.Inject(ctx, traceCarrier)
-	}
-	captured, err := CaptureDurableContinuation(ctx, c.fromName, c.toName, payload, traceCarrier)
-	if err != nil {
-		c.source.GetEnvironment().Log().Error(ctx, "durable continuation capture failed", log.Err(err))
-		return
-	}
-	if !captured {
-		c.delegate.Consume(ctx, value)
-	}
-}
-
-func (c *durableDelayCaller[T]) IsAsync() bool { return c.delegate.IsAsync() }
-
-type durableCaller[T any] struct {
-	caller[T]
-	linkID    config.LinkID
-	transport DurableTransport
-	serde     serde.StreamSerde[T]
-}
-
-func (c *durableCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
-	if !c.samplingEnabled(ctx) {
-		return ctx, noopSpan{}
-	}
-	return c.tracer.Start(ctx, "stream.call",
-		tracing.StringAttr("from", c.fromName),
-		tracing.StringAttr("to", c.toName),
-		tracing.StringAttr("type", "durable"),
-	)
-}
-
-// nextDurableCallID returns one identity for one logical DurableCall emission.
-// Calls made while executing a Temporal Activity are derived from the parent
-// call and a per-payload occurrence number. An Activity retry recreates the
-// scope and therefore produces the same child IDs, while two equal values
-// emitted by the same Activity still remain two distinct durable calls.
-func nextDurableCallID(ctx context.Context, linkID config.LinkID, payload []byte) string {
-	scope, ok := DurableCallContextFromContext(ctx)
-	if !ok || scope == nil {
-		// There is no durable parent outside an Activity. A fresh identity is the
-		// only honest default: stream IDs identify a request, not every message
-		// emitted by that request.
-		return NewStreamID()
-	}
-	payloadDigest := sha256.Sum256(payload)
-	key := fmt.Sprintf("%d\x00%d\x00%x", linkID.From, linkID.To, payloadDigest)
-	scope.mu.Lock()
-	if scope.counts == nil {
-		scope.counts = make(map[string]uint64)
-	}
-	scope.counts[key]++
-	occurrence := scope.counts[key]
-	scope.mu.Unlock()
-
-	digest := sha256.New()
-	_, _ = fmt.Fprintf(digest, "%s\x00%s\x00%d", scope.parentID, key, occurrence)
-	return hex.EncodeToString(digest.Sum(nil))
-}
-
-func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
-	c.statistics.Inc()
-	if c.messagesCounter != nil {
-		c.messagesCounter.Inc(ctx)
-	}
-	ctx, span := c.startSpan(ctx)
-	defer span.End()
-	payload, err := c.serde.Serialize(value)
-	if err != nil {
-		tracing.SpanError(span, err)
-		c.source.GetEnvironment().Log().Error(ctx, "durable call serialization failed", log.Err(err))
-		return
-	}
-	streamID, ok := StreamIdFromContext(ctx)
-	if !ok {
-		ctx = WithStreamId(ctx, NewStreamID())
-		streamID, _ = StreamIdFromContext(ctx)
-	}
-	priority, _ := PriorityFromContext(ctx)
-	envelope := DurableEnvelope{
-		Version: 1, From: c.linkID.From, To: c.linkID.To,
-		StreamID: streamID.GetID(), Priority: priority,
-		Payload: payload,
-	}
-	if deadline, present := ctx.Deadline(); present {
-		envelope.DeadlineUnixNano = deadline.UTC().UnixNano()
-	}
-	envelope.CallID = nextDurableCallID(ctx, c.linkID, payload)
-	if err := c.transport.SubmitLink(ctx, c.linkID, envelope); err != nil {
-		tracing.SpanError(span, err)
-		c.source.GetEnvironment().Log().Error(ctx, "durable call submission failed", log.Err(err))
-	}
-}
-
-func (c *durableCaller[T]) IsAsync() bool { return true }
-
-func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope) (context.Context, context.CancelFunc) {
-	ctx := parent
-	if _, present := DurableCallContextFromContext(ctx); !present {
-		// Transport adapters normally attach the processing-side scope before
-		// invoking this handler. Keep envelope reconstruction self-contained for
-		// direct adapters and tests while never replacing an already active scope.
-		ctx = WithDurableCallContext(ctx, NewDurableCallContext(envelope.CallID, nil, nil))
-	}
-	if envelope.StreamID != "" {
-		ctx = WithStreamId(ctx, envelope.StreamID)
-	}
-	ctx = WithPriority(ctx, envelope.Priority)
-	if envelope.DeadlineUnixNano > 0 {
-		return context.WithDeadline(ctx, time.Unix(0, envelope.DeadlineUnixNano))
-	}
-	return ctx, func() {}
 }
 
 type consumeStatistics struct {

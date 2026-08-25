@@ -38,16 +38,9 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 		MissedRunPolicy:             api.ScheduleMissedRunPolicyFireOnce,
 		ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
 	}
-	link := &LinkConfig{From: 1, To: 2, CallSemantics: &CallSemanticsGroup{
-		DurableCall: &DurableCallSemanticsConfig{
-			IdDataConnector: 7, TaskQueue: "automation",
-			ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
-		},
-	}}
 	cfg := &temporalTestConfig{
 		connectors: []DataConnectorConfig{connector},
 		endpoints:  []EndpointConfig{endpoint},
-		links:      []*LinkConfig{link},
 	}
 
 	_, err := NewRuntimeConfig(cfg)
@@ -60,31 +53,6 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 	require.Equal(t, "secret", *app.DataConnectors[0].ApiKey)
 	require.True(t, *app.DataConnectors[0].TlsEnabled)
 	require.Equal(t, "temporal.example.com", *app.DataConnectors[0].TlsServerName)
-	require.Equal(t, 7, *app.Links[0].IdDataConnector)
-	require.Equal(t, "automation", *app.Links[0].TaskQueue)
-	require.Equal(t, api.CallSemanticsDurableCall, app.Links[0].CallSemantics)
-}
-
-func TestDurableCallRejectsNonTemporalConnector(t *testing.T) {
-	cfg := &temporalTestConfig{
-		connectors: []DataConnectorConfig{&CustomDataConnectorConfig{ID: 7, Name: "local"}},
-		links: []*LinkConfig{{From: 1, To: 2, CallSemantics: &CallSemanticsGroup{
-			DurableCall: &DurableCallSemanticsConfig{
-				IdDataConnector: 7, TaskQueue: "automation",
-				ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
-			},
-		}}},
-	}
-
-	_, err := NewRuntimeConfig(cfg)
-	require.ErrorContains(t, err, "requires a Temporal data connector")
-}
-
-func TestDurableCallRequiresConnector(t *testing.T) {
-	link := &LinkConfig{From: 1, To: 2, CallSemantics: &CallSemanticsGroup{
-		DurableCall: &DurableCallSemanticsConfig{},
-	}}
-	require.ErrorContains(t, link.Validate(), "positive idDataConnector")
 }
 
 func TestTemporalEndpointRequiresCompleteScheduleIdentity(t *testing.T) {
@@ -111,7 +79,7 @@ func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
 		endpoints: []EndpointConfig{&CronEndpointConfig{
 			ID: 11, Name: "tick", IdDataConnector: 7, Enabled: true,
 			Schedule: "*/5 * * * *", Timezone: "Europe/Moscow",
-			OverlapPolicy: api.ScheduleOverlapPolicySkip,
+			OverlapPolicy:   api.ScheduleOverlapPolicySkip,
 			MissedRunPolicy: api.ScheduleMissedRunPolicySkip,
 		}},
 	}
@@ -127,7 +95,7 @@ func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
 			ID: 11, Name: "scheduled", IdDataConnector: 7, Enabled: true,
 			TaskQueue: "automation", Schedule: "*/5 * * * *", ScheduleID: "scheduled",
 			Timezone: "Europe/Moscow", OverlapPolicy: api.ScheduleOverlapPolicySkip,
-			MissedRunPolicy: api.ScheduleMissedRunPolicySkip,
+			MissedRunPolicy:             api.ScheduleMissedRunPolicySkip,
 			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
 		}},
 	}

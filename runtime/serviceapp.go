@@ -35,34 +35,33 @@ import (
 var _ RuntimeEnvironment = (*ServiceApp)(nil)
 
 type ServiceApp struct {
-	id                   int
-	config               atomic.Pointer[config.RuntimeConfig]
-	environment          RuntimeEnvironment
-	streams              map[int]RuntimeStream
-	endpointConsumers    map[int]RuntimeEndpointConsumer
-	dataSources          map[int]DataSource
-	dataSinks            map[int]DataSink
-	durableTransports    map[int]DurableTransport
-	serdes               map[reflect.Type]serde.StreamSerializer
-	httpServer           *http.Server
-	mux                  *http.ServeMux
-	httpServerDone       chan struct{}
-	metrics              metrics.Metrics
-	metricsEngine        metrics.MetricsEngine
-	tracingEngine        tracing.TracingEngine
-	consumeStatistics    map[config.LinkID]ConsumeStatistics
-	runtimeLinks         []RuntimeLinkInfo
-	durableContinuations map[string]DurableContinuationHandler
-	storages             []store.Storage
-	delayPool            environment.DelayPool
-	taskPools            map[string]pool.TaskPool
-	priorityTaskPools    map[string]pool.PriorityTaskPool
-	loader               ServiceLoader
-	logsEngine           log.LogsEngine
-	log                  log.Logger
-	dep                  environment.ServiceDependencies
-	components           []environment.Lifecycle
-	parallel             sync.WaitGroup
+	id                    int
+	config                atomic.Pointer[config.RuntimeConfig]
+	environment           RuntimeEnvironment
+	streams               map[int]RuntimeStream
+	endpointConsumers     map[int]RuntimeEndpointConsumer
+	dataSources           map[int]DataSource
+	dataSinks             map[int]DataSink
+	managedDataConnectors map[int]ManagedDataConnector
+	serdes                map[reflect.Type]serde.StreamSerializer
+	httpServer            *http.Server
+	mux                   *http.ServeMux
+	httpServerDone        chan struct{}
+	metrics               metrics.Metrics
+	metricsEngine         metrics.MetricsEngine
+	tracingEngine         tracing.TracingEngine
+	consumeStatistics     map[config.LinkID]ConsumeStatistics
+	runtimeLinks          []RuntimeLinkInfo
+	storages              []store.Storage
+	delayPool             environment.DelayPool
+	taskPools             map[string]pool.TaskPool
+	priorityTaskPools     map[string]pool.PriorityTaskPool
+	loader                ServiceLoader
+	logsEngine            log.LogsEngine
+	log                   log.Logger
+	dep                   environment.ServiceDependencies
+	components            []environment.Lifecycle
+	parallel              sync.WaitGroup
 }
 
 func (app *ServiceApp) GetSerde(_ reflect.Type) (serde.Serializer, error) {
@@ -247,12 +246,11 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 	app.streams = make(map[int]RuntimeStream)
 	app.endpointConsumers = make(map[int]RuntimeEndpointConsumer)
 	app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
-	app.durableContinuations = make(map[string]DurableContinuationHandler)
 	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
 
 	app.dataSources = make(map[int]DataSource)
 	app.dataSinks = make(map[int]DataSink)
-	app.durableTransports = make(map[int]DurableTransport)
+	app.managedDataConnectors = make(map[int]ManagedDataConnector)
 
 	if dep != nil {
 		app.delayPool, err = dep.DelayPool(ctx, env)
@@ -333,30 +331,6 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 	return env.ServiceInit()
 }
 
-func durableContinuationKey(fromName, toName string) string {
-	return fromName + "\x00" + toName
-}
-
-func (app *ServiceApp) registerDurableContinuation(fromName, toName string, handler DurableContinuationHandler) error {
-	key := durableContinuationKey(fromName, toName)
-	if _, present := app.durableContinuations[key]; present {
-		return fmt.Errorf("durable continuation %s->%s is already registered", fromName, toName)
-	}
-	app.durableContinuations[key] = handler
-	return nil
-}
-
-func (app *ServiceApp) ResumeDurableContinuation(ctx context.Context, continuation DurableContinuation) error {
-	if continuation.Version != 1 || continuation.FromName == "" || continuation.ToName == "" || continuation.CallID == "" {
-		return errors.New("invalid durable continuation envelope")
-	}
-	handler := app.durableContinuations[durableContinuationKey(continuation.FromName, continuation.ToName)]
-	if handler == nil {
-		return fmt.Errorf("durable continuation %s->%s is not registered", continuation.FromName, continuation.ToName)
-	}
-	return handler(ctx, continuation)
-}
-
 func (app *ServiceApp) HasCustomHTTPServer() bool {
 	return false
 }
@@ -381,12 +355,12 @@ func (app *ServiceApp) AddDataSink(dataSink DataSink) {
 	app.dataSinks[dataSink.GetID()] = dataSink
 }
 
-func (app *ServiceApp) AddDurableTransport(transport DurableTransport) {
-	app.durableTransports[transport.GetID()] = transport
+func (app *ServiceApp) AddManagedDataConnector(connector ManagedDataConnector) {
+	app.managedDataConnectors[connector.GetID()] = connector
 }
 
-func (app *ServiceApp) GetDurableTransport(id int) DurableTransport {
-	return app.durableTransports[id]
+func (app *ServiceApp) GetManagedDataConnector(id int) ManagedDataConnector {
+	return app.managedDataConnectors[id]
 }
 
 func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, error) {
@@ -415,8 +389,8 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 		}
 	}
 
-	for _, transport := range app.durableTransports {
-		if err := transport.Start(ctx); err != nil {
+	for _, connector := range app.managedDataConnectors {
+		if err := connector.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -565,11 +539,11 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		}()
 	}
 
-	for _, transport := range app.durableTransports {
+	for _, connector := range app.managedDataConnectors {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			transport.StopAdmission(ctx)
+			connector.StopAdmission(ctx)
 		}()
 	}
 
@@ -647,8 +621,8 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 
 	// Durable clients remain open until every sink submission has drained.
 	// Their Activity Workers were stopped with the admission sources above.
-	for _, transport := range app.durableTransports {
-		transport.Stop(ctx)
+	for _, connector := range app.managedDataConnectors {
+		connector.Stop(ctx)
 	}
 
 	if err := app.metricsEngine.Shutdown(ctx); err != nil {

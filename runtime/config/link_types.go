@@ -49,25 +49,11 @@ func (*ParallelCallSemanticsConfig) GetType() api.CallSemantics {
 	return api.CallSemanticsParallelCall
 }
 
-type DurableCallSemanticsConfig struct {
-	IdDataConnector             int    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
-	TaskQueue                   string `yaml:"taskQueue" mapstructure:"taskQueue"`
-	WorkflowExecutionTimeout    int    `yaml:"workflowExecutionTimeout,omitempty" mapstructure:"workflowExecutionTimeout"`
-	ActivityStartToCloseTimeout int    `yaml:"activityStartToCloseTimeout" mapstructure:"activityStartToCloseTimeout"`
-	ActivityHeartbeatTimeout    int    `yaml:"activityHeartbeatTimeout,omitempty" mapstructure:"activityHeartbeatTimeout"`
-	MaximumAttempts             int    `yaml:"maximumAttempts" mapstructure:"maximumAttempts"`
-}
-
-func (*DurableCallSemanticsConfig) GetType() api.CallSemantics {
-	return api.CallSemanticsDurableCall
-}
-
 type CallSemanticsGroup struct {
 	FunctionCall     *FunctionCallSemanticsConfig         `yaml:"function,omitempty" mapstructure:"functionCall"`
 	TaskPool         *TaskPoolCallSemanticsConfig         `yaml:"taskPool,omitempty" mapstructure:"taskPool"`
 	PriorityTaskPool *PriorityTaskPoolCallSemanticsConfig `yaml:"priorityTaskPool,omitempty" mapstructure:"priorityTaskPool"`
 	ParallelCall     *ParallelCallSemanticsConfig         `yaml:"parallelCall,omitempty" mapstructure:"parallelCall"`
-	DurableCall      *DurableCallSemanticsConfig          `yaml:"durableCall,omitempty" mapstructure:"durableCall"`
 }
 
 func (g *CallSemanticsGroup) Get() CallSemanticsConfig {
@@ -80,8 +66,6 @@ func (g *CallSemanticsGroup) Get() CallSemanticsConfig {
 		return g.PriorityTaskPool
 	case g.ParallelCall != nil:
 		return g.ParallelCall
-	case g.DurableCall != nil:
-		return g.DurableCall
 	}
 	return nil
 }
@@ -98,9 +82,6 @@ func (g *CallSemanticsGroup) Validate() error {
 		c++
 	}
 	if g.ParallelCall != nil {
-		c++
-	}
-	if g.DurableCall != nil {
 		c++
 	}
 	if c != 1 {
@@ -132,20 +113,6 @@ func (l *LinkConfig) Validate() error {
 	}
 	if err := l.CallSemantics.Validate(); err != nil {
 		return fmt.Errorf("link From: %d, To: %d has invalid configuration: %w", l.From, l.To, err)
-	}
-	if l.CallSemantics.DurableCall != nil && l.CallSemantics.DurableCall.IdDataConnector <= 0 {
-		return fmt.Errorf("link From: %d, To: %d durableCall requires a positive idDataConnector", l.From, l.To)
-	}
-	if durable := l.CallSemantics.DurableCall; durable != nil {
-		if durable.TaskQueue == "" {
-			return fmt.Errorf("link From: %d, To: %d durableCall requires taskQueue", l.From, l.To)
-		}
-		if durable.ActivityStartToCloseTimeout < 1 {
-			return fmt.Errorf("link From: %d, To: %d durableCall requires activityStartToCloseTimeout", l.From, l.To)
-		}
-		if durable.MaximumAttempts < 1 {
-			return fmt.Errorf("link From: %d, To: %d durableCall requires maximumAttempts", l.From, l.To)
-		}
 	}
 	return nil
 }
