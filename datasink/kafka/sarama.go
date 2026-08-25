@@ -453,12 +453,28 @@ func (ep *saramaKafkaEndpoint) SendMessage(ctx context.Context, key []byte, valu
 	if len(key) > 0 {
 		keyEncoder = kafka.ByteEncoder(key)
 	}
-	ep.getDataSink().SendMessage(ctx, &kafka.ProducerMessage{
+	message := &kafka.ProducerMessage{
 		Topic:    ep.topic,
 		Value:    kafka.ByteEncoder(value),
 		Key:      keyEncoder,
 		Metadata: metadata,
-	})
+	}
+	carrier := map[string]string{}
+	if engine := ep.GetRuntimeEnvironment().Tracing(); engine != nil {
+		engine.Inject(ctx, carrier)
+	}
+	if streamID, ok := runtime.StreamIdFromContext(ctx); ok && streamID.GetID() != "" {
+		carrier["x-stream-id"] = streamID.GetID()
+	}
+	if tracing.SamplingEnabled(ctx) {
+		carrier["x-trace"] = "1"
+	}
+	for _, key := range []string{"x-stream-id", "x-trace", "traceparent", "tracestate", "baggage"} {
+		if value := carrier[key]; value != "" {
+			message.Headers = append(message.Headers, kafka.RecordHeader{Key: []byte(key), Value: []byte(value)})
+		}
+	}
+	ep.getDataSink().SendMessage(ctx, message)
 }
 
 func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {

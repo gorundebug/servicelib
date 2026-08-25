@@ -68,6 +68,30 @@ type ConsumerMessage struct {
 	Offset      int64
 }
 
+func contextFromKafkaHeaders(ctx context.Context, env runtime.RuntimeEnvironment, headers []*kafka.RecordHeader) context.Context {
+	carrier := make(map[string]string, len(headers))
+	for _, header := range headers {
+		if header == nil {
+			continue
+		}
+		key := strings.ToLower(string(header.Key))
+		switch key {
+		case "x-trace", "traceparent", "tracestate", "baggage", "x-stream-id":
+			carrier[key] = string(header.Value)
+		}
+	}
+	if streamID := carrier["x-stream-id"]; streamID != "" {
+		ctx = runtime.WithStreamId(ctx, streamID)
+	}
+	if engine := env.Tracing(); engine != nil {
+		ctx = engine.Extract(ctx, carrier)
+	}
+	if carrier["x-trace"] != "" || carrier["traceparent"] != "" {
+		ctx = tracing.EnableSampling(ctx)
+	}
+	return ctx
+}
+
 func (m *ConsumerMessage) Commit() {
 	m.handlerData.session.Commit()
 }
@@ -549,8 +573,10 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	}
 	defer ec.releaseConcurrency()
 
-	ctx := runtime.ApplyDataSourceEndpointTracing(
-		session.Context(), ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	environment := ec.Endpoint().GetRuntimeEnvironment()
+	ctx := contextFromKafkaHeaders(session.Context(), environment, message.Headers)
+	ctx = runtime.ApplyDataSourceEndpointTracing(
+		ctx, environment, ec.Endpoint().GetID(),
 	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
