@@ -803,11 +803,10 @@ func submitEndpointFromWorkflow(
 	if state.connector == "" {
 		return EndpointResult{}, fmt.Errorf("Temporal Workflow connector identity is empty")
 	}
-	if envelope.MessageID == "" {
-		envelope.MessageID = runtime.NewStreamID()
-	}
-	if envelope.StreamID == "" {
-		envelope.StreamID = envelope.MessageID
+	if envelope.MessageID == "" || envelope.StreamID == "" {
+		return EndpointResult{}, fmt.Errorf(
+			"Temporal Workflow submission to %q requires stable message and stream identity", cfg.Name,
+		)
 	}
 	envelope.Version = 1
 	envelope.EndpointID = endpointID
