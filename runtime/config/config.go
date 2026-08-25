@@ -217,6 +217,9 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		if temporalEndpoint.TaskQueue == "" {
 			return nil, fmt.Errorf("Temporal endpoint %q requires taskQueue", temporalEndpoint.Name)
 		}
+		if temporalEndpoint.TemporalExecutionType != api.Activity && temporalEndpoint.TemporalExecutionType != api.Workflow {
+			return nil, fmt.Errorf("Temporal endpoint %q requires temporalExecutionType Activity or Workflow", temporalEndpoint.Name)
+		}
 		if temporalEndpoint.ActivityStartToCloseTimeout < 1 {
 			return nil, fmt.Errorf("Temporal endpoint %q requires activityStartToCloseTimeout", temporalEndpoint.Name)
 		}

@@ -984,6 +984,14 @@ components:
       description: Portable policy for a firing delayed while the scheduler process is running.
       enum: [ 'Skip', 'FireOnce' ]
 
+    TemporalExecutionType:
+      type: string
+      description: |
+        Execution domain entered by a Temporal endpoint.
+        - `Activity`: execute the endpoint in the ordinary ServiceLib runtime graph.
+        - `Workflow`: execute the endpoint in the deterministic Temporal Workflow domain.
+      enum: [ 'Activity', 'Workflow' ]
+
     Endpoint:
       type: object
       description: |
@@ -1083,6 +1091,9 @@ components:
         taskQueue:
           type: string
           description: Temporal Task Queue used by this durable endpoint.
+        temporalExecutionType:
+          $ref: '#/components/schemas/TemporalExecutionType'
+          description: Required immutable execution domain for a Temporal endpoint.
         workflowExecutionTimeout:
           type: integer
           minimum: 0

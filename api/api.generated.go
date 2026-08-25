@@ -195,6 +195,12 @@ const (
 	ScheduleOverlapPolicySkip  ScheduleOverlapPolicy = "Skip"
 )
 
+// Defines values for TemporalExecutionType.
+const (
+	Activity TemporalExecutionType = "Activity"
+	Workflow TemporalExecutionType = "Workflow"
+)
+
 // Defines values for TransformationType.
 const (
 	TransformationTypeCase            TransformationType = 12
@@ -625,6 +631,11 @@ type Endpoint struct {
 	// TaskQueue Temporal Task Queue used by this durable endpoint.
 	TaskQueue *string `json:"taskQueue,omitempty"`
 
+	// TemporalExecutionType Execution domain entered by a Temporal endpoint.
+	// - `Activity`: execute the endpoint in the ordinary ServiceLib runtime graph.
+	// - `Workflow`: execute the endpoint in the deterministic Temporal Workflow domain.
+	TemporalExecutionType *TemporalExecutionType `json:"temporalExecutionType,omitempty"`
+
 	// Timezone Timezone used to evaluate the schedule. The portable contract accepts only UTC.
 	Timezone *string `json:"timezone,omitempty"`
 
@@ -1000,6 +1011,11 @@ type StreamApp struct {
 	// UndefinedEnum Sentinel value used to represent an undefined/unset enum. Always 0.
 	UndefinedEnum *UndefinedEnum `json:"undefinedEnum,omitempty"`
 }
+
+// TemporalExecutionType Execution domain entered by a Temporal endpoint.
+// - `Activity`: execute the endpoint in the ordinary ServiceLib runtime graph.
+// - `Workflow`: execute the endpoint in the deterministic Temporal Workflow domain.
+type TemporalExecutionType string
 
 // TransformationType The operator type for a stream node. Determines the node's role in the dataflow graph
 // and the signature of the generated stub.

@@ -33,7 +33,8 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 	}
 	endpoint := &TemporalEndpointConfig{
 		ID: 11, Name: "scheduledJob", IdDataConnector: 7, Enabled: true,
-		TaskQueue: "automation", Schedule: "*/5 * * * *", ScheduleID: "scheduled-job",
+		TaskQueue: "automation", TemporalExecutionType: api.Activity,
+		Schedule: "*/5 * * * *", ScheduleID: "scheduled-job",
 		Timezone: "UTC", OverlapPolicy: api.ScheduleOverlapPolicySkip,
 		MissedRunPolicy:             api.ScheduleMissedRunPolicyFireOnce,
 		ActivityStartToCloseTimeout: 30_000, MaximumAttempts: 3,
@@ -50,6 +51,7 @@ func TestTemporalConfigRoundTrip(t *testing.T) {
 	require.Equal(t, api.DataConnectorTypeTemporal, app.DataConnectors[0].Type)
 	require.Equal(t, "temporal:7233", *app.DataConnectors[0].Address)
 	require.Equal(t, "automation", *app.Endpoints[0].TaskQueue)
+	require.Equal(t, api.Activity, *app.Endpoints[0].TemporalExecutionType)
 	require.Equal(t, "secret", *app.DataConnectors[0].ApiKey)
 	require.True(t, *app.DataConnectors[0].TlsEnabled)
 	require.Equal(t, "temporal.example.com", *app.DataConnectors[0].TlsServerName)
@@ -63,12 +65,29 @@ func TestTemporalEndpointRequiresCompleteScheduleIdentity(t *testing.T) {
 		}},
 		endpoints: []EndpointConfig{&TemporalEndpointConfig{
 			ID: 11, Name: "scheduledJob", IdDataConnector: 7, Enabled: true,
-			TaskQueue: "automation", Schedule: "*/5 * * * *",
+			TaskQueue: "automation", TemporalExecutionType: api.Activity,
+			Schedule:                    "*/5 * * * *",
 			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
 		}},
 	}
 	_, err := NewRuntimeConfig(cfg)
 	require.ErrorContains(t, err, "requires scheduleId and timezone")
+}
+
+func TestTemporalEndpointRequiresExplicitExecutionType(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "job", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+
+	_, err := NewRuntimeConfig(cfg)
+	require.ErrorContains(t, err, "requires temporalExecutionType Activity or Workflow")
 }
 
 func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
@@ -93,7 +112,8 @@ func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
 		}},
 		endpoints: []EndpointConfig{&TemporalEndpointConfig{
 			ID: 11, Name: "scheduled", IdDataConnector: 7, Enabled: true,
-			TaskQueue: "automation", Schedule: "*/5 * * * *", ScheduleID: "scheduled",
+			TaskQueue: "automation", TemporalExecutionType: api.Activity,
+			Schedule: "*/5 * * * *", ScheduleID: "scheduled",
 			Timezone: "Europe/Moscow", OverlapPolicy: api.ScheduleOverlapPolicySkip,
 			MissedRunPolicy:             api.ScheduleMissedRunPolicySkip,
 			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
@@ -107,7 +127,7 @@ func TestTemporalEndpointRejectsNonTemporalConnector(t *testing.T) {
 	cfg := &temporalTestConfig{
 		connectors: []DataConnectorConfig{&CustomDataConnectorConfig{ID: 7, Name: "custom"}},
 		endpoints: []EndpointConfig{&TemporalEndpointConfig{
-			ID: 11, Name: "job", IdDataConnector: 7, TaskQueue: "automation",
+			ID: 11, Name: "job", IdDataConnector: 7, TaskQueue: "automation", TemporalExecutionType: api.Activity,
 			ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
 		}},
 	}

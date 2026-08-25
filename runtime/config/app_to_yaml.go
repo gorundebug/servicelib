@@ -438,6 +438,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					if ep.TaskQueue != nil {
 						epObj["taskQueue"] = *ep.TaskQueue
 					}
+					if ep.TemporalExecutionType != nil {
+						epObj["temporalExecutionType"] = string(*ep.TemporalExecutionType)
+					}
 					if ep.WorkflowExecutionTimeout != nil {
 						epObj["workflowExecutionTimeout"] = *ep.WorkflowExecutionTimeout
 					}

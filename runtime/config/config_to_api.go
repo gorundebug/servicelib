@@ -344,6 +344,10 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 	case *TemporalEndpointConfig:
 		e.Enabled = boolOptPtr(c.Enabled)
 		e.TaskQueue = strOptPtr(c.TaskQueue)
+		if c.TemporalExecutionType != "" {
+			executionType := c.TemporalExecutionType
+			e.TemporalExecutionType = &executionType
+		}
 		e.Schedule = strOptPtr(c.Schedule)
 		e.ScheduleId = strOptPtr(c.ScheduleID)
 		e.Timezone = strOptPtr(c.Timezone)
