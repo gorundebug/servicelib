@@ -47,6 +47,12 @@ func TestScheduledTimeUsesTemporalScheduleWorkflowIDSuffix(t *testing.T) {
 	}
 }
 
+func TestTemporalCronExpressionPreservesPortableMinuteSemantics(t *testing.T) {
+	if got, want := temporalCronExpression("  */5   * * * * "), "0 */5 * * * *"; got != want {
+		t.Fatalf("temporal cron expression = %q, want %q", got, want)
+	}
+}
+
 func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	environment := suite.NewTestWorkflowEnvironment()

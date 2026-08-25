@@ -669,7 +669,7 @@ func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Cl
 	_, err := temporalClient.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: cfg.ScheduleID,
 		Spec: client.ScheduleSpec{
-			CronExpressions: []string{cfg.Schedule},
+			CronExpressions: []string{temporalCronExpression(cfg.Schedule)},
 			TimeZoneName:    cfg.Timezone,
 		},
 		Action:        action,
@@ -702,6 +702,13 @@ func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Cl
 		)
 	}
 	return nil
+}
+
+func temporalCronExpression(expression string) string {
+	// The DSL exposes the portable five-field cron contract (minute through
+	// day-of-week). Temporal accepts a leading seconds field, so make zero
+	// seconds explicit instead of letting it reinterpret the minute field.
+	return "0 " + strings.Join(strings.Fields(expression), " ")
 }
 
 func existingActionWorkflow(action *client.ScheduleWorkflowAction) interface{} {
