@@ -50,7 +50,7 @@ var durableCallContextKey = durableCallContextKeyType{}
 // crosses a Workflow/process boundary and is safe for concurrent graph branches.
 // Its presence means only that processing entered through a Temporal Source.
 type DurableCallContext struct {
-	executionID string
+	messageID string
 
 	mu          sync.Mutex
 	closed      bool
@@ -63,12 +63,12 @@ type DurableCallContext struct {
 // NewDurableCallContext constructs processing-side Activity state. Temporal
 // endpoint adapters call it after receiving a serialized endpoint envelope.
 func NewDurableCallContext(
-	executionID string,
+	messageID string,
 	heartbeat DurableCallHeartbeatRecorder,
 	diagnostics DurableCallDiagnostics,
 ) *DurableCallContext {
 	return &DurableCallContext{
-		executionID: executionID,
+		messageID:   messageID,
 		heartbeat:   heartbeat,
 		diagnostics: diagnostics,
 	}

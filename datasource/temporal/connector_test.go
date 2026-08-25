@@ -32,7 +32,7 @@ func TestTemporalEndpointActivityProvidesDurableContextAndHeartbeat(t *testing.T
 	}
 	result, err := executeEndpointActivity(
 		context.Background(),
-		EndpointEnvelope{Version: 1, EndpointID: 7, ExecutionID: "job-1"},
+		EndpointEnvelope{Version: 1, EndpointID: 7, MessageID: "job-1"},
 		registration,
 		func(_ context.Context, details any) error {
 			heartbeats <- details
@@ -61,7 +61,7 @@ func TestTemporalEndpointActivityPropagatesEndpointError(t *testing.T) {
 	}
 	_, err := executeEndpointActivity(
 		context.Background(),
-		EndpointEnvelope{Version: 1, EndpointID: 7, ExecutionID: "job-2"},
+		EndpointEnvelope{Version: 1, EndpointID: 7, MessageID: "job-2"},
 		registration, nil, nil,
 	)
 	if !errors.Is(err, want) {
@@ -107,7 +107,7 @@ func TestTemporalEndpointWorkflowPreservesOnDemandEnvelopeAndResult(t *testing.T
 	const activityType = "Temporal.endpoint.DurableJob.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-			if envelope.EndpointID != 7 || envelope.ExecutionID != "job-1" || envelope.StreamID != "request-1" || envelope.Scheduled {
+			if envelope.EndpointID != 7 || envelope.MessageID != "job-1" || envelope.StreamID != "request-1" || envelope.Scheduled {
 				t.Fatalf("unexpected endpoint envelope: %+v", envelope)
 			}
 			return EndpointResult{Payload: []byte("result")}, nil
@@ -118,7 +118,7 @@ func TestTemporalEndpointWorkflowPreservesOnDemandEnvelopeAndResult(t *testing.T
 		ActivityType: activityType, ActivityStartToCloseMillis: 1_000,
 		MaximumAttempts: 3, Priority: 3,
 		Envelope: EndpointEnvelope{
-			Version: 1, EndpointID: 7, ExecutionID: "job-1", StreamID: "request-1", Payload: []byte("value"),
+			Version: 1, EndpointID: 7, MessageID: "job-1", StreamID: "request-1", Payload: []byte("value"),
 		},
 	})
 	if err := environment.GetWorkflowError(); err != nil {
@@ -142,7 +142,7 @@ func TestTemporalScheduleWorkflowCreatesExecutionIdentity(t *testing.T) {
 	const activityType = "Temporal.endpoint.TemporalSchedule.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-			if !envelope.Scheduled || envelope.ScheduleID != "schedule-8" || envelope.ExecutionID == "" || envelope.StreamID != envelope.ExecutionID || envelope.ScheduledAtNano == 0 {
+			if !envelope.Scheduled || envelope.ScheduleID != "schedule-8" || envelope.MessageID == "" || envelope.StreamID != envelope.MessageID || envelope.ScheduledAtNano == 0 {
 				t.Fatalf("unexpected scheduled envelope: %+v", envelope)
 			}
 			return EndpointResult{}, nil

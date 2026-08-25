@@ -26,14 +26,14 @@ import (
 // Serialization, Temporal submission, retry, and result transport stay in the
 // framework adapter and do not alter the target graph node.
 type EndpointHandler[HandlerState, T any] interface {
-	GetExecutionID(context.Context, T) string
+	GetMessageID(context.Context, T) string
 	BeginRequest(context.Context, runtime.Stream) (context.Context, HandlerState)
 	EndRequest(context.Context, runtime.Stream, error, HandlerState)
 }
 
 type directEndpointHandler[T any] struct{}
 
-func (directEndpointHandler[T]) GetExecutionID(ctx context.Context, _ T) string {
+func (directEndpointHandler[T]) GetMessageID(ctx context.Context, _ T) string {
 	if id, ok := runtime.StreamIdFromContext(ctx); ok {
 		return id.GetID()
 	}
@@ -146,17 +146,17 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 		tracing.SpanError(span, err)
 		return
 	}
-	executionID := ec.handler.GetExecutionID(handlerCtx, value)
-	if executionID == "" {
-		executionID = runtime.NewStreamID()
+	messageID := ec.handler.GetMessageID(handlerCtx, value)
+	if messageID == "" {
+		messageID = runtime.NewStreamID()
 	}
-	streamID := executionID
+	streamID := messageID
 	if sid, ok := runtime.StreamIdFromContext(handlerCtx); ok {
 		streamID = sid.GetID()
 	}
 	priority, _ := runtime.PriorityFromContext(handlerCtx)
 	envelope := datasourcetemporal.EndpointEnvelope{
-		Version: 1, EndpointID: ec.endpoint.GetID(), ExecutionID: executionID,
+		Version: 1, EndpointID: ec.endpoint.GetID(), MessageID: messageID,
 		StreamID: streamID, Priority: priority,
 		Payload: payload,
 	}

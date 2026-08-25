@@ -102,11 +102,11 @@ func temporalEndpointActivityType(connectorName, endpointName string) string {
 	)
 }
 
-func temporalEndpointWorkflowID(connectorName, endpointName, executionID string) string {
+func temporalEndpointWorkflowID(connectorName, endpointName, messageID string) string {
 	return fmt.Sprintf("%s/endpoint/%s/%s",
 		temporalIdentityName(connectorName),
 		temporalIdentityName(endpointName),
-		temporalOpaqueIdentityComponent(executionID),
+		temporalOpaqueIdentityComponent(messageID),
 	)
 }
 
@@ -122,7 +122,7 @@ func temporalEndpointOwner(connectorName, endpointName string) string {
 type EndpointEnvelope struct {
 	Version          int    `json:"version"`
 	EndpointID       int    `json:"endpointId"`
-	ExecutionID      string `json:"executionId"`
+	MessageID        string `json:"messageId"`
 	StreamID         string `json:"streamId"`
 	Priority         int    `json:"priority"`
 	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
@@ -288,12 +288,12 @@ func executeEndpointActivity(
 	heartbeat runtime.DurableCallHeartbeatRecorder,
 	diagnostics runtime.DurableCallDiagnostics,
 ) (EndpointResult, error) {
-	if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.ExecutionID == "" {
+	if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.MessageID == "" {
 		return EndpointResult{}, fmt.Errorf("invalid endpoint envelope for Temporal endpoint %d", registration.id)
 	}
 	envelope.FiredAtNano = time.Now().UTC().UnixNano()
 	durable := runtime.NewDurableCallContext(
-		envelope.ExecutionID, heartbeat, diagnostics,
+		envelope.MessageID, heartbeat, diagnostics,
 	)
 	var result EndpointResult
 	err := runtime.RunDurableActivity(
@@ -617,11 +617,11 @@ func (c *Connector) SubmitEndpoint(
 	if !started || temporalClient == nil {
 		return EndpointResult{}, fmt.Errorf("Temporal connector %q is not started", c.name)
 	}
-	if envelope.ExecutionID == "" {
-		envelope.ExecutionID = runtime.NewStreamID()
+	if envelope.MessageID == "" {
+		envelope.MessageID = runtime.NewStreamID()
 	}
 	if envelope.StreamID == "" {
-		envelope.StreamID = envelope.ExecutionID
+		envelope.StreamID = envelope.MessageID
 	}
 	envelope.Version = 1
 	envelope.EndpointID = endpointID
@@ -633,7 +633,7 @@ func (c *Connector) SubmitEndpoint(
 		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                   envelope,
 	}
-	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.ExecutionID)
+	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.MessageID)
 	owner := temporalEndpointOwner(c.name, cfg.Name)
 	options := client.StartWorkflowOptions{
 		ID:                       workflowID,
@@ -644,7 +644,7 @@ func (c *Connector) SubmitEndpoint(
 		Memo: map[string]interface{}{
 			durableMemoManagedBy: "servicelib",
 			durableMemoOwner:     owner,
-			durableMemoCallID:    envelope.ExecutionID,
+			durableMemoCallID:    envelope.MessageID,
 		},
 	}
 	if cfg.WorkflowExecutionTimeout > 0 {
@@ -658,7 +658,7 @@ func (c *Connector) SubmitEndpoint(
 		}
 		run = temporalClient.GetWorkflow(ctx, workflowID, "")
 	}
-	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), endpointWorkflowType, owner, envelope.ExecutionID); err != nil {
+	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), endpointWorkflowType, owner, envelope.MessageID); err != nil {
 		return EndpointResult{}, err
 	}
 	if !waitForResult {
@@ -740,7 +740,7 @@ func validateMemoOwnership(memo *commonpb.Memo, expectedOwner string, expectedCa
 func temporalEndpointWorkflow(ctx workflow.Context, request endpointWorkflowRequest) (EndpointResult, error) {
 	if request.Envelope.Scheduled {
 		info := workflow.GetInfo(ctx)
-		request.Envelope.ExecutionID = info.WorkflowExecution.ID
+		request.Envelope.MessageID = info.WorkflowExecution.ID
 		request.Envelope.StreamID = info.WorkflowExecution.ID
 		request.Envelope.ScheduledAtNano = scheduledTimeFromWorkflowID(
 			info.WorkflowExecution.ID, info.WorkflowStartTime,
