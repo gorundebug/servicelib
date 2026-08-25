@@ -163,7 +163,7 @@ func TestDurableDelayReturnsSerializableContinuation(t *testing.T) {
 		active, err := BeginDurableDelay(ctx, time.Hour)
 		require.NoError(t, err)
 		require.True(t, active)
-		captured, err := CaptureDurableContinuation(ctx, "Delay", "After Delay", []byte("value"))
+		captured, err := CaptureDurableContinuation(ctx, "Delay", "After Delay", []byte("value"), map[string]string{"traceparent": "parent"})
 		require.NoError(t, err)
 		require.True(t, captured)
 		return nil
@@ -172,6 +172,7 @@ func TestDurableDelayReturnsSerializableContinuation(t *testing.T) {
 	require.NotNil(t, result.Continuation)
 	require.Equal(t, "Delay", result.Continuation.FromName)
 	require.Equal(t, "After Delay", result.Continuation.ToName)
+	require.Equal(t, "parent", result.Continuation.TraceCarrier["traceparent"])
 	require.Equal(t, "call-1/delay", result.Continuation.CallID)
 	require.Equal(t, "stream-1", result.Continuation.StreamID)
 	require.Equal(t, 7, result.Continuation.Priority)

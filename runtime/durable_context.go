@@ -50,15 +50,16 @@ const (
 // identities; generated numeric IDs are deliberately not persisted in
 // Temporal history.
 type DurableContinuation struct {
-	Version          int    `json:"version"`
-	FromName         string `json:"fromName"`
-	ToName           string `json:"toName"`
-	CallID           string `json:"callId"`
-	StreamID         string `json:"streamId,omitempty"`
-	Priority         int    `json:"priority"`
-	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
-	WakeAtUnixNano   int64  `json:"wakeAtUnixNano"`
-	Payload          []byte `json:"payload"`
+	Version          int               `json:"version"`
+	FromName         string            `json:"fromName"`
+	ToName           string            `json:"toName"`
+	CallID           string            `json:"callId"`
+	StreamID         string            `json:"streamId,omitempty"`
+	Priority         int               `json:"priority"`
+	DeadlineUnixNano int64             `json:"deadlineUnixNano,omitempty"`
+	WakeAtUnixNano   int64             `json:"wakeAtUnixNano"`
+	TraceCarrier     map[string]string `json:"traceCarrier,omitempty"`
+	Payload          []byte            `json:"payload"`
 }
 
 // DurableActivityResult is returned to the durable transport when an
@@ -129,6 +130,7 @@ func CaptureDurableContinuation(
 	fromName string,
 	toName string,
 	payload []byte,
+	traceCarrier map[string]string,
 ) (bool, error) {
 	durable, ok := DurableCallContextFromContext(ctx)
 	if !ok {
@@ -149,7 +151,8 @@ func CaptureDurableContinuation(
 		Version: 1, FromName: fromName, ToName: toName,
 		CallID:   durable.parentID + "/delay",
 		Priority: priority, WakeAtUnixNano: durable.delayAt.UnixNano(),
-		Payload: append([]byte(nil), payload...),
+		TraceCarrier: cloneStringMap(traceCarrier),
+		Payload:      append([]byte(nil), payload...),
 	}
 	if streamID != nil {
 		continuation.StreamID = streamID.GetID()
@@ -163,6 +166,17 @@ func CaptureDurableContinuation(
 	durable.report(ctx, DurableCallEventSuspended, nil)
 	close(durable.done)
 	return true, nil
+}
+
+func cloneStringMap(value map[string]string) map[string]string {
+	if len(value) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(value))
+	for key, item := range value {
+		cloned[key] = item
+	}
+	return cloned
 }
 
 // NewDurableCallContext constructs processing-side Activity state. Transport

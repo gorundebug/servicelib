@@ -420,6 +420,9 @@ func (c *Connector) Start(ctx context.Context) error {
 				}
 				ctx, cancel := durableContinuationContext(activityCtx, continuation)
 				defer cancel()
+				if configuredTracing := c.environment.Tracing(); configuredTracing != nil && len(continuation.TraceCarrier) != 0 {
+					ctx = configuredTracing.Extract(ctx, continuation.TraceCarrier)
+				}
 				durable := runtime.NewDurableCallContext(
 					continuation.CallID,
 					func(ctx context.Context, details any) error {

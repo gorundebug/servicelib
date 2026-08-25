@@ -735,7 +735,12 @@ func (c *durableDelayCaller[T]) Consume(ctx context.Context, value T) {
 		c.source.GetEnvironment().Log().Error(ctx, "durable continuation serialization failed", log.Err(wrapped))
 		return
 	}
-	captured, err := CaptureDurableContinuation(ctx, c.fromName, c.toName, payload)
+	var traceCarrier map[string]string
+	if tracingEngine := c.source.GetEnvironment().Tracing(); tracingEngine != nil && tracing.SamplingEnabled(ctx) {
+		traceCarrier = make(map[string]string)
+		tracingEngine.Inject(ctx, traceCarrier)
+	}
+	captured, err := CaptureDurableContinuation(ctx, c.fromName, c.toName, payload, traceCarrier)
 	if err != nil {
 		c.source.GetEnvironment().Log().Error(ctx, "durable continuation capture failed", log.Err(err))
 		return
