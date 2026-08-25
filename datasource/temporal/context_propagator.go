@@ -90,6 +90,24 @@ func (p temporalContextPropagator) ExtractToWorkflow(ctx workflow.Context, reade
 }
 
 func (p temporalContextPropagator) extractContext(ctx context.Context, carrier map[string]string) context.Context {
+	ctx = p.extractWorkflowContext(ctx, carrier)
+	if rawDeadline := carrier[temporalHeaderDeadlineUnixNano]; rawDeadline != "" {
+		if nanos, err := strconv.ParseInt(rawDeadline, 10, 64); err == nil {
+			deadline := time.Unix(0, nanos)
+			if current, present := ctx.Deadline(); !present || deadline.Before(current) {
+				withDeadline, _ := context.WithDeadline(ctx, deadline)
+				ctx = withDeadline
+			}
+		}
+	}
+	return ctx
+}
+
+// extractWorkflowContext deliberately excludes process-local deadline timers.
+// Workflow code receives its time semantics from Temporal; the absolute
+// deadline remains in the serializable envelope and is applied by the Activity
+// adapter after the durable boundary.
+func (p temporalContextPropagator) extractWorkflowContext(ctx context.Context, carrier map[string]string) context.Context {
 	if p.tracing != nil && len(carrier) > 0 {
 		ctx = p.tracing.Extract(ctx, carrier)
 	}
@@ -102,15 +120,6 @@ func (p temporalContextPropagator) extractContext(ctx context.Context, carrier m
 	if rawPriority := carrier[temporalHeaderPriority]; rawPriority != "" {
 		if priority, err := strconv.Atoi(rawPriority); err == nil {
 			ctx = runtime.WithPriority(ctx, priority)
-		}
-	}
-	if rawDeadline := carrier[temporalHeaderDeadlineUnixNano]; rawDeadline != "" {
-		if nanos, err := strconv.ParseInt(rawDeadline, 10, 64); err == nil {
-			deadline := time.Unix(0, nanos)
-			if current, present := ctx.Deadline(); !present || deadline.Before(current) {
-				withDeadline, _ := context.WithDeadline(ctx, deadline)
-				ctx = withDeadline
-			}
 		}
 	}
 	return ctx

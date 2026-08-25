@@ -12,6 +12,7 @@ import (
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 )
 
@@ -193,13 +194,16 @@ func TestTemporalWorkflowEndpointRunsGraphContractWithDurableTimer(t *testing.T)
 	var suite testsuite.WorkflowTestSuite
 	environment := suite.NewTestWorkflowEnvironment()
 	environment.RegisterWorkflowWithOptions(
-		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		func(ctx workflow.Context, request directEndpointWorkflowRequest) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, request, registration, temporalContextPropagator{})
 		},
 		workflow.RegisterOptions{Name: registration.workflowType},
 	)
-	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
-		Version: 1, EndpointID: 9, MessageID: "workflow-1", StreamID: "request-1",
+	environment.ExecuteWorkflow(registration.workflowType, directEndpointWorkflowRequest{
+		ConnectorName: "temporal",
+		Envelope: EndpointEnvelope{
+			Version: 1, EndpointID: 9, MessageID: "workflow-1", StreamID: "request-1",
+		},
 	})
 	if err := environment.GetWorkflowError(); err != nil {
 		t.Fatal(err)
@@ -228,13 +232,16 @@ func TestScheduledTemporalWorkflowEndpointCreatesTriggerIdentity(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	environment := suite.NewTestWorkflowEnvironment()
 	environment.RegisterWorkflowWithOptions(
-		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		func(ctx workflow.Context, request directEndpointWorkflowRequest) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, request, registration, temporalContextPropagator{})
 		},
 		workflow.RegisterOptions{Name: registration.workflowType},
 	)
-	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
-		Version: 1, EndpointID: 10, Scheduled: true, ScheduleID: "workflow-schedule",
+	environment.ExecuteWorkflow(registration.workflowType, directEndpointWorkflowRequest{
+		ConnectorName: "temporal",
+		Envelope: EndpointEnvelope{
+			Version: 1, EndpointID: 10, Scheduled: true, ScheduleID: "workflow-schedule",
+		},
 	})
 	if err := environment.GetWorkflowError(); err != nil {
 		t.Fatal(err)
@@ -264,24 +271,142 @@ func TestTemporalWorkflowEndpointContinuesAsNewWithTypedInput(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	environment := suite.NewTestWorkflowEnvironment()
 	environment.RegisterWorkflowWithOptions(
-		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		func(ctx workflow.Context, request directEndpointWorkflowRequest) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, request, registration, temporalContextPropagator{})
 		},
 		workflow.RegisterOptions{Name: registration.workflowType},
 	)
-	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
-		Version: 1, EndpointID: 11, MessageID: "continue-1", StreamID: "continue-1", Payload: []byte("first"),
+	environment.ExecuteWorkflow(registration.workflowType, directEndpointWorkflowRequest{
+		ConnectorName: "temporal",
+		Envelope: EndpointEnvelope{
+			Version: 1, EndpointID: 11, MessageID: "continue-1", StreamID: "continue-1", Payload: []byte("first"),
+		},
 	})
 	err := environment.GetWorkflowError()
 	var continuation *workflow.ContinueAsNewError
 	if !errors.As(err, &continuation) {
 		t.Fatalf("expected Continue-As-New, got %v", err)
 	}
-	var next EndpointEnvelope
+	var next directEndpointWorkflowRequest
 	if err := converter.GetDefaultDataConverter().FromPayloads(continuation.Input, &next); err != nil {
 		t.Fatal(err)
 	}
-	if next.Scheduled || string(next.Payload) != "second" || next.MessageID != "continue-1" {
+	if next.Envelope.Scheduled || string(next.Envelope.Payload) != "second" || next.Envelope.MessageID != "continue-1" {
 		t.Fatalf("unexpected continued input: %+v", next)
+	}
+}
+
+func TestWorkflowTemporalSinksAwaitSequentialActivityResults(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return EndpointResult{Payload: append(envelope.Payload, []byte("-a")...)}, nil
+		},
+		activity.RegisterOptions{Name: "temporal.endpoint.activity_a.v1"},
+	)
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return EndpointResult{Payload: append(envelope.Payload, []byte("-b")...)}, nil
+		},
+		activity.RegisterOptions{Name: "temporal.endpoint.activity_b.v1"},
+	)
+	workflowFunction := func(ctx workflow.Context) (string, error) {
+		state := workflowSubmissionContext{
+			workflowCtx: ctx,
+			connector:   "temporal",
+			endpoints: map[int]workflowEndpointConfig{
+				1: testWorkflowActivityConfig(1, "activityA", "temporal.endpoint.activity_a.v1"),
+				2: testWorkflowActivityConfig(2, "activityB", "temporal.endpoint.activity_b.v1"),
+			},
+		}
+		first, err := submitEndpointFromWorkflow(state, 1, EndpointEnvelope{
+			MessageID: "sequence-a", StreamID: "sequence", Payload: []byte("start"),
+		})
+		if err != nil {
+			return "", err
+		}
+		second, err := submitEndpointFromWorkflow(state, 2, EndpointEnvelope{
+			MessageID: "sequence-b", StreamID: "sequence", Payload: first.Payload,
+		})
+		return string(second.Payload), err
+	}
+	environment.ExecuteWorkflow(workflowFunction)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	var result string
+	if err := environment.GetWorkflowResult(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result != "start-a-b" {
+		t.Fatalf("sequential activity result = %q", result)
+	}
+}
+
+func TestWorkflowTemporalSinkResultCanFanOutToTwoActivities(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	for _, target := range []struct {
+		name   string
+		suffix string
+	}{
+		{name: "temporal.endpoint.activity_a.v1", suffix: "-a"},
+		{name: "temporal.endpoint.activity_b.v1", suffix: "-b"},
+		{name: "temporal.endpoint.activity_c.v1", suffix: "-c"},
+	} {
+		target := target
+		environment.RegisterActivityWithOptions(
+			func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+				return EndpointResult{Payload: append(envelope.Payload, []byte(target.suffix)...)}, nil
+			},
+			activity.RegisterOptions{Name: target.name},
+		)
+	}
+	workflowFunction := func(ctx workflow.Context) ([]string, error) {
+		state := workflowSubmissionContext{
+			workflowCtx: ctx,
+			connector:   "temporal",
+			endpoints: map[int]workflowEndpointConfig{
+				1: testWorkflowActivityConfig(1, "activityA", "temporal.endpoint.activity_a.v1"),
+				2: testWorkflowActivityConfig(2, "activityB", "temporal.endpoint.activity_b.v1"),
+				3: testWorkflowActivityConfig(3, "activityC", "temporal.endpoint.activity_c.v1"),
+			},
+		}
+		first, err := submitEndpointFromWorkflow(state, 1, EndpointEnvelope{
+			MessageID: "fanout-a", StreamID: "fanout", Payload: []byte("start"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		results := make([]string, 0, 2)
+		for endpointID, messageID := range []string{"fanout-b", "fanout-c"} {
+			result, submitErr := submitEndpointFromWorkflow(state, endpointID+2, EndpointEnvelope{
+				MessageID: messageID, StreamID: "fanout", Payload: first.Payload,
+			})
+			if submitErr != nil {
+				return nil, submitErr
+			}
+			results = append(results, string(result.Payload))
+		}
+		return results, nil
+	}
+	environment.ExecuteWorkflow(workflowFunction)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	var result []string
+	if err := environment.GetWorkflowResult(&result); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(result) != "[start-a-b start-a-c]" {
+		t.Fatalf("fan-out activity results = %v", result)
+	}
+}
+
+func testWorkflowActivityConfig(id int, name, activityType string) workflowEndpointConfig {
+	return workflowEndpointConfig{
+		ID: id, Name: name, TaskQueue: "temporal-test", ExecutionType: api.Activity,
+		ActivityType: activityType, ActivityStartToCloseMillis: 1000, MaximumAttempts: 1,
 	}
 }
