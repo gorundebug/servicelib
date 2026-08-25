@@ -10,6 +10,8 @@ package tracing
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"google.golang.org/grpc/stats"
 )
@@ -124,6 +126,22 @@ func EnableSampling(ctx context.Context) context.Context {
 func SamplingEnabled(ctx context.Context) bool {
 	v, _ := ctx.Value(samplingKey{}).(bool)
 	return v
+}
+
+// SamplingRequestedByCarrier reports whether a transport carrier explicitly
+// requests ServiceLib tracing or contains a valid sampled W3C traceparent.
+// Transport adapters use this before starting their input span; extracting an
+// OpenTelemetry parent alone does not set ServiceLib's opt-in context marker.
+func SamplingRequestedByCarrier(carrier map[string]string) bool {
+	if carrier["x-trace"] != "" {
+		return true
+	}
+	parts := strings.Split(carrier["traceparent"], "-")
+	if len(parts) != 4 || len(parts[3]) != 2 {
+		return false
+	}
+	flags, err := strconv.ParseUint(parts[3], 16, 8)
+	return err == nil && flags&1 == 1
 }
 
 type TracingEngine interface {

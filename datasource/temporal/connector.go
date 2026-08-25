@@ -156,19 +156,17 @@ type durableWorkflowRequest struct {
 // endpoint. Payload is the endpoint's declared input type. ScheduledAt and
 // FiredAt are populated only for an execution started by a Temporal Schedule.
 type EndpointEnvelope struct {
-	Version          int               `json:"version"`
-	EndpointID       int               `json:"endpointId"`
-	ExecutionID      string            `json:"executionId"`
-	StreamID         string            `json:"streamId"`
-	Priority         int               `json:"priority"`
-	DeadlineUnixNano int64             `json:"deadlineUnixNano,omitempty"`
-	SamplingEnabled  bool              `json:"samplingEnabled,omitempty"`
-	TraceCarrier     map[string]string `json:"traceCarrier,omitempty"`
-	Scheduled        bool              `json:"scheduled,omitempty"`
-	ScheduleID       string            `json:"scheduleId,omitempty"`
-	ScheduledAtNano  int64             `json:"scheduledAtUnixNano,omitempty"`
-	FiredAtNano      int64             `json:"firedAtUnixNano,omitempty"`
-	Payload          []byte            `json:"payload,omitempty"`
+	Version          int    `json:"version"`
+	EndpointID       int    `json:"endpointId"`
+	ExecutionID      string `json:"executionId"`
+	StreamID         string `json:"streamId"`
+	Priority         int    `json:"priority"`
+	DeadlineUnixNano int64  `json:"deadlineUnixNano,omitempty"`
+	Scheduled        bool   `json:"scheduled,omitempty"`
+	ScheduleID       string `json:"scheduleId,omitempty"`
+	ScheduledAtNano  int64  `json:"scheduledAtUnixNano,omitempty"`
+	FiredAtNano      int64  `json:"firedAtUnixNano,omitempty"`
+	Payload          []byte `json:"payload,omitempty"`
 }
 
 // EndpointResult carries the endpoint's declared result type back through the
@@ -488,6 +486,9 @@ func (c *Connector) Start(ctx context.Context) error {
 func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
 	options := client.Options{
 		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
+		ContextPropagators: []workflow.ContextPropagator{
+			temporalContextPropagator{tracing: c.environment.Tracing()},
+		},
 	}
 	metricsHandler, err := sdkMetricsHandler()
 	if err != nil {

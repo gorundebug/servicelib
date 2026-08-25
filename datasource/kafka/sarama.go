@@ -86,7 +86,7 @@ func contextFromKafkaHeaders(ctx context.Context, env runtime.RuntimeEnvironment
 	if engine := env.Tracing(); engine != nil {
 		ctx = engine.Extract(ctx, carrier)
 	}
-	if carrier["x-trace"] != "" || carrier["traceparent"] != "" {
+	if tracing.SamplingRequestedByCarrier(carrier) {
 		ctx = tracing.EnableSampling(ctx)
 	}
 	return ctx

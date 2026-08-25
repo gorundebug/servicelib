@@ -119,7 +119,7 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	if err != nil {
 		return result, err
 	}
-	ctx, cancel := endpointContext(activityCtx, envelope, ec.tracing)
+	ctx, cancel := endpointContext(activityCtx, envelope)
 	defer cancel()
 	ctx = runtime.ApplyDataSourceEndpointTracing(
 		ctx, ec.Stream().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
@@ -182,16 +182,10 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	}
 }
 
-func endpointContext(parent context.Context, envelope EndpointEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
+func endpointContext(parent context.Context, envelope EndpointEnvelope) (context.Context, context.CancelFunc) {
 	ctx := parent
-	if engine != nil && len(envelope.TraceCarrier) > 0 {
-		ctx = engine.Extract(ctx, envelope.TraceCarrier)
-	}
 	ctx = runtime.WithStreamId(ctx, envelope.StreamID)
 	ctx = runtime.WithPriority(ctx, envelope.Priority)
-	if envelope.SamplingEnabled {
-		ctx = tracing.EnableSampling(ctx)
-	}
 	if envelope.DeadlineUnixNano > 0 {
 		deadline := time.Unix(0, envelope.DeadlineUnixNano)
 		if current, ok := ctx.Deadline(); !ok || deadline.Before(current) {

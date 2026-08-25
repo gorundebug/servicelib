@@ -651,7 +651,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 			if err != nil {
 				return fmt.Errorf("deserialize durable link %d->%d payload: %w", linkID.From, linkID.To, err)
 			}
-			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope, env.Tracing())
+			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope)
 			defer cancel()
 			if tr != nil && tracing.SamplingEnabled(activityCtx) {
 				var span tracing.Span
@@ -752,11 +752,7 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 	envelope := DurableEnvelope{
 		Version: 1, From: c.linkID.From, To: c.linkID.To,
 		StreamID: streamID.GetID(), Priority: priority,
-		SamplingEnabled: tracing.SamplingEnabled(ctx), Payload: payload,
-	}
-	if engine := c.source.GetEnvironment().Tracing(); engine != nil {
-		envelope.TraceCarrier = make(map[string]string)
-		engine.Inject(ctx, envelope.TraceCarrier)
+		Payload: payload,
 	}
 	if deadline, present := ctx.Deadline(); present {
 		envelope.DeadlineUnixNano = deadline.UTC().UnixNano()
@@ -770,11 +766,8 @@ func (c *durableCaller[T]) Consume(ctx context.Context, value T) {
 
 func (c *durableCaller[T]) IsAsync() bool { return true }
 
-func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
+func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope) (context.Context, context.CancelFunc) {
 	ctx := parent
-	if engine != nil && len(envelope.TraceCarrier) > 0 {
-		ctx = engine.Extract(ctx, envelope.TraceCarrier)
-	}
 	if _, present := DurableCallContextFromContext(ctx); !present {
 		// Transport adapters normally attach the processing-side scope before
 		// invoking this handler. Keep envelope reconstruction self-contained for
@@ -785,9 +778,6 @@ func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope, en
 		ctx = WithStreamId(ctx, envelope.StreamID)
 	}
 	ctx = WithPriority(ctx, envelope.Priority)
-	if envelope.SamplingEnabled {
-		ctx = tracing.EnableSampling(ctx)
-	}
 	if envelope.DeadlineUnixNano > 0 {
 		return context.WithDeadline(ctx, time.Unix(0, envelope.DeadlineUnixNano))
 	}
