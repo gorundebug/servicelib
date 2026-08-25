@@ -21,6 +21,9 @@ var (
 	// ErrDurableCallHeartbeatAfterCompletion reports progress after the endpoint
 	// Activity boundary has already closed.
 	ErrDurableCallHeartbeatAfterCompletion = errors.New("durable call heartbeat after completion")
+	// ErrTemporalContinueAsNewOutsideWorkflow reports a terminal Workflow
+	// operation attempted from ordinary or Activity execution.
+	ErrTemporalContinueAsNewOutsideWorkflow = errors.New("Temporal Continue-As-New requires a Workflow endpoint")
 )
 
 // DurableCallEvent is a stable diagnostics classification shared by metrics,
@@ -78,7 +81,38 @@ func NewDurableWorkflowContext(
 	delay DurableCallDelay,
 	replaying func() bool,
 ) *DurableCallContext {
-	return &DurableCallContext{messageID: messageID, delay: delay, workflow: true, replaying: replaying}
+	return &DurableCallContext{
+		messageID: messageID, delay: delay, workflow: true,
+		replaying: replaying,
+	}
+}
+
+// TemporalContinueAsNewRequest is the terminal, in-process control outcome
+// consumed by the Temporal Workflow adapter. Business code should create it
+// only through TemporalContinueAsNew.
+type TemporalContinueAsNewRequest struct{ NextInput any }
+
+func (*TemporalContinueAsNewRequest) Error() string { return "Temporal Continue-As-New" }
+
+// TemporalContinueAsNew terminates the current Workflow run and starts its
+// next run with nextInput. It never returns. Calling it outside a Workflow
+// endpoint panics with ErrTemporalContinueAsNewOutsideWorkflow so an invalid
+// history boundary cannot be ignored accidentally.
+func TemporalContinueAsNew(ctx context.Context, nextInput any) {
+	durable, ok := DurableCallContextFromContext(ctx)
+	if !ok {
+		panic(ErrTemporalContinueAsNewOutsideWorkflow)
+	}
+	durable.mu.Lock()
+	workflow, closed := durable.workflow, durable.closed
+	durable.mu.Unlock()
+	if !workflow {
+		panic(ErrTemporalContinueAsNewOutsideWorkflow)
+	}
+	if closed {
+		panic(errors.New("Temporal Continue-As-New after Workflow completion"))
+	}
+	panic(&TemporalContinueAsNewRequest{NextInput: nextInput})
 }
 
 // NewDurableCallContext constructs processing-side Activity state. Temporal
@@ -270,12 +304,24 @@ func RunDurableWorkflow(
 	ctx context.Context,
 	durable *DurableCallContext,
 	invoke func(context.Context) error,
-) error {
+) (err error) {
 	if durable == nil {
 		return errors.New("durable workflow context is nil")
 	}
 	workflowCtx := WithDurableCallContext(ctx, durable)
-	err := invoke(workflowCtx)
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		control, ok := recovered.(*TemporalContinueAsNewRequest)
+		if !ok {
+			panic(recovered)
+		}
+		durable.close(workflowCtx, nil)
+		err = control
+	}()
+	err = invoke(workflowCtx)
 	durable.close(workflowCtx, err)
 	return err
 }

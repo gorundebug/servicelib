@@ -152,6 +152,7 @@ type EndpointResult struct {
 }
 
 type connectorEndpointHandler func(context.Context, EndpointEnvelope) (EndpointResult, error)
+type connectorEndpointEncoder func(any) ([]byte, error)
 
 type endpointWorkflowRequest struct {
 	ActivityType               string           `json:"activityType"`
@@ -167,6 +168,7 @@ type endpointRegistration struct {
 	activityType string
 	workflowType string
 	handler      connectorEndpointHandler
+	encodeInput  connectorEndpointEncoder
 }
 
 // Connector owns exactly one Temporal client and the Workers registered for
@@ -257,7 +259,11 @@ func (c *Connector) temporalConfig() (*config.TemporalDataConnectorConfig, error
 // RegisterEndpoint binds one configured endpoint Activity to its existing
 // input graph adapter. The Activity is infrastructure; handler invokes the
 // ordinary endpoint consumer and never replaces a business node.
-func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHandler) error {
+func (c *Connector) RegisterEndpoint(
+	endpointID int,
+	handler connectorEndpointHandler,
+	encodeInput connectorEndpointEncoder,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.started {
@@ -265,6 +271,9 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 	}
 	if handler == nil {
 		return fmt.Errorf("Temporal endpoint %d handler is nil", endpointID)
+	}
+	if encodeInput == nil {
+		return fmt.Errorf("Temporal endpoint %d input encoder is nil", endpointID)
 	}
 	if _, exists := c.endpointRegistrations[endpointID]; exists {
 		return fmt.Errorf("Temporal endpoint %d is already registered", endpointID)
@@ -278,6 +287,7 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 		activityType: temporalEndpointActivityType(c.name, cfg.Name),
 		workflowType: temporalDirectWorkflowType(c.name, cfg.Name),
 		handler:      handler,
+		encodeInput:  encodeInput,
 	}
 	return nil
 }
@@ -322,6 +332,22 @@ func executeEndpointWorkflow(
 		result, invokeErr = registration.handler(ctx, envelope)
 		return invokeErr
 	})
+	var continuation *runtime.TemporalContinueAsNewRequest
+	if errors.As(err, &continuation) {
+		payload, encodeErr := registration.encodeInput(continuation.NextInput)
+		if encodeErr != nil {
+			return EndpointResult{}, encodeErr
+		}
+		nextEnvelope := envelope
+		nextEnvelope.Scheduled = false
+		nextEnvelope.ScheduleID = ""
+		nextEnvelope.ScheduledAtNano = 0
+		nextEnvelope.FiredAtNano = 0
+		nextEnvelope.Payload = payload
+		return EndpointResult{}, workflow.NewContinueAsNewError(
+			workflowCtx, registration.workflowType, nextEnvelope,
+		)
+	}
 	return result, err
 }
 

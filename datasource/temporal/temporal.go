@@ -268,7 +268,13 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	if consumer.resultSer != nil {
 		stream.SetResultConsumer(&resultConsumer[R]{consume: consumer.consumeResult})
 	}
-	if err := connector.RegisterEndpoint(cfg.ID, consumer.handle); err != nil {
+	if err := connector.RegisterEndpoint(cfg.ID, consumer.handle, func(value any) ([]byte, error) {
+		typed, ok := value.(T)
+		if !ok {
+			return nil, fmt.Errorf("Temporal endpoint %q Continue-As-New input has type %T", cfg.Name, value)
+		}
+		return stream.GetSerde().Serialize(typed)
+	}); err != nil {
 		return nil, err
 	}
 	env.RegisterEndpointConsumer(consumer)

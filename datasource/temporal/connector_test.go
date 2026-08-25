@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 
@@ -237,5 +238,50 @@ func TestScheduledTemporalWorkflowEndpointCreatesTriggerIdentity(t *testing.T) {
 	})
 	if err := environment.GetWorkflowError(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTemporalWorkflowEndpointContinuesAsNewWithTypedInput(t *testing.T) {
+	registration := endpointRegistration{
+		id: 11, workflowType: "temporal.endpoint.continue_job.v1",
+		encodeInput: func(value any) ([]byte, error) {
+			text, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("unexpected continuation input %T", value)
+			}
+			return []byte(text), nil
+		},
+		handler: func(ctx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			if string(envelope.Payload) == "first" {
+				runtime.TemporalContinueAsNew(ctx, "second")
+			}
+			if envelope.Scheduled || string(envelope.Payload) != "second" {
+				return EndpointResult{}, fmt.Errorf("unexpected continued envelope: %+v", envelope)
+			}
+			return EndpointResult{Payload: []byte("complete")}, nil
+		},
+	}
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterWorkflowWithOptions(
+		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		},
+		workflow.RegisterOptions{Name: registration.workflowType},
+	)
+	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
+		Version: 1, EndpointID: 11, MessageID: "continue-1", StreamID: "continue-1", Payload: []byte("first"),
+	})
+	err := environment.GetWorkflowError()
+	var continuation *workflow.ContinueAsNewError
+	if !errors.As(err, &continuation) {
+		t.Fatalf("expected Continue-As-New, got %v", err)
+	}
+	var next EndpointEnvelope
+	if err := converter.GetDefaultDataConverter().FromPayloads(continuation.Input, &next); err != nil {
+		t.Fatal(err)
+	}
+	if next.Scheduled || string(next.Payload) != "second" || next.MessageID != "continue-1" {
+		t.Fatalf("unexpected continued input: %+v", next)
 	}
 }

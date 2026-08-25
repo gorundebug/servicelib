@@ -70,6 +70,23 @@ func TestDurableWorkflowUsesDurableDelayAndIgnoresHeartbeat(t *testing.T) {
 	require.True(t, called)
 }
 
+func TestTemporalContinueAsNewTerminatesWorkflowWithAdapterError(t *testing.T) {
+	durable := NewDurableWorkflowContext("workflow", nil, nil)
+	err := RunDurableWorkflow(context.Background(), durable, func(ctx context.Context) error {
+		TemporalContinueAsNew(ctx, "next-run")
+		return errors.New("unreachable")
+	})
+	var continuation *TemporalContinueAsNewRequest
+	require.ErrorAs(t, err, &continuation)
+	require.Equal(t, "next-run", continuation.NextInput)
+}
+
+func TestTemporalContinueAsNewOutsideWorkflowPanics(t *testing.T) {
+	require.PanicsWithValue(t, ErrTemporalContinueAsNewOutsideWorkflow, func() {
+		TemporalContinueAsNew(context.Background(), "next-run")
+	})
+}
+
 func TestDurableActivityLifecycleIsRecordedOnActivitySpan(t *testing.T) {
 	engine := testtracing.New()
 	durable := NewDurableCallContext("execution", nil, nil)
