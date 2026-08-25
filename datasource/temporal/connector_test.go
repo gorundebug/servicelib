@@ -12,21 +12,23 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/config"
 )
 
 func TestTemporalRuntimeIdentityUsesServiceForLinksAndContractForEndpoints(t *testing.T) {
-	link := config.LinkID{From: 3, To: 4}
-	if got := durableLinkWorkflowID("Automation Service", link, "call-1"); got != "Automation Service/durable/3/4/call-1" {
+	if got := durableLinkWorkflowID(
+		"Automation Service", "Consume Durable Job", "Process/Durable Job", "call-1",
+	); got != "Automation%20Service/durable/Consume%20Durable%20Job/Process%2FDurable%20Job/call-1" {
 		t.Fatalf("durable workflow id = %q", got)
 	}
-	if got := durableLinkOwner("Automation Service", link); got != "Automation Service/link/3/4/v1" {
+	if got := durableLinkOwner(
+		"Automation Service", "Consume Durable Job", "Process/Durable Job",
+	); got != "Automation%20Service/link/Consume%20Durable%20Job/Process%2FDurable%20Job/v1" {
 		t.Fatalf("durable owner = %q", got)
 	}
-	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "Temporal.endpoint.Durable Job.v1" {
+	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "Temporal.endpoint.Durable%20Job.v1" {
 		t.Fatalf("endpoint activity type = %q", got)
 	}
-	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "Temporal/endpoint/Durable Job/job-1" {
+	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "Temporal/endpoint/Durable%20Job/job-1" {
 		t.Fatalf("endpoint workflow id = %q", got)
 	}
 }
@@ -51,7 +53,7 @@ func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testin
 	environment.RegisterWorkflowWithOptions(
 		durableLinkWorkflow, workflow.RegisterOptions{Name: durableWorkflowType},
 	)
-	const activityType = "Automation Service.durable.2.3.v1"
+	const activityType = "Automation%20Service.durable.Source.Target.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope runtime.DurableEnvelope) error {
 			if envelope.CallID != "logical-call" || envelope.From != 2 || envelope.To != 3 {

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,28 +50,62 @@ const (
 	durableMemoCallID    = "servicelib.callId"
 )
 
-func durableLinkActivityType(serviceName string, id config.LinkID) string {
-	return fmt.Sprintf("%s.durable.%d.%d.v1", serviceName, id.From, id.To)
+func temporalIdentityComponent(value string) string {
+	var result strings.Builder
+	for _, b := range []byte(value) {
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
+			(b >= '0' && b <= '9') || b == '-' || b == '.' || b == '_' || b == '~' {
+			result.WriteByte(b)
+		} else {
+			fmt.Fprintf(&result, "%%%02X", b)
+		}
+	}
+	return result.String()
 }
 
-func durableLinkWorkflowID(serviceName string, id config.LinkID, callID string) string {
-	return fmt.Sprintf("%s/durable/%d/%d/%s", serviceName, id.From, id.To, callID)
+func durableLinkActivityType(serviceName, sourceName, targetName string) string {
+	return fmt.Sprintf("%s.durable.%s.%s.v1",
+		temporalIdentityComponent(serviceName),
+		temporalIdentityComponent(sourceName),
+		temporalIdentityComponent(targetName),
+	)
 }
 
-func durableLinkOwner(serviceName string, id config.LinkID) string {
-	return fmt.Sprintf("%s/link/%d/%d/v1", serviceName, id.From, id.To)
+func durableLinkWorkflowID(serviceName, sourceName, targetName, callID string) string {
+	return fmt.Sprintf("%s/durable/%s/%s/%s",
+		temporalIdentityComponent(serviceName),
+		temporalIdentityComponent(sourceName),
+		temporalIdentityComponent(targetName),
+		temporalIdentityComponent(callID),
+	)
+}
+
+func durableLinkOwner(serviceName, sourceName, targetName string) string {
+	return fmt.Sprintf("%s/link/%s/%s/v1",
+		temporalIdentityComponent(serviceName),
+		temporalIdentityComponent(sourceName),
+		temporalIdentityComponent(targetName),
+	)
 }
 
 func temporalEndpointActivityType(connectorName, endpointName string) string {
-	return fmt.Sprintf("%s.endpoint.%s.v1", connectorName, endpointName)
+	return fmt.Sprintf("%s.endpoint.%s.v1",
+		temporalIdentityComponent(connectorName), temporalIdentityComponent(endpointName),
+	)
 }
 
 func temporalEndpointWorkflowID(connectorName, endpointName, executionID string) string {
-	return fmt.Sprintf("%s/endpoint/%s/%s", connectorName, endpointName, executionID)
+	return fmt.Sprintf("%s/endpoint/%s/%s",
+		temporalIdentityComponent(connectorName),
+		temporalIdentityComponent(endpointName),
+		temporalIdentityComponent(executionID),
+	)
 }
 
 func temporalEndpointOwner(connectorName, endpointName string) string {
-	return fmt.Sprintf("%s/endpoint/%s/v1", connectorName, endpointName)
+	return fmt.Sprintf("%s/endpoint/%s/v1",
+		temporalIdentityComponent(connectorName), temporalIdentityComponent(endpointName),
+	)
 }
 
 type durableWorkflowRequest struct {
@@ -122,6 +157,8 @@ type linkRegistration struct {
 	id           config.LinkID
 	config       config.DurableCallSemanticsConfig
 	serviceName  string
+	sourceName   string
+	targetName   string
 	activityType string
 	handler      runtime.DurableLinkHandler
 }
@@ -242,9 +279,16 @@ func (c *Connector) RegisterLink(id config.LinkID, handler runtime.DurableLinkHa
 	if !ok || durable.IdDataConnector != c.id {
 		return fmt.Errorf("link %d->%d does not belong to Temporal connector %q", id.From, id.To, c.name)
 	}
+	source := c.environment.RuntimeConfig().GetStreamConfigByID(id.From)
+	target := c.environment.RuntimeConfig().GetStreamConfigByID(id.To)
+	if source == nil || target == nil {
+		return fmt.Errorf("durable link %d->%d references missing stream configuration", id.From, id.To)
+	}
+	serviceName := c.environment.ServiceConfig().Name
 	c.linkRegistrations[id] = linkRegistration{
-		id: id, config: *durable, serviceName: c.environment.ServiceConfig().Name,
-		activityType: durableLinkActivityType(c.environment.ServiceConfig().Name, id),
+		id: id, config: *durable, serviceName: serviceName,
+		sourceName: source.GetName(), targetName: target.GetName(),
+		activityType: durableLinkActivityType(serviceName, source.GetName(), target.GetName()),
 		handler:      handler,
 	}
 	return nil
@@ -600,8 +644,12 @@ func (c *Connector) SubmitLink(ctx context.Context, id config.LinkID, envelope r
 		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                   envelope,
 	}
-	workflowID := durableLinkWorkflowID(registration.serviceName, id, envelope.CallID)
-	owner := durableLinkOwner(registration.serviceName, id)
+	workflowID := durableLinkWorkflowID(
+		registration.serviceName, registration.sourceName, registration.targetName, envelope.CallID,
+	)
+	owner := durableLinkOwner(
+		registration.serviceName, registration.sourceName, registration.targetName,
+	)
 	options := client.StartWorkflowOptions{
 		ID:                       workflowID,
 		TaskQueue:                registration.config.TaskQueue,
