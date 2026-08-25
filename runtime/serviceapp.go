@@ -63,6 +63,7 @@ type ServiceApp struct {
 	dep                   environment.ServiceDependencies
 	components            []environment.Lifecycle
 	parallel              sync.WaitGroup
+	isolated              bool
 }
 
 func (app *ServiceApp) GetSerde(_ reflect.Type) (serde.Serializer, error) {
@@ -102,18 +103,30 @@ func (app *ServiceApp) ReloadConfig() {
 }
 
 func (app *ServiceApp) Metrics() metrics.Metrics {
+	if app.isolated {
+		return app.environment.Metrics()
+	}
 	return app.metrics
 }
 
 func (app *ServiceApp) MetricsEngine() metrics.MetricsEngine {
+	if app.isolated {
+		return app.environment.MetricsEngine()
+	}
 	return app.metricsEngine
 }
 
 func (app *ServiceApp) Tracing() tracing.Tracing {
+	if app.isolated {
+		return app.environment.Tracing()
+	}
 	return app.tracingEngine.Tracing()
 }
 
 func (app *ServiceApp) TracingEngine() tracing.TracingEngine {
+	if app.isolated {
+		return app.environment.TracingEngine()
+	}
 	return app.tracingEngine
 }
 
@@ -173,7 +186,11 @@ func (app *ServiceApp) endParallel() { app.parallel.Done() }
 // RunParallel schedules graph work using the process runtime. Workflow-backed
 // environments override this method with their deterministic SDK scheduler;
 // ordinary services retain the existing goroutine and drain semantics.
-func (app *ServiceApp) RunParallel(_ context.Context, fn func()) {
+func (app *ServiceApp) RunParallel(ctx context.Context, fn func()) {
+	if app.isolated {
+		app.environment.RunParallel(ctx, fn)
+		return
+	}
 	app.beginParallel()
 	go func() {
 		defer app.endParallel()
@@ -200,6 +217,7 @@ func (app *ServiceApp) InitIsolatedGraphRuntime(
 		return fmt.Errorf("isolated graph service id=%d not found", serviceID)
 	}
 	app.id = serviceID
+	app.isolated = true
 	app.environment = env
 	app.config.Store(runtimeConfig)
 	app.streams = make(map[int]RuntimeStream)
@@ -217,6 +235,9 @@ func (app *ServiceApp) InitIsolatedGraphRuntime(
 }
 
 func (app *ServiceApp) Log() log.Logger {
+	if app.isolated {
+		return app.environment.Log()
+	}
 	return app.log
 }
 
@@ -701,13 +722,22 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 }
 
 func (app *ServiceApp) Delay(ctx context.Context, duration time.Duration, f func()) error {
+	if app.isolated {
+		return app.environment.Delay(ctx, duration, f)
+	}
 	return app.delayPool.Delay(ctx, duration, f)
 }
 
 func (app *ServiceApp) GetTaskPool(name string) pool.TaskPool {
+	if app.isolated {
+		return app.environment.GetTaskPool(name)
+	}
 	return app.taskPools[name]
 }
 
 func (app *ServiceApp) GetPriorityTaskPool(name string) pool.PriorityTaskPool {
+	if app.isolated {
+		return app.environment.GetPriorityTaskPool(name)
+	}
 	return app.priorityTaskPools[name]
 }

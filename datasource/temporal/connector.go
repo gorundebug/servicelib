@@ -362,6 +362,26 @@ func (c *Connector) RegisterWorkflowEndpoint(
 	return nil
 }
 
+// ExecuteRegisteredWorkflowEndpoint invokes the graph adapter registered while
+// constructing an isolated Workflow graph. It never starts a client or Worker;
+// the generated static Workflow function owns the current SDK context.
+func (c *Connector) ExecuteRegisteredWorkflowEndpoint(
+	workflowCtx workflow.Context,
+	request DirectEndpointWorkflowRequest,
+	endpointID int,
+) (EndpointResult, error) {
+	c.mu.Lock()
+	registration, ok := c.endpointRegistrations[endpointID]
+	c.mu.Unlock()
+	if !ok {
+		return EndpointResult{}, fmt.Errorf("Temporal Workflow endpoint id=%d is not registered", endpointID)
+	}
+	return executeWorkflowEndpoint(
+		workflowCtx, request, registration.id, registration.workflowType,
+		registration.handler, registration.encodeInput, temporalContextPropagator{},
+	)
+}
+
 func executeEndpointWorkflow(
 	workflowCtx workflow.Context,
 	request directEndpointWorkflowRequest,

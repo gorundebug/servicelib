@@ -36,6 +36,7 @@ type WorkflowEnvironment struct {
 	workflowCtx workflow.Context
 	metrics     metrics.Metrics
 	logger      log.Logger
+	tracing     tracing.Tracing
 	taskPools   map[string]*workflowPool
 	priority    map[string]*workflowPool
 	parallel    int
@@ -54,6 +55,7 @@ func NewWorkflowEnvironment(
 		workflowCtx: ctx,
 		metrics:     newWorkflowMetrics(ctx),
 		logger:      newWorkflowLogger(ctx),
+		tracing:     newWorkflowTracing(ctx),
 		taskPools:   make(map[string]*workflowPool),
 		priority:    make(map[string]*workflowPool),
 	}
@@ -75,7 +77,7 @@ func (env *WorkflowEnvironment) BindRuntimeEnvironment(actual runtime.RuntimeEnv
 }
 
 func (env *WorkflowEnvironment) Metrics() metrics.Metrics { return env.metrics }
-func (env *WorkflowEnvironment) Tracing() tracing.Tracing { return nil }
+func (env *WorkflowEnvironment) Tracing() tracing.Tracing { return env.tracing }
 func (env *WorkflowEnvironment) Log() log.Logger          { return env.logger }
 func (env *WorkflowEnvironment) ServiceDependencies() environment.ServiceDependencies {
 	return nil
