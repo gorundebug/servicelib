@@ -4,6 +4,7 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,104 @@ import (
 
 	"github.com/gorundebug/servicelib/runtime"
 )
+
+func TestTemporalEndpointActivityCompletesExplicitlyWithoutDurableLink(t *testing.T) {
+	heartbeats := make(chan any, 1)
+	registration := endpointRegistration{
+		id: 7,
+		handler: func(ctx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			if envelope.FiredAtNano == 0 {
+				t.Fatal("endpoint Activity did not record its actual fire time")
+			}
+			if _, ok := runtime.DurableCallContextFromContext(ctx); !ok {
+				t.Fatal("endpoint handler did not receive a processing-side DurableCallContext")
+			}
+			if err := runtime.DurableCallHeartbeat(ctx, "halfway"); err != nil {
+				return EndpointResult{}, err
+			}
+			if err := runtime.DurableCallSuccess(ctx); err != nil {
+				return EndpointResult{}, err
+			}
+			return EndpointResult{Payload: []byte("accepted")}, nil
+		},
+	}
+	result, err := executeEndpointActivity(
+		context.Background(),
+		EndpointEnvelope{Version: 1, EndpointID: 7, ExecutionID: "job-1"},
+		registration,
+		func(_ context.Context, details any) error {
+			heartbeats <- details
+			return nil
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Result.Payload) != "accepted" {
+		t.Fatalf("endpoint result = %q", result.Result.Payload)
+	}
+	if heartbeat := <-heartbeats; heartbeat != "halfway" {
+		t.Fatalf("heartbeat = %#v", heartbeat)
+	}
+}
+
+func TestTemporalEndpointActivityPropagatesExplicitErrorWithoutDurableLink(t *testing.T) {
+	want := errors.New("business failure")
+	registration := endpointRegistration{
+		id: 7,
+		handler: func(ctx context.Context, _ EndpointEnvelope) (EndpointResult, error) {
+			if err := runtime.DurableCallError(ctx, want); err != nil {
+				return EndpointResult{}, err
+			}
+			return EndpointResult{}, nil
+		},
+	}
+	_, err := executeEndpointActivity(
+		context.Background(),
+		EndpointEnvelope{Version: 1, EndpointID: 7, ExecutionID: "job-2"},
+		registration, nil, nil,
+	)
+	if !errors.Is(err, want) {
+		t.Fatalf("endpoint error = %v, want %v", err, want)
+	}
+}
+
+func TestTemporalEndpointActivityWithoutOutcomeWaitsForCancellation(t *testing.T) {
+	started := make(chan struct{})
+	registration := endpointRegistration{
+		id: 7,
+		handler: func(context.Context, EndpointEnvelope) (EndpointResult, error) {
+			close(started)
+			return EndpointResult{}, nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := executeEndpointActivity(
+			ctx,
+			EndpointEnvelope{Version: 1, EndpointID: 7, ExecutionID: "job-3"},
+			registration, nil, nil,
+		)
+		result <- err
+	}()
+	<-started
+	select {
+	case err := <-result:
+		t.Fatalf("endpoint completed without an explicit outcome: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, runtime.ErrDurableCallOutcomeMissing) || !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("endpoint Activity did not finish after cancellation")
+	}
+}
 
 func TestTemporalRuntimeIdentityUsesServiceForLinksAndContractForEndpoints(t *testing.T) {
 	if got := durableLinkWorkflowID(

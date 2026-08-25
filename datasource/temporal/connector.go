@@ -369,6 +369,35 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 	return nil
 }
 
+// executeEndpointActivity owns the processing-side Temporal Activity scope for
+// both scheduled and on-demand endpoints. Keeping this boundary independent of
+// graph callers makes its terminal, cancellation, heartbeat and result
+// semantics directly testable without constructing a DurableCall link.
+func executeEndpointActivity(
+	activityCtx context.Context,
+	envelope EndpointEnvelope,
+	registration endpointRegistration,
+	heartbeat runtime.DurableCallHeartbeatRecorder,
+	diagnostics runtime.DurableCallDiagnostics,
+) (endpointActivityResult, error) {
+	if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.ExecutionID == "" {
+		return endpointActivityResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
+	}
+	envelope.FiredAtNano = time.Now().UTC().UnixNano()
+	durable := runtime.NewDurableCallContext(
+		envelope.ExecutionID, heartbeat, diagnostics,
+	)
+	var result EndpointResult
+	durableResult, err := runtime.RunDurableCallActivityWithResult(
+		activityCtx, durable, func(ctx context.Context) error {
+			var invokeErr error
+			result, invokeErr = registration.handler(ctx, envelope)
+			return invokeErr
+		},
+	)
+	return endpointActivityResult{Durable: durableResult, Result: result}, err
+}
+
 func (c *Connector) Start(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -489,25 +518,14 @@ func (c *Connector) Start(ctx context.Context) error {
 		registration := registration
 		registered.worker.RegisterActivityWithOptions(
 			func(activityCtx context.Context, envelope EndpointEnvelope) (endpointActivityResult, error) {
-				if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.ExecutionID == "" {
-					return endpointActivityResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
-				}
-				envelope.FiredAtNano = time.Now().UTC().UnixNano()
-				durable := runtime.NewDurableCallContext(
-					envelope.ExecutionID,
+				return executeEndpointActivity(
+					activityCtx, envelope, registration,
 					func(ctx context.Context, details any) error {
 						activity.RecordHeartbeat(ctx, details)
 						return nil
 					},
 					c.durableCallDiagnostics("endpoint", fmt.Sprintf("%d", registration.id)),
 				)
-				var result EndpointResult
-				durableResult, err := runtime.RunDurableCallActivityWithResult(activityCtx, durable, func(ctx context.Context) error {
-					var invokeErr error
-					result, invokeErr = registration.handler(ctx, envelope)
-					return invokeErr
-				})
-				return endpointActivityResult{Durable: durableResult, Result: result}, err
 			},
 			activity.RegisterOptions{Name: registration.activityType},
 		)
