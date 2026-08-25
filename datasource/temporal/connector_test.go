@@ -17,18 +17,18 @@ import (
 func TestTemporalRuntimeIdentityUsesServiceForLinksAndContractForEndpoints(t *testing.T) {
 	if got := durableLinkWorkflowID(
 		"Automation Service", "Consume Durable Job", "Process/Durable Job", "call-1",
-	); got != "Automation%20Service/durable/Consume%20Durable%20Job/Process%2FDurable%20Job/call-1" {
+	); got != "automation_service/durable/consume_durable_job/process_durable_job/call-1" {
 		t.Fatalf("durable workflow id = %q", got)
 	}
 	if got := durableLinkOwner(
 		"Automation Service", "Consume Durable Job", "Process/Durable Job",
-	); got != "Automation%20Service/link/Consume%20Durable%20Job/Process%2FDurable%20Job/v1" {
+	); got != "automation_service/link/consume_durable_job/process_durable_job/v1" {
 		t.Fatalf("durable owner = %q", got)
 	}
-	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "Temporal.endpoint.Durable%20Job.v1" {
+	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "temporal.endpoint.durable_job.v1" {
 		t.Fatalf("endpoint activity type = %q", got)
 	}
-	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "Temporal/endpoint/Durable%20Job/job-1" {
+	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "temporal/endpoint/durable_job/job-1" {
 		t.Fatalf("endpoint workflow id = %q", got)
 	}
 }
@@ -53,7 +53,7 @@ func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testin
 	environment.RegisterWorkflowWithOptions(
 		durableLinkWorkflow, workflow.RegisterOptions{Name: durableWorkflowType},
 	)
-	const activityType = "Automation%20Service.durable.Source.Target.v1"
+	const activityType = "automation_service.durable.source.target.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope runtime.DurableEnvelope) error {
 			if envelope.CallID != "logical-call" || envelope.From != 2 || envelope.To != 3 {

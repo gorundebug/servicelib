@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/api/enums/v1"
@@ -50,7 +51,7 @@ const (
 	durableMemoCallID    = "servicelib.callId"
 )
 
-func temporalIdentityComponent(value string) string {
+func temporalOpaqueIdentityComponent(value string) string {
 	var result strings.Builder
 	for _, b := range []byte(value) {
 		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') ||
@@ -63,48 +64,82 @@ func temporalIdentityComponent(value string) string {
 	return result.String()
 }
 
+// temporalIdentityName is intentionally identical to servicegen.ToSnakeCase.
+func temporalIdentityName(value string) string {
+	var words []string
+	var current []rune
+	runes := []rune(value)
+	for i, ch := range runes {
+		if unicode.IsSpace(ch) || ch == '_' || ch == '-' || ch == '/' || ch == '.' {
+			if len(current) > 0 {
+				words = append(words, string(current))
+				current = current[:0]
+			}
+			continue
+		}
+		if !unicode.IsLetter(ch) && !unicode.IsDigit(ch) {
+			continue
+		}
+		if len(current) > 0 && unicode.IsUpper(ch) {
+			previous := current[len(current)-1]
+			if !unicode.IsUpper(previous) || (i+1 < len(runes) && unicode.IsLower(runes[i+1])) {
+				words = append(words, string(current))
+				current = current[:0]
+			}
+		}
+		current = append(current, ch)
+	}
+	if len(current) > 0 {
+		words = append(words, string(current))
+	}
+	for i := range words {
+		words[i] = strings.ToLower(words[i])
+	}
+	return strings.Join(words, "_")
+}
+
 func durableLinkActivityType(serviceName, sourceName, targetName string) string {
 	return fmt.Sprintf("%s.durable.%s.%s.v1",
-		temporalIdentityComponent(serviceName),
-		temporalIdentityComponent(sourceName),
-		temporalIdentityComponent(targetName),
+		temporalIdentityName(serviceName),
+		temporalIdentityName(sourceName),
+		temporalIdentityName(targetName),
 	)
 }
 
 func durableLinkWorkflowID(serviceName, sourceName, targetName, callID string) string {
 	return fmt.Sprintf("%s/durable/%s/%s/%s",
-		temporalIdentityComponent(serviceName),
-		temporalIdentityComponent(sourceName),
-		temporalIdentityComponent(targetName),
-		temporalIdentityComponent(callID),
+		temporalIdentityName(serviceName),
+		temporalIdentityName(sourceName),
+		temporalIdentityName(targetName),
+		temporalOpaqueIdentityComponent(callID),
 	)
 }
 
 func durableLinkOwner(serviceName, sourceName, targetName string) string {
 	return fmt.Sprintf("%s/link/%s/%s/v1",
-		temporalIdentityComponent(serviceName),
-		temporalIdentityComponent(sourceName),
-		temporalIdentityComponent(targetName),
+		temporalIdentityName(serviceName),
+		temporalIdentityName(sourceName),
+		temporalIdentityName(targetName),
 	)
 }
 
 func temporalEndpointActivityType(connectorName, endpointName string) string {
 	return fmt.Sprintf("%s.endpoint.%s.v1",
-		temporalIdentityComponent(connectorName), temporalIdentityComponent(endpointName),
+		temporalIdentityName(connectorName), temporalIdentityName(endpointName),
 	)
 }
 
 func temporalEndpointWorkflowID(connectorName, endpointName, executionID string) string {
 	return fmt.Sprintf("%s/endpoint/%s/%s",
-		temporalIdentityComponent(connectorName),
-		temporalIdentityComponent(endpointName),
-		temporalIdentityComponent(executionID),
+		temporalIdentityName(connectorName),
+		temporalIdentityName(endpointName),
+		temporalOpaqueIdentityComponent(executionID),
 	)
 }
 
 func temporalEndpointOwner(connectorName, endpointName string) string {
 	return fmt.Sprintf("%s/endpoint/%s/v1",
-		temporalIdentityComponent(connectorName), temporalIdentityComponent(endpointName),
+		temporalIdentityName(connectorName), temporalIdentityName(endpointName),
 	)
 }
 
