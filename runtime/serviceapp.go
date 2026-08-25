@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -126,6 +127,23 @@ func (app *ServiceApp) RegisterEndpointConsumer(consumer RuntimeEndpointConsumer
 
 func (app *ServiceApp) RegisterStorage(storage store.Storage) {
 	app.storages = append(app.storages, storage)
+}
+
+// BuildRegisteredStreams resolves callers for an isolated graph after all
+// generated streams and links have been registered.
+func (app *ServiceApp) BuildRegisteredStreams() error {
+	ids := make([]int, 0, len(app.streams))
+	for id := range app.streams {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	for _, id := range ids {
+		stream := app.streams[id]
+		if err := stream.Build(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (app *ServiceApp) registerSerializer(tp reflect.Type, serializer serde.StreamSerializer) {
