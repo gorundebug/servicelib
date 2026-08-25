@@ -38,6 +38,7 @@ import (
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 const durableWorkflowType = "servicelib.durable-link.v1"
@@ -408,6 +409,10 @@ func (c *Connector) Start(ctx context.Context) error {
 		if registered.continuationRegistered {
 			return
 		}
+		var continuationTracer tracing.Tracer
+		if configuredTracing := c.environment.Tracing(); configuredTracing != nil {
+			continuationTracer = configuredTracing.Tracer(c.environment.ServiceConfig().Name)
+		}
 		registered.worker.RegisterActivityWithOptions(
 			func(activityCtx context.Context, continuation runtime.DurableContinuation) (runtime.DurableActivityResult, error) {
 				if continuation.Version != 1 || continuation.CallID == "" || continuation.FromName == "" || continuation.ToName == "" {
@@ -424,6 +429,15 @@ func (c *Connector) Start(ctx context.Context) error {
 					c.durableCallDiagnostics("continuation", continuation.FromName+":"+continuation.ToName),
 				)
 				return runtime.RunDurableCallActivityWithResult(ctx, durable, func(ctx context.Context) error {
+					if continuationTracer != nil && tracing.SamplingEnabled(ctx) {
+						var span tracing.Span
+						ctx, span = continuationTracer.Start(ctx, "temporal.activity",
+							tracing.StringAttr("boundary", "durable_delay"),
+							tracing.StringAttr("from", continuation.FromName),
+							tracing.StringAttr("to", continuation.ToName),
+						)
+						runtime.BindDurableCallSpan(ctx, span)
+					}
 					return c.environment.GetRuntime().ResumeDurableContinuation(ctx, continuation)
 				})
 			},
