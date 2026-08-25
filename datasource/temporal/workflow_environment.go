@@ -140,15 +140,66 @@ func (env *WorkflowEnvironment) makePool(name string, priority bool) *workflowPo
 	if cfg == nil {
 		panic(fmt.Sprintf("Temporal Workflow pool %q not found", name))
 	}
-	capacity := cfg.QueueCapacity
-	if priority && capacity == 0 {
-		capacity = 256
-	}
 	return &workflowPool{
 		ctx: env.workflowCtx, name: name,
-		executors: max(1, cfg.ExecutorsCount), capacity: capacity,
-		priority: priority,
+		executors: max(1, cfg.ExecutorsCount), priority: priority,
+		metrics: makeWorkflowPoolMetrics(env.metrics, env.ServiceConfig().Name, name, priority),
 	}
+}
+
+func makeWorkflowPoolMetrics(
+	metricSet metrics.Metrics,
+	service string,
+	name string,
+	priority bool,
+) workflowPoolMetrics {
+	prefix := "task_pool"
+	description := "task pool"
+	if priority {
+		prefix = "priority_task_pool"
+		description = "priority task pool"
+	}
+	scope := metricSet.Scope(prefix, metrics.Labels{"service": service, "name": name})
+	return workflowPoolMetrics{
+		queueLength:        mustWorkflowGauge(scope, "queue_length", description+" wait queue length"),
+		executorsTarget:    mustWorkflowGauge(scope, "executors_target", "Desired number of "+description+" executors"),
+		executorsAllocated: mustWorkflowGauge(scope, "executors_allocated", "Number of live "+description+" executors"),
+		executorsBusy:      mustWorkflowGauge(scope, "executors_busy", "Number of "+description+" executors running callbacks"),
+		tasksTotal:         mustWorkflowCounter(scope, "tasks_total", "Total number of tasks executed by "+description, nil),
+		executionDuration:  mustWorkflowHistogram(scope, "task_execution_duration_seconds", "Task execution duration in seconds"),
+		taskRejected:       mustWorkflowCounter(scope, "events_total", "Total number of events in "+description, metrics.Labels{"event": "task_rejected"}),
+	}
+}
+
+func mustWorkflowGauge(scope metrics.MetricsScope, name, help string) metrics.Int64Gauge {
+	value, err := scope.Gauge(name, help, nil)
+	if err != nil {
+		panic(fmt.Errorf("register Temporal Workflow gauge %q: %w", name, err))
+	}
+	return value
+}
+
+func mustWorkflowCounter(
+	scope metrics.MetricsScope,
+	name, help string,
+	labels metrics.Labels,
+) metrics.Int64Counter {
+	value, err := scope.Counter(name, help, labels)
+	if err != nil {
+		panic(fmt.Errorf("register Temporal Workflow counter %q: %w", name, err))
+	}
+	return value
+}
+
+func mustWorkflowHistogram(
+	scope metrics.MetricsScope,
+	name, help string,
+) metrics.Float64Histogram {
+	value, err := scope.Histogram(name, help, nil)
+	if err != nil {
+		panic(fmt.Errorf("register Temporal Workflow histogram %q: %w", name, err))
+	}
+	return value
 }
 
 func (env *WorkflowEnvironment) Start(context.Context) error {
@@ -217,17 +268,28 @@ func sortedWorkflowPools(values map[string]*workflowPool) []*workflowPool {
 }
 
 type workflowTask struct {
+	ctx      context.Context
 	priority int
 	sequence uint64
 	fn       func()
+}
+
+type workflowPoolMetrics struct {
+	queueLength        metrics.Int64Gauge
+	executorsTarget    metrics.Int64Gauge
+	executorsAllocated metrics.Int64Gauge
+	executorsBusy      metrics.Int64Gauge
+	tasksTotal         metrics.Int64Counter
+	executionDuration  metrics.Float64Histogram
+	taskRejected       metrics.Int64Counter
 }
 
 type workflowPool struct {
 	ctx       workflow.Context
 	name      string
 	executors int
-	capacity  int
 	priority  bool
+	metrics   workflowPoolMetrics
 	queue     []workflowTask
 	sequence  uint64
 	pending   int
@@ -248,6 +310,8 @@ func (p *workflowPool) Start(context.Context) error {
 	}
 	p.started = true
 	p.workers = p.executors
+	p.metrics.executorsTarget.Set(int64(p.executors))
+	p.metrics.executorsAllocated.Set(int64(p.executors))
 	for range p.executors {
 		workflow.Go(p.ctx, p.run)
 	}
@@ -255,7 +319,10 @@ func (p *workflowPool) Start(context.Context) error {
 }
 
 func (p *workflowPool) run(ctx workflow.Context) {
-	defer func() { p.workers-- }()
+	defer func() {
+		p.workers--
+		p.metrics.executorsAllocated.Dec()
+	}()
 	for {
 		if err := workflow.Await(ctx, func() bool {
 			return len(p.queue) != 0 || p.stopped
@@ -267,7 +334,13 @@ func (p *workflowPool) run(ctx workflow.Context) {
 		}
 		task := p.queue[0]
 		p.queue = p.queue[1:]
+		p.metrics.queueLength.Dec()
+		p.metrics.executorsBusy.Inc()
+		started := workflow.Now(ctx)
 		task.fn()
+		p.metrics.executorsBusy.Dec()
+		p.metrics.tasksTotal.Inc(task.ctx)
+		p.metrics.executionDuration.Observe(task.ctx, workflow.Now(ctx).Sub(started).Seconds())
 		p.pending--
 	}
 }
@@ -299,15 +372,14 @@ func (p *workflowPool) AddTaskWithPriority(
 
 func (p *workflowPool) add(ctx context.Context, priority int, fn func()) error {
 	if err := ctx.Err(); err != nil {
+		p.metrics.taskRejected.Inc(ctx)
 		return err
 	}
 	if !p.started || p.stopped {
+		p.metrics.taskRejected.Inc(ctx)
 		return pool.ErrPoolStopped
 	}
-	if p.capacity > 0 && len(p.queue) >= p.capacity {
-		return fmt.Errorf("Temporal Workflow pool %q queue is full", p.name)
-	}
-	task := workflowTask{priority: priority, sequence: p.sequence, fn: fn}
+	task := workflowTask{ctx: ctx, priority: priority, sequence: p.sequence, fn: fn}
 	p.sequence++
 	p.queue = append(p.queue, task)
 	if p.priority {
@@ -319,6 +391,7 @@ func (p *workflowPool) add(ctx context.Context, priority int, fn func()) error {
 		})
 	}
 	p.pending++
+	p.metrics.queueLength.Inc()
 	return nil
 }
 
