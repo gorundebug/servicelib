@@ -252,9 +252,10 @@ func (c *Connector) activityDiagnostics(boundary, target string) runtime.Durable
 	return func(ctx context.Context, event runtime.DurableCallEvent, err error) {
 		if c.durableEvents != nil {
 			c.durableEvents.With(metrics.Labels{
-				"boundary": boundary,
-				"target":   target,
-				"event":    string(event),
+				"connector": c.name,
+				"boundary":  boundary,
+				"target":    target,
+				"event":     string(event),
 			}).Inc(ctx)
 		}
 		if err == nil {

@@ -170,7 +170,7 @@ func (d *DurableCallContext) report(ctx context.Context, event DurableCallEvent,
 	span := d.span
 	d.mu.Unlock()
 	if span != nil {
-		attributes := []tracing.Attribute{tracing.StringAttr("event", string(event))}
+		var attributes []tracing.Attribute
 		if err != nil {
 			attributes = append(attributes, tracing.StringAttr("error", err.Error()))
 		}
