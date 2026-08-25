@@ -25,8 +25,16 @@ func TemporalEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R,
 	return temporalsource.MakeDirectEndpointConsumer(stream)
 }
 
+func TemporalWorkflowEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E], handler temporalsource.WorkflowEndpointHandler) (runtime.Consumer[T], error) {
+	return temporalsource.MakeDirectWorkflowEndpointConsumer(stream, handler)
+}
+
 func TemporalScheduleEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E], function runtime.ScheduleEndpointFunction[T]) (runtime.Consumer[T], error) {
 	return temporalsource.MakeScheduleFunctionEndpointConsumer(stream, function)
+}
+
+func TemporalScheduleWorkflowEndpointConsumer[T, R, E any](stream runtime.TypedInputStream[T, R, E], function runtime.ScheduleEndpointFunction[T], handler temporalsource.WorkflowEndpointHandler) (runtime.Consumer[T], error) {
+	return temporalsource.MakeScheduleFunctionWorkflowEndpointConsumer(stream, function, handler)
 }
 
 func CustomEndpointConsumer[HandlerState, T, R, E any](stream runtime.TypedInputStream[T, R, E], dataProducer localsource.DataProducer[T], handler localsource.EndpointHandler[HandlerState, T, R, E]) (runtime.Consumer[T], error) {

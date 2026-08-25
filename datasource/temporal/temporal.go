@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
@@ -229,6 +230,7 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	stream runtime.TypedInputStream[T, R, E],
 	handler EndpointHandler[HandlerState, Input, T, R, E],
 	decode func(EndpointEnvelope) (Input, error),
+	workflowHandler WorkflowEndpointHandler,
 ) (runtime.Consumer[T], error) {
 	if handler == nil {
 		return nil, fmt.Errorf("handler is nil for Temporal endpoint stream %q", stream.GetName())
@@ -277,6 +279,14 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	}); err != nil {
 		return nil, err
 	}
+	if cfg.TemporalExecutionType == api.Workflow {
+		if workflowHandler == nil {
+			return nil, fmt.Errorf("Temporal Workflow endpoint %q requires a generated Workflow handler", cfg.Name)
+		}
+		if err := connector.RegisterWorkflowEndpoint(cfg.ID, workflowHandler); err != nil {
+			return nil, err
+		}
+	}
 	env.RegisterEndpointConsumer(consumer)
 	return consumer, nil
 }
@@ -289,7 +299,7 @@ func MakeEndpointConsumer[HandlerState, T, R, E any](
 	serde := stream.GetSerde()
 	return makeEndpointConsumer(stream, handler, func(envelope EndpointEnvelope) (T, error) {
 		return serde.Deserialize(envelope.Payload)
-	})
+	}, nil)
 }
 
 // MakeDirectEndpointConsumer registers a generated on-demand Temporal input
@@ -299,6 +309,23 @@ func MakeDirectEndpointConsumer[T, R, E any](
 	stream runtime.TypedInputStream[T, R, E],
 ) (runtime.Consumer[T], error) {
 	return MakeEndpointConsumer[struct{}](stream, directEndpointHandler[T, R, E]{})
+}
+
+// MakeDirectWorkflowEndpointConsumer registers a generated static Workflow
+// function while retaining the same ordinary input-stream business contract.
+func MakeDirectWorkflowEndpointConsumer[T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	workflowHandler WorkflowEndpointHandler,
+) (runtime.Consumer[T], error) {
+	serde := stream.GetSerde()
+	return makeEndpointConsumer(
+		stream,
+		directEndpointHandler[T, R, E]{},
+		func(envelope EndpointEnvelope) (T, error) {
+			return serde.Deserialize(envelope.Payload)
+		},
+		workflowHandler,
+	)
 }
 
 type scheduleEndpointInput[T any] struct {
@@ -368,7 +395,7 @@ func MakeScheduleEndpointConsumer[HandlerState, T, R, E any](
 					runtime.ScheduleBackendTemporal,
 				),
 			}, nil
-		},
+		}, nil,
 	)
 }
 
@@ -413,6 +440,43 @@ func MakeScheduleFunctionEndpointConsumer[T, R, E any](
 	return MakeScheduleEndpointConsumer[struct{}](
 		stream,
 		scheduleEndpointHandler[T, R, E]{function: function},
+	)
+}
+
+// MakeScheduleFunctionWorkflowEndpointConsumer is the Workflow equivalent of
+// MakeScheduleFunctionEndpointConsumer with a statically generated Workflow.
+func MakeScheduleFunctionWorkflowEndpointConsumer[T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	function runtime.ScheduleEndpointFunction[T],
+	workflowHandler WorkflowEndpointHandler,
+) (runtime.Consumer[T], error) {
+	if function == nil {
+		return nil, fmt.Errorf("Temporal schedule endpoint function is nil for stream %q", stream.GetName())
+	}
+	serde := stream.GetSerde()
+	return makeEndpointConsumer(
+		stream,
+		scheduleOrValueEndpointHandler[struct{}, T, R, E]{
+			scheduled: scheduleEndpointHandler[T, R, E]{function: function},
+		},
+		func(envelope EndpointEnvelope) (scheduleEndpointInput[T], error) {
+			if !envelope.Scheduled {
+				value, err := serde.Deserialize(envelope.Payload)
+				return scheduleEndpointInput[T]{value: value}, err
+			}
+			if envelope.ScheduleID == "" || envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
+				return scheduleEndpointInput[T]{}, fmt.Errorf("invalid Temporal schedule envelope for endpoint %d", envelope.EndpointID)
+			}
+			return scheduleEndpointInput[T]{
+				scheduled: true,
+				trigger: runtime.NewScheduleTrigger(
+					envelope.EndpointID, envelope.ScheduleID,
+					time.Unix(0, envelope.ScheduledAtNano), time.Unix(0, envelope.FiredAtNano),
+					runtime.ScheduleBackendTemporal,
+				),
+			}, nil
+		},
+		workflowHandler,
 	)
 }
 

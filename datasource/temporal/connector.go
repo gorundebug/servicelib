@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -23,12 +24,15 @@ import (
 	"time"
 	"unicode"
 
+	"go.opentelemetry.io/otel"
 	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
+	sdkotel "go.temporal.io/sdk/contrib/opentelemetry"
 	"go.temporal.io/sdk/converter"
+	"go.temporal.io/sdk/interceptor"
 	sdktemporal "go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
@@ -152,8 +156,10 @@ type EndpointResult struct {
 	Payload []byte `json:"payload,omitempty"`
 }
 
-type connectorEndpointHandler func(context.Context, EndpointEnvelope) (EndpointResult, error)
-type connectorEndpointEncoder func(any) ([]byte, error)
+type WorkflowGraphHandler func(context.Context, EndpointEnvelope) (EndpointResult, error)
+type WorkflowInputEncoder func(any) ([]byte, error)
+type connectorEndpointHandler = WorkflowGraphHandler
+type connectorEndpointEncoder = WorkflowInputEncoder
 
 type endpointWorkflowRequest struct {
 	ActivityType               string           `json:"activityType"`
@@ -164,7 +170,7 @@ type endpointWorkflowRequest struct {
 	Envelope                   EndpointEnvelope `json:"envelope"`
 }
 
-type workflowEndpointConfig struct {
+type WorkflowEndpointConfig struct {
 	ID                         int                       `json:"id"`
 	Name                       string                    `json:"name"`
 	TaskQueue                  string                    `json:"taskQueue"`
@@ -177,16 +183,23 @@ type workflowEndpointConfig struct {
 	MaximumAttempts            int                       `json:"maximumAttempts"`
 }
 
-type directEndpointWorkflowRequest struct {
+type DirectEndpointWorkflowRequest struct {
 	ConnectorName string                   `json:"connectorName"`
 	Envelope      EndpointEnvelope         `json:"envelope"`
-	Endpoints     []workflowEndpointConfig `json:"endpoints"`
+	Endpoints     []WorkflowEndpointConfig `json:"endpoints"`
+	RuntimeConfig []byte                   `json:"runtimeConfig"`
 }
 
+type workflowEndpointConfig = WorkflowEndpointConfig
+type directEndpointWorkflowRequest = DirectEndpointWorkflowRequest
+
+type WorkflowEndpointHandler func(workflow.Context, DirectEndpointWorkflowRequest) (EndpointResult, error)
+
 type workflowSubmissionContext struct {
-	workflowCtx workflow.Context
-	connector   string
-	endpoints   map[int]workflowEndpointConfig
+	workflowCtx   workflow.Context
+	connector     string
+	endpoints     map[int]workflowEndpointConfig
+	runtimeConfig []byte
 }
 
 type workflowSubmissionContextKey struct{}
@@ -197,6 +210,7 @@ type endpointRegistration struct {
 	workflowType string
 	handler      connectorEndpointHandler
 	encodeInput  connectorEndpointEncoder
+	workflow     WorkflowEndpointHandler
 }
 
 // Connector owns exactly one Temporal client and the Workers registered for
@@ -321,15 +335,73 @@ func (c *Connector) RegisterEndpoint(
 	return nil
 }
 
+// RegisterWorkflowEndpoint binds the statically generated Workflow function
+// for one Workflow source. The function is registered directly with the SDK;
+// it must not capture the process-owned service graph.
+func (c *Connector) RegisterWorkflowEndpoint(
+	endpointID int,
+	handler WorkflowEndpointHandler,
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.started {
+		return fmt.Errorf("cannot register Temporal endpoint %d after connector start", endpointID)
+	}
+	if handler == nil {
+		return fmt.Errorf("Temporal Workflow endpoint %d handler is nil", endpointID)
+	}
+	registration, ok := c.endpointRegistrations[endpointID]
+	if !ok {
+		return fmt.Errorf("Temporal endpoint %d must be registered before its Workflow", endpointID)
+	}
+	if registration.workflow != nil {
+		return fmt.Errorf("Temporal Workflow endpoint %d is already registered", endpointID)
+	}
+	registration.workflow = handler
+	c.endpointRegistrations[endpointID] = registration
+	return nil
+}
+
 func executeEndpointWorkflow(
 	workflowCtx workflow.Context,
 	request directEndpointWorkflowRequest,
 	registration endpointRegistration,
 	propagator temporalContextPropagator,
 ) (EndpointResult, error) {
+	return executeWorkflowEndpoint(
+		workflowCtx, request, registration.id, registration.workflowType,
+		registration.handler, registration.encodeInput, propagator,
+	)
+}
+
+// ExecuteWorkflowEndpoint runs one generated Workflow graph in the current
+// Workflow isolate and owns its durable context and Continue-As-New boundary.
+func ExecuteWorkflowEndpoint(
+	workflowCtx workflow.Context,
+	request DirectEndpointWorkflowRequest,
+	endpointID int,
+	workflowType string,
+	handler WorkflowGraphHandler,
+	encodeInput WorkflowInputEncoder,
+) (EndpointResult, error) {
+	return executeWorkflowEndpoint(
+		workflowCtx, request, endpointID, workflowType,
+		handler, encodeInput, temporalContextPropagator{},
+	)
+}
+
+func executeWorkflowEndpoint(
+	workflowCtx workflow.Context,
+	request DirectEndpointWorkflowRequest,
+	endpointID int,
+	workflowType string,
+	handler WorkflowGraphHandler,
+	encodeInput WorkflowInputEncoder,
+	propagator temporalContextPropagator,
+) (EndpointResult, error) {
 	envelope := request.Envelope
-	if envelope.Version != 1 || envelope.EndpointID != registration.id {
-		return EndpointResult{}, fmt.Errorf("invalid endpoint envelope for Temporal endpoint %d", registration.id)
+	if envelope.Version != 1 || envelope.EndpointID != endpointID {
+		return EndpointResult{}, fmt.Errorf("invalid endpoint envelope for Temporal endpoint %d", endpointID)
 	}
 	if envelope.Scheduled {
 		info := workflow.GetInfo(workflowCtx)
@@ -341,7 +413,7 @@ func executeEndpointWorkflow(
 		envelope.FiredAtNano = workflow.Now(workflowCtx).UTC().UnixNano()
 	}
 	if envelope.MessageID == "" || envelope.StreamID == "" {
-		return EndpointResult{}, fmt.Errorf("invalid endpoint identity for Temporal endpoint %d", registration.id)
+		return EndpointResult{}, fmt.Errorf("invalid endpoint identity for Temporal endpoint %d", endpointID)
 	}
 	carrier, _ := workflowCtx.Value(temporalCarrierContextKey{}).(map[string]string)
 	workflowCarrier := make(map[string]string, len(carrier))
@@ -359,9 +431,10 @@ func executeEndpointWorkflow(
 		endpointConfigs[endpoint.ID] = endpoint
 	}
 	ctx = context.WithValue(ctx, workflowSubmissionContextKey{}, workflowSubmissionContext{
-		workflowCtx: workflowCtx,
-		connector:   request.ConnectorName,
-		endpoints:   endpointConfigs,
+		workflowCtx:   workflowCtx,
+		connector:     request.ConnectorName,
+		endpoints:     endpointConfigs,
+		runtimeConfig: request.RuntimeConfig,
 	})
 	durable := runtime.NewDurableWorkflowContext(
 		envelope.MessageID,
@@ -371,12 +444,12 @@ func executeEndpointWorkflow(
 	var result EndpointResult
 	err := runtime.RunDurableWorkflow(ctx, durable, func(ctx context.Context) error {
 		var invokeErr error
-		result, invokeErr = registration.handler(ctx, envelope)
+		result, invokeErr = handler(ctx, envelope)
 		return invokeErr
 	})
 	var continuation *runtime.TemporalContinueAsNewRequest
 	if errors.As(err, &continuation) {
-		payload, encodeErr := registration.encodeInput(continuation.NextInput)
+		payload, encodeErr := encodeInput(continuation.NextInput)
 		if encodeErr != nil {
 			return EndpointResult{}, encodeErr
 		}
@@ -387,10 +460,11 @@ func executeEndpointWorkflow(
 		nextEnvelope.FiredAtNano = 0
 		nextEnvelope.Payload = payload
 		return EndpointResult{}, workflow.NewContinueAsNewError(
-			workflowCtx, registration.workflowType, directEndpointWorkflowRequest{
+			workflowCtx, workflowType, DirectEndpointWorkflowRequest{
 				ConnectorName: request.ConnectorName,
 				Envelope:      nextEnvelope,
 				Endpoints:     request.Endpoints,
+				RuntimeConfig: request.RuntimeConfig,
 			},
 		)
 	}
@@ -430,6 +504,14 @@ func (c *Connector) workflowEndpointSnapshot() ([]workflowEndpointConfig, error)
 		})
 	}
 	return result, nil
+}
+
+func (c *Connector) runtimeConfigSnapshot() ([]byte, error) {
+	snapshot, err := json.Marshal(c.environment.RuntimeConfig().GetConfig())
+	if err != nil {
+		return nil, fmt.Errorf("serialize Temporal Workflow runtime config: %w", err)
+	}
+	return snapshot, nil
 }
 
 // executeEndpointActivity owns the processing-side Temporal Activity scope for
@@ -526,11 +608,12 @@ func (c *Connector) Start(ctx context.Context) error {
 				activity.RegisterOptions{Name: registration.activityType},
 			)
 		case api.Workflow:
-			propagator := temporalContextPropagator{tracing: c.environment.Tracing()}
+			if registration.workflow == nil {
+				temporalClient.Close()
+				return fmt.Errorf("Temporal Workflow endpoint %q has no generated Workflow handler", cfg.Name)
+			}
 			registered.worker.RegisterWorkflowWithOptions(
-				func(workflowCtx workflow.Context, request directEndpointWorkflowRequest) (EndpointResult, error) {
-					return executeEndpointWorkflow(workflowCtx, request, registration, propagator)
-				},
+				registration.workflow,
 				workflow.RegisterOptions{Name: registration.workflowType},
 			)
 		default:
@@ -575,8 +658,15 @@ func (c *Connector) Start(ctx context.Context) error {
 }
 
 func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
+	tracingInterceptor, err := sdkotel.NewTracingInterceptor(sdkotel.TracerOptions{
+		TextMapPropagator: otel.GetTextMapPropagator(),
+	})
+	if err != nil {
+		return client.Options{}, fmt.Errorf("create Temporal tracing interceptor for connector %q: %w", c.name, err)
+	}
 	options := client.Options{
 		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
+		Interceptors: []interceptor.ClientInterceptor{tracingInterceptor},
 		ContextPropagators: []workflow.ContextPropagator{
 			temporalContextPropagator{tracing: c.environment.Tracing()},
 		},
@@ -685,11 +775,16 @@ func (c *Connector) ensureSchedule(
 		if err != nil {
 			return err
 		}
+		runtimeSnapshot, err := c.runtimeConfigSnapshot()
+		if err != nil {
+			return err
+		}
 		workflowType = registration.workflowType
 		args = []interface{}{directEndpointWorkflowRequest{
 			ConnectorName: c.name,
 			Envelope:      envelope,
 			Endpoints:     endpoints,
+			RuntimeConfig: runtimeSnapshot,
 		}}
 	}
 	overlap := enums.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL
@@ -840,6 +935,7 @@ func submitEndpointFromWorkflow(
 			ConnectorName: state.connector,
 			Envelope:      envelope,
 			Endpoints:     workflowEndpointConfigs(state.endpoints),
+			RuntimeConfig: state.runtimeConfig,
 		}
 		if err := workflow.ExecuteChildWorkflow(childCtx, cfg.WorkflowType, request).Get(childCtx, &result); err != nil {
 			return EndpointResult{}, fmt.Errorf("execute child Temporal endpoint Workflow %q: %w", cfg.Name, err)
@@ -906,11 +1002,16 @@ func (c *Connector) SubmitEndpoint(
 		if snapshotErr != nil {
 			return EndpointResult{}, snapshotErr
 		}
+		runtimeSnapshot, snapshotErr := c.runtimeConfigSnapshot()
+		if snapshotErr != nil {
+			return EndpointResult{}, snapshotErr
+		}
 		workflowType = registration.workflowType
 		workflowInput = directEndpointWorkflowRequest{
 			ConnectorName: c.name,
 			Envelope:      envelope,
 			Endpoints:     endpoints,
+			RuntimeConfig: runtimeSnapshot,
 		}
 	}
 	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.MessageID)

@@ -63,6 +63,17 @@ func NewWorkflowEnvironment(
 	return env, nil
 }
 
+// BindRuntimeEnvironment lets a generated service wrapper provide its custom
+// serde implementation while preserving this Workflow-owned runtime core. It
+// must be called before graph construction.
+func (env *WorkflowEnvironment) BindRuntimeEnvironment(actual runtime.RuntimeEnvironment) error {
+	if env.started {
+		return fmt.Errorf("cannot rebind a started Temporal Workflow environment")
+	}
+	serviceID := env.ServiceConfig().ID
+	return env.ServiceApp.InitIsolatedGraphRuntime(env.RuntimeConfig(), actual, serviceID)
+}
+
 func (env *WorkflowEnvironment) Metrics() metrics.Metrics { return env.metrics }
 func (env *WorkflowEnvironment) Tracing() tracing.Tracing { return nil }
 func (env *WorkflowEnvironment) Log() log.Logger          { return env.logger }
