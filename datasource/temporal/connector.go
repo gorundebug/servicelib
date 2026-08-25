@@ -212,7 +212,6 @@ type linkRegistration struct {
 
 type endpointRegistration struct {
 	id           int
-	config       config.TemporalEndpointConfig
 	activityType string
 	handler      connectorEndpointHandler
 }
@@ -356,17 +355,25 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 	if _, exists := c.endpointRegistrations[endpointID]; exists {
 		return fmt.Errorf("Temporal endpoint %d is already registered", endpointID)
 	}
-	configured := c.environment.RuntimeConfig().GetEndpointConfigByID(endpointID)
-	cfg, ok := configured.(*config.TemporalEndpointConfig)
-	if !ok || cfg.IdDataConnector != c.id {
-		return fmt.Errorf("endpoint id=%d does not belong to Temporal connector %q", endpointID, c.name)
+	cfg, err := c.endpointConfig(endpointID)
+	if err != nil {
+		return err
 	}
 	c.endpointRegistrations[endpointID] = endpointRegistration{
-		id: endpointID, config: *cfg,
+		id:           endpointID,
 		activityType: temporalEndpointActivityType(c.name, cfg.Name),
 		handler:      handler,
 	}
 	return nil
+}
+
+func (c *Connector) endpointConfig(endpointID int) (*config.TemporalEndpointConfig, error) {
+	configured := c.environment.RuntimeConfig().GetEndpointConfigByID(endpointID)
+	cfg, ok := configured.(*config.TemporalEndpointConfig)
+	if !ok || cfg.IdDataConnector != c.id {
+		return nil, fmt.Errorf("endpoint id=%d does not belong to Temporal connector %q", endpointID, c.name)
+	}
+	return cfg, nil
 }
 
 // executeEndpointActivity owns the processing-side Temporal Activity scope for
@@ -506,10 +513,15 @@ func (c *Connector) Start(ctx context.Context) error {
 		)
 	}
 	for _, registration := range c.endpointRegistrations {
-		if !registration.config.Enabled {
+		cfg, err := c.endpointConfig(registration.id)
+		if err != nil {
+			temporalClient.Close()
+			return err
+		}
+		if !cfg.Enabled {
 			continue
 		}
-		registered := getWorker(registration.config.TaskQueue)
+		registered := getWorker(cfg.TaskQueue)
 		registerContinuation(registered)
 		if !registered.endpointRegistered {
 			registered.worker.RegisterWorkflowWithOptions(temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType})
@@ -542,8 +554,16 @@ func (c *Connector) Start(ctx context.Context) error {
 		startedWorkers = append(startedWorkers, registered.worker)
 	}
 	for _, registration := range c.endpointRegistrations {
-		if registration.config.Enabled && registration.config.Schedule != "" {
-			if err := c.ensureSchedule(ctx, temporalClient, registration); err != nil {
+		cfg, err := c.endpointConfig(registration.id)
+		if err != nil {
+			for _, started := range startedWorkers {
+				started.Stop()
+			}
+			temporalClient.Close()
+			return err
+		}
+		if cfg.Enabled && cfg.Schedule != "" {
+			if err := c.ensureSchedule(ctx, temporalClient, registration, cfg); err != nil {
 				for _, started := range startedWorkers {
 					started.Stop()
 				}
@@ -644,8 +664,12 @@ func (c *Connector) StopAdmission(context.Context) {
 	}
 }
 
-func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Client, registration endpointRegistration) error {
-	cfg := registration.config
+func (c *Connector) ensureSchedule(
+	ctx context.Context,
+	temporalClient client.Client,
+	registration endpointRegistration,
+	cfg *config.TemporalEndpointConfig,
+) error {
 	owner := temporalEndpointOwner(c.name, cfg.Name)
 	request := endpointWorkflowRequest{
 		ActivityType:               registration.activityType,
