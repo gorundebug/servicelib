@@ -295,23 +295,75 @@ func MakeDirectEndpointConsumer[T, R, E any](
 	return MakeEndpointConsumer[struct{}](stream, directEndpointHandler[T, R, E]{})
 }
 
-// MakeScheduleEndpointConsumer registers the same endpoint contract for a
-// Temporal Schedule. The transport supplies ScheduleTrigger; no cron node or
-// transport-specific business function is added to the graph.
+type scheduleEndpointInput[T any] struct {
+	scheduled bool
+	trigger   runtime.ScheduleTrigger
+	value     T
+}
+
+type scheduleOrValueEndpointHandler[HandlerState, T, R, E any] struct {
+	scheduled EndpointHandler[HandlerState, runtime.ScheduleTrigger, T, R, E]
+}
+
+func (handler scheduleOrValueEndpointHandler[HandlerState, T, R, E]) BeginRequest(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+) (context.Context, HandlerState, error) {
+	return handler.scheduled.BeginRequest(ctx, sc)
+}
+
+func (handler scheduleOrValueEndpointHandler[HandlerState, T, R, E]) ConsumeMessage(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+	state HandlerState,
+	input scheduleEndpointInput[T],
+) error {
+	if input.scheduled {
+		return handler.scheduled.ConsumeMessage(ctx, sc, state, input.trigger)
+	}
+	sc.Collect(ctx, input.value)
+	return nil
+}
+
+func (handler scheduleOrValueEndpointHandler[HandlerState, T, R, E]) EndRequest(
+	ctx context.Context,
+	sc StreamContext[T, R, E],
+	err error,
+	state HandlerState,
+) {
+	handler.scheduled.EndRequest(ctx, sc, err, state)
+}
+
+// MakeScheduleEndpointConsumer registers a Temporal endpoint that supports
+// both entry paths of the same durable job contract. Schedule-created
+// executions invoke the endpoint function with ScheduleTrigger. On-demand
+// submissions deserialize T and enter the existing input stream directly.
 func MakeScheduleEndpointConsumer[HandlerState, T, R, E any](
 	stream runtime.TypedInputStream[T, R, E],
 	handler EndpointHandler[HandlerState, runtime.ScheduleTrigger, T, R, E],
 ) (runtime.Consumer[T], error) {
-	return makeEndpointConsumer(stream, handler, func(envelope EndpointEnvelope) (runtime.ScheduleTrigger, error) {
-		if !envelope.Scheduled || envelope.ScheduleID == "" || envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
-			return runtime.ScheduleTrigger{}, fmt.Errorf("invalid Temporal schedule envelope for endpoint %d", envelope.EndpointID)
-		}
-		return runtime.NewScheduleTrigger(
-			envelope.EndpointID, envelope.ScheduleID,
-			time.Unix(0, envelope.ScheduledAtNano), time.Unix(0, envelope.FiredAtNano),
-			runtime.ScheduleBackendTemporal,
-		), nil
-	})
+	serde := stream.GetSerde()
+	return makeEndpointConsumer(
+		stream,
+		scheduleOrValueEndpointHandler[HandlerState, T, R, E]{scheduled: handler},
+		func(envelope EndpointEnvelope) (scheduleEndpointInput[T], error) {
+			if !envelope.Scheduled {
+				value, err := serde.Deserialize(envelope.Payload)
+				return scheduleEndpointInput[T]{value: value}, err
+			}
+			if envelope.ScheduleID == "" || envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
+				return scheduleEndpointInput[T]{}, fmt.Errorf("invalid Temporal schedule envelope for endpoint %d", envelope.EndpointID)
+			}
+			return scheduleEndpointInput[T]{
+				scheduled: true,
+				trigger: runtime.NewScheduleTrigger(
+					envelope.EndpointID, envelope.ScheduleID,
+					time.Unix(0, envelope.ScheduledAtNano), time.Unix(0, envelope.FiredAtNano),
+					runtime.ScheduleBackendTemporal,
+				),
+			}, nil
+		},
+	)
 }
 
 type scheduleEndpointHandler[T, R, E any] struct {
