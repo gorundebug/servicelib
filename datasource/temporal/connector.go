@@ -38,16 +38,40 @@ import (
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
-const durableWorkflowType = "servicegen.durable-link.v1"
-const endpointWorkflowType = "servicegen.temporal-endpoint.v1"
+const durableWorkflowType = "servicelib.durable-link.v1"
+const endpointWorkflowType = "servicelib.temporal-endpoint.v1"
 
 var scheduleWorkflowIDSuffix = regexp.MustCompile(`-(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)$`)
 
 const (
-	durableMemoManagedBy = "servicegen.managedBy"
-	durableMemoOwner     = "servicegen.owner"
-	durableMemoCallID    = "servicegen.callId"
+	durableMemoManagedBy = "servicelib.managedBy"
+	durableMemoOwner     = "servicelib.owner"
+	durableMemoCallID    = "servicelib.callId"
 )
+
+func durableLinkActivityType(serviceName string, id config.LinkID) string {
+	return fmt.Sprintf("%s.durable.%d.%d.v1", serviceName, id.From, id.To)
+}
+
+func durableLinkWorkflowID(serviceName string, id config.LinkID, callID string) string {
+	return fmt.Sprintf("%s/durable/%d/%d/%s", serviceName, id.From, id.To, callID)
+}
+
+func durableLinkOwner(serviceName string, id config.LinkID) string {
+	return fmt.Sprintf("%s/link/%d/%d/v1", serviceName, id.From, id.To)
+}
+
+func temporalEndpointActivityType(connectorName, endpointName string) string {
+	return fmt.Sprintf("%s.endpoint.%s.v1", connectorName, endpointName)
+}
+
+func temporalEndpointWorkflowID(connectorName, endpointName, executionID string) string {
+	return fmt.Sprintf("%s/endpoint/%s/%s", connectorName, endpointName, executionID)
+}
+
+func temporalEndpointOwner(connectorName, endpointName string) string {
+	return fmt.Sprintf("%s/endpoint/%s/v1", connectorName, endpointName)
+}
 
 type durableWorkflowRequest struct {
 	ActivityType               string                  `json:"activityType"`
@@ -97,6 +121,7 @@ type endpointWorkflowRequest struct {
 type linkRegistration struct {
 	id           config.LinkID
 	config       config.DurableCallSemanticsConfig
+	serviceName  string
 	activityType string
 	handler      runtime.DurableLinkHandler
 }
@@ -217,10 +242,9 @@ func (c *Connector) RegisterLink(id config.LinkID, handler runtime.DurableLinkHa
 	if !ok || durable.IdDataConnector != c.id {
 		return fmt.Errorf("link %d->%d does not belong to Temporal connector %q", id.From, id.To, c.name)
 	}
-	serviceID := c.environment.ServiceConfig().ID
 	c.linkRegistrations[id] = linkRegistration{
-		id: id, config: *durable,
-		activityType: fmt.Sprintf("servicegen.durable.%d.%d.%d.v1", serviceID, id.From, id.To),
+		id: id, config: *durable, serviceName: c.environment.ServiceConfig().Name,
+		activityType: durableLinkActivityType(c.environment.ServiceConfig().Name, id),
 		handler:      handler,
 	}
 	return nil
@@ -246,10 +270,9 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 	if !ok || cfg.IdDataConnector != c.id {
 		return fmt.Errorf("endpoint id=%d does not belong to Temporal connector %q", endpointID, c.name)
 	}
-	serviceID := c.environment.ServiceConfig().ID
 	c.endpointRegistrations[endpointID] = endpointRegistration{
 		id: endpointID, config: *cfg,
-		activityType: fmt.Sprintf("servicegen.endpoint.%d.%d.v1", serviceID, endpointID),
+		activityType: temporalEndpointActivityType(c.name, cfg.Name),
 		handler:      handler,
 	}
 	return nil
@@ -468,7 +491,7 @@ func (c *Connector) StopAdmission(context.Context) {
 
 func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Client, registration endpointRegistration) error {
 	cfg := registration.config
-	owner := fmt.Sprintf("servicegen/%d/endpoint/%d/v1", c.environment.ServiceConfig().ID, cfg.ID)
+	owner := temporalEndpointOwner(c.name, cfg.Name)
 	request := endpointWorkflowRequest{
 		ActivityType:               registration.activityType,
 		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
@@ -491,12 +514,12 @@ func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Cl
 		catchupWindow = 365 * 24 * time.Hour
 	}
 	action := &client.ScheduleWorkflowAction{
-		ID:        fmt.Sprintf("servicegen/schedule/%d/%d", c.environment.ServiceConfig().ID, cfg.ID),
+		ID:        fmt.Sprintf("%s/schedule/%s", c.name, cfg.Name),
 		Workflow:  endpointWorkflowType,
 		Args:      []interface{}{request},
 		TaskQueue: cfg.TaskQueue,
 		Memo: map[string]interface{}{
-			durableMemoManagedBy: "servicegen",
+			durableMemoManagedBy: "servicelib",
 			durableMemoOwner:     owner,
 			durableMemoCallID:    cfg.ScheduleID,
 		},
@@ -515,7 +538,7 @@ func (c *Connector) ensureSchedule(ctx context.Context, temporalClient client.Cl
 		Overlap:       overlap,
 		CatchupWindow: catchupWindow,
 		Memo: map[string]interface{}{
-			durableMemoManagedBy: "servicegen",
+			durableMemoManagedBy: "servicelib",
 			durableMemoOwner:     owner,
 			durableMemoCallID:    cfg.ScheduleID,
 		},
@@ -577,8 +600,8 @@ func (c *Connector) SubmitLink(ctx context.Context, id config.LinkID, envelope r
 		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                   envelope,
 	}
-	workflowID := fmt.Sprintf("servicegen/durable/%d/%d/%d/%s", c.environment.ServiceConfig().ID, id.From, id.To, envelope.CallID)
-	owner := fmt.Sprintf("servicegen/%d/link/%d/%d/v1", c.environment.ServiceConfig().ID, id.From, id.To)
+	workflowID := durableLinkWorkflowID(registration.serviceName, id, envelope.CallID)
+	owner := durableLinkOwner(registration.serviceName, id)
 	options := client.StartWorkflowOptions{
 		ID:                       workflowID,
 		TaskQueue:                registration.config.TaskQueue,
@@ -586,7 +609,7 @@ func (c *Connector) SubmitLink(ctx context.Context, id config.LinkID, envelope r
 		WorkflowIDConflictPolicy: enums.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
 		Priority:                 sdktemporal.Priority{PriorityKey: request.Priority},
 		Memo: map[string]interface{}{
-			durableMemoManagedBy: "servicegen",
+			durableMemoManagedBy: "servicelib",
 			durableMemoOwner:     owner,
 			durableMemoCallID:    envelope.CallID,
 		},
@@ -618,15 +641,16 @@ func (c *Connector) SubmitEndpoint(
 	waitForResult bool,
 ) (EndpointResult, error) {
 	c.mu.Lock()
-	registration, registered := c.endpointRegistrations[endpointID]
 	temporalClient := c.client
 	started := c.started
 	c.mu.Unlock()
-	if !registered {
-		return EndpointResult{}, fmt.Errorf("Temporal endpoint %d is not registered", endpointID)
+	configured := c.environment.RuntimeConfig().GetEndpointConfigByID(endpointID)
+	cfg, ok := configured.(*config.TemporalEndpointConfig)
+	if !ok || cfg.IdDataConnector != c.id {
+		return EndpointResult{}, fmt.Errorf("endpoint id=%d does not belong to Temporal connector %q", endpointID, c.name)
 	}
-	if !registration.config.Enabled {
-		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q is disabled", registration.config.Name)
+	if !cfg.Enabled {
+		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q is disabled", cfg.Name)
 	}
 	if !started || temporalClient == nil {
 		return EndpointResult{}, fmt.Errorf("Temporal connector %q is not started", c.name)
@@ -640,35 +664,35 @@ func (c *Connector) SubmitEndpoint(
 	envelope.Version = 1
 	envelope.EndpointID = endpointID
 	request := endpointWorkflowRequest{
-		ActivityType:               registration.activityType,
-		ActivityStartToCloseMillis: registration.config.ActivityStartToCloseTimeout,
-		ActivityHeartbeatMillis:    registration.config.ActivityHeartbeatTimeout,
-		MaximumAttempts:            int32(registration.config.MaximumAttempts),
+		ActivityType:               temporalEndpointActivityType(c.name, cfg.Name),
+		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
+		ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
+		MaximumAttempts:            int32(cfg.MaximumAttempts),
 		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                   envelope,
 	}
-	workflowID := fmt.Sprintf("servicegen/endpoint/%d/%d/%s", c.environment.ServiceConfig().ID, endpointID, envelope.ExecutionID)
-	owner := fmt.Sprintf("servicegen/%d/endpoint/%d/v1", c.environment.ServiceConfig().ID, endpointID)
+	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.ExecutionID)
+	owner := temporalEndpointOwner(c.name, cfg.Name)
 	options := client.StartWorkflowOptions{
 		ID:                       workflowID,
-		TaskQueue:                registration.config.TaskQueue,
+		TaskQueue:                cfg.TaskQueue,
 		WorkflowIDReusePolicy:    enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 		WorkflowIDConflictPolicy: enums.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
 		Priority:                 sdktemporal.Priority{PriorityKey: request.Priority},
 		Memo: map[string]interface{}{
-			durableMemoManagedBy: "servicegen",
+			durableMemoManagedBy: "servicelib",
 			durableMemoOwner:     owner,
 			durableMemoCallID:    envelope.ExecutionID,
 		},
 	}
-	if registration.config.WorkflowExecutionTimeout > 0 {
-		options.WorkflowExecutionTimeout = time.Duration(registration.config.WorkflowExecutionTimeout) * time.Millisecond
+	if cfg.WorkflowExecutionTimeout > 0 {
+		options.WorkflowExecutionTimeout = time.Duration(cfg.WorkflowExecutionTimeout) * time.Millisecond
 	}
 	run, err := temporalClient.ExecuteWorkflow(ctx, options, endpointWorkflowType, request)
 	if err != nil {
 		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
 		if !errors.As(err, &alreadyStarted) {
-			return EndpointResult{}, fmt.Errorf("submit Temporal endpoint %q: %w", registration.config.Name, err)
+			return EndpointResult{}, fmt.Errorf("submit Temporal endpoint %q: %w", cfg.Name, err)
 		}
 		run = temporalClient.GetWorkflow(ctx, workflowID, "")
 	}
@@ -680,7 +704,7 @@ func (c *Connector) SubmitEndpoint(
 	}
 	var result EndpointResult
 	if err := run.Get(ctx, &result); err != nil {
-		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q execution failed: %w", registration.config.Name, err)
+		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q execution failed: %w", cfg.Name, err)
 	}
 	return result, nil
 }
@@ -725,7 +749,7 @@ func validateWorkflowOwnership(
 
 func validateMemoOwnership(memo *commonpb.Memo, expectedOwner string, expectedCallID string) error {
 	if memo == nil {
-		return fmt.Errorf("ServiceGen memo is absent")
+		return fmt.Errorf("ServiceLib memo is absent")
 	}
 	readMemo := func(name string) (string, error) {
 		payload := memo.GetFields()[name]
@@ -742,7 +766,7 @@ func validateMemoOwnership(memo *commonpb.Memo, expectedOwner string, expectedCa
 	if err != nil {
 		return err
 	}
-	if managedBy != "servicegen" {
+	if managedBy != "servicelib" {
 		return fmt.Errorf("managedBy=%q", managedBy)
 	}
 	owner, err := readMemo(durableMemoOwner)

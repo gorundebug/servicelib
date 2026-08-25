@@ -229,7 +229,16 @@ func (d *DurableCallContext) cancelWithoutOutcome(ctx context.Context, cause err
 	if cause != nil {
 		missing = fmt.Errorf("%w: %w", ErrDurableCallOutcomeMissing, cause)
 	}
-	_ = d.complete(ctx, DurableCallEventMissingOutcome, missing)
+	d.mu.Lock()
+	if d.completed {
+		d.mu.Unlock()
+		return
+	}
+	d.completed = true
+	d.outcome = missing
+	d.mu.Unlock()
+	d.report(ctx, DurableCallEventMissingOutcome, missing)
+	close(d.done)
 }
 
 // RunDurableCallActivity installs the processing-side context and cancellation

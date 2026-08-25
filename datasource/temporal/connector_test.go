@@ -12,12 +12,29 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
 )
+
+func TestTemporalRuntimeIdentityUsesServiceForLinksAndContractForEndpoints(t *testing.T) {
+	link := config.LinkID{From: 3, To: 4}
+	if got := durableLinkWorkflowID("Automation Service", link, "call-1"); got != "Automation Service/durable/3/4/call-1" {
+		t.Fatalf("durable workflow id = %q", got)
+	}
+	if got := durableLinkOwner("Automation Service", link); got != "Automation Service/link/3/4/v1" {
+		t.Fatalf("durable owner = %q", got)
+	}
+	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "Temporal.endpoint.Durable Job.v1" {
+		t.Fatalf("endpoint activity type = %q", got)
+	}
+	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "Temporal/endpoint/Durable Job/job-1" {
+		t.Fatalf("endpoint workflow id = %q", got)
+	}
+}
 
 func TestScheduledTimeUsesTemporalScheduleWorkflowIDSuffix(t *testing.T) {
 	fallback := time.Date(2026, 8, 24, 12, 35, 1, 0, time.UTC)
 	got := scheduledTimeFromWorkflowID(
-		"servicegen/schedule/1/3-2026-08-24T12:30:00.123456789Z", fallback,
+		"Temporal/schedule/DurableJob-2026-08-24T12:30:00.123456789Z", fallback,
 	)
 	want := time.Date(2026, 8, 24, 12, 30, 0, 123456789, time.UTC)
 	if !got.Equal(want) {
@@ -34,7 +51,7 @@ func TestDurableWorkflowInvokesRegisteredActivityWithUnchangedEnvelope(t *testin
 	environment.RegisterWorkflowWithOptions(
 		durableLinkWorkflow, workflow.RegisterOptions{Name: durableWorkflowType},
 	)
-	const activityType = "servicegen.durable.1.2.3.v1"
+	const activityType = "Automation Service.durable.2.3.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope runtime.DurableEnvelope) error {
 			if envelope.CallID != "logical-call" || envelope.From != 2 || envelope.To != 3 {
@@ -62,7 +79,7 @@ func TestTemporalEndpointWorkflowPreservesOnDemandEnvelopeAndResult(t *testing.T
 	environment.RegisterWorkflowWithOptions(
 		temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType},
 	)
-	const activityType = "servicegen.endpoint.1.7.v1"
+	const activityType = "Temporal.endpoint.DurableJob.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
 			if envelope.EndpointID != 7 || envelope.ExecutionID != "job-1" || envelope.StreamID != "request-1" || envelope.Scheduled {
@@ -97,7 +114,7 @@ func TestTemporalScheduleWorkflowCreatesExecutionIdentity(t *testing.T) {
 	environment.RegisterWorkflowWithOptions(
 		temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType},
 	)
-	const activityType = "servicegen.endpoint.1.8.v1"
+	const activityType = "Temporal.endpoint.TemporalSchedule.v1"
 	environment.RegisterActivityWithOptions(
 		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
 			if !envelope.Scheduled || envelope.ScheduleID != "schedule-8" || envelope.ExecutionID == "" || envelope.StreamID != envelope.ExecutionID || envelope.ScheduledAtNano == 0 {
