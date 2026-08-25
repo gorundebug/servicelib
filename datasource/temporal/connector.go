@@ -493,17 +493,13 @@ func (c *Connector) Start(ctx context.Context) error {
 					return endpointActivityResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
 				}
 				envelope.FiredAtNano = time.Now().UTC().UnixNano()
-				if !envelope.Scheduled {
-					result, err := registration.handler(activityCtx, envelope)
-					return endpointActivityResult{Result: result}, err
-				}
 				durable := runtime.NewDurableCallContext(
 					envelope.ExecutionID,
 					func(ctx context.Context, details any) error {
 						activity.RecordHeartbeat(ctx, details)
 						return nil
 					},
-					c.durableCallDiagnostics("schedule", fmt.Sprintf("%d", registration.id)),
+					c.durableCallDiagnostics("endpoint", fmt.Sprintf("%d", registration.id)),
 				)
 				var result EndpointResult
 				durableResult, err := runtime.RunDurableCallActivityWithResult(activityCtx, durable, func(ctx context.Context) error {
