@@ -26,14 +26,19 @@ import (
 // Serialization, Temporal submission, retry, and result transport stay in the
 // framework adapter and do not alter the target graph node.
 type EndpointHandler[HandlerState, T any] interface {
-	GetMessageID(context.Context, T) string
+	GetMessageID(context.Context, runtime.Stream, HandlerState, T) string
 	BeginRequest(context.Context, runtime.Stream) (context.Context, HandlerState)
 	EndRequest(context.Context, runtime.Stream, error, HandlerState)
 }
 
 type directEndpointHandler[T any] struct{}
 
-func (directEndpointHandler[T]) GetMessageID(ctx context.Context, _ T) string {
+func (directEndpointHandler[T]) GetMessageID(
+	ctx context.Context,
+	_ runtime.Stream,
+	_ struct{},
+	_ T,
+) string {
 	if id, ok := runtime.StreamIdFromContext(ctx); ok {
 		return id.GetID()
 	}
@@ -146,7 +151,7 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 		tracing.SpanError(span, err)
 		return
 	}
-	messageID := ec.handler.GetMessageID(handlerCtx, value)
+	messageID := ec.handler.GetMessageID(handlerCtx, ec.stream.Stream(), state, value)
 	if messageID == "" {
 		messageID = runtime.NewStreamID()
 	}
