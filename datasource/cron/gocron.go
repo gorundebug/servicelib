@@ -105,6 +105,7 @@ func (ep *endpoint[T, R, E]) fire(ctx context.Context) {
 		return
 	}
 	ctx = runtime.WithStreamId(ctx, runtime.NewStreamID())
+	ctx = runtime.ApplyDataSourceEndpointTracing(ctx, ep.GetRuntimeEnvironment(), ep.GetID())
 	start := ep.OnRequestStart(ctx)
 	ep.consumer.onTrigger(ctx, runtime.NewScheduleTrigger(
 		ep.GetID(), ep.GetName(), scheduledAt, firedAt, runtime.ScheduleBackendLocal,

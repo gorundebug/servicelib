@@ -549,7 +549,9 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	}
 	defer ec.releaseConcurrency()
 
-	ctx := session.Context()
+	ctx := runtime.ApplyDataSourceEndpointTracing(
+		session.Context(), ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "kafka.input",

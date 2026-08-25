@@ -14,6 +14,7 @@ type EndpointConfig interface {
 	GetID() int
 	GetName() string
 	GetIdDataConnector() int
+	GetTracingEnabled() bool
 	GetProperty(name string) interface{}
 }
 
@@ -22,6 +23,7 @@ type HttpEndpointConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	TracingEnabled           bool                   `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	HttpMethodType           api.HTTPMethodType     `yaml:"httpMethodType,omitempty" mapstructure:"httpMethodType"`
 	Path                     string                 `yaml:"path,omitempty" mapstructure:"path"`
 	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
@@ -36,6 +38,7 @@ type HttpEndpointConfig struct {
 func (e *HttpEndpointConfig) GetID() int                          { return e.ID }
 func (e *HttpEndpointConfig) GetName() string                     { return e.Name }
 func (e *HttpEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *HttpEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *HttpEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
 // GrpcEndpointConfig is the configuration for a gRPC endpoint.
@@ -51,12 +54,14 @@ type GrpcEndpointConfig struct {
 	FunctionInitializerGroup string                 `yaml:"functionInitializerGroup,omitempty" mapstructure:"functionInitializerGroup"`
 	FunctionModule           string                 `yaml:"functionModule,omitempty" mapstructure:"functionModule"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	TracingEnabled           bool                   `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
 func (e *GrpcEndpointConfig) GetID() int                          { return e.ID }
 func (e *GrpcEndpointConfig) GetName() string                     { return e.Name }
 func (e *GrpcEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *GrpcEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *GrpcEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
 // KafkaEndpointConfig is the configuration for a Kafka endpoint.
@@ -65,6 +70,7 @@ type KafkaEndpointConfig struct {
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
 	Enabled                  bool                   `yaml:"enabled" mapstructure:"enabled"`
+	TracingEnabled           bool                   `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	CreateTopic              bool                   `yaml:"createTopic,omitempty" mapstructure:"createTopic"`
 	Topic                    string                 `yaml:"topic,omitempty" mapstructure:"topic"`
 	Partitions               int                    `yaml:"partitions,omitempty" mapstructure:"partitions"`
@@ -82,6 +88,7 @@ type KafkaEndpointConfig struct {
 func (e *KafkaEndpointConfig) GetID() int                          { return e.ID }
 func (e *KafkaEndpointConfig) GetName() string                     { return e.Name }
 func (e *KafkaEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *KafkaEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *KafkaEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
 // CronEndpointConfig is one concrete local cron item.
@@ -90,6 +97,7 @@ type CronEndpointConfig struct {
 	Name                     string                      `yaml:"name" mapstructure:"name"`
 	IdDataConnector          int                         `yaml:"idDataConnector" mapstructure:"idDataConnector"`
 	Enabled                  bool                        `yaml:"enabled" mapstructure:"enabled"`
+	TracingEnabled           bool                        `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	Schedule                 string                      `yaml:"schedule" mapstructure:"schedule"`
 	Timezone                 string                      `yaml:"timezone" mapstructure:"timezone"`
 	OverlapPolicy            api.ScheduleOverlapPolicy   `yaml:"overlapPolicy" mapstructure:"overlapPolicy"`
@@ -106,6 +114,7 @@ type CronEndpointConfig struct {
 func (e *CronEndpointConfig) GetID() int                          { return e.ID }
 func (e *CronEndpointConfig) GetName() string                     { return e.Name }
 func (e *CronEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *CronEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *CronEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
 // TemporalEndpointConfig is one typed durable job contract and optionally one
@@ -115,6 +124,7 @@ type TemporalEndpointConfig struct {
 	Name                        string                      `yaml:"name" mapstructure:"name"`
 	IdDataConnector             int                         `yaml:"idDataConnector" mapstructure:"idDataConnector"`
 	Enabled                     bool                        `yaml:"enabled" mapstructure:"enabled"`
+	TracingEnabled              bool                        `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	TaskQueue                   string                      `yaml:"taskQueue" mapstructure:"taskQueue"`
 	Schedule                    string                      `yaml:"schedule,omitempty" mapstructure:"schedule"`
 	ScheduleID                  string                      `yaml:"scheduleId,omitempty" mapstructure:"scheduleId"`
@@ -137,6 +147,7 @@ type TemporalEndpointConfig struct {
 func (e *TemporalEndpointConfig) GetID() int                          { return e.ID }
 func (e *TemporalEndpointConfig) GetName() string                     { return e.Name }
 func (e *TemporalEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *TemporalEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *TemporalEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }
 
 // CustomEndpointConfig is the configuration for a custom endpoint.
@@ -144,6 +155,7 @@ type CustomEndpointConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`
+	TracingEnabled           bool                   `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	FunctionName             string                 `yaml:"functionName,omitempty" mapstructure:"functionName"`
 	FunctionPackage          string                 `yaml:"functionPackage,omitempty" mapstructure:"functionPackage"`
 	PublicFunction           bool                   `yaml:"publicFunction,omitempty" mapstructure:"publicFunction"`
@@ -156,4 +168,5 @@ type CustomEndpointConfig struct {
 func (e *CustomEndpointConfig) GetID() int                          { return e.ID }
 func (e *CustomEndpointConfig) GetName() string                     { return e.Name }
 func (e *CustomEndpointConfig) GetIdDataConnector() int             { return e.IdDataConnector }
+func (e *CustomEndpointConfig) GetTracingEnabled() bool             { return e.TracingEnabled }
 func (e *CustomEndpointConfig) GetProperty(name string) interface{} { return e.Properties[name] }

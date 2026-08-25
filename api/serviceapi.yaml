@@ -1036,6 +1036,12 @@ components:
             Controls whether an endpoint starts its transport integration.
             When omitted or false, the endpoint remains in the execution graph but its
             external transport or scheduler is not started.
+        tracingEnabled:
+          type: boolean
+          description: |
+            Enables tracing for events admitted by this DataSource endpoint. The current
+            reloadable value is evaluated for every inbound event. DataSink adapters ignore
+            this flag and only propagate tracing already present in the message context.
         httpMethodType:
           $ref: '#/components/schemas/HTTPMethodType'
         path:

@@ -407,6 +407,9 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 			reqCtx = runtime.WithStreamId(reqCtx, sid)
 		}
 	}
+	reqCtx = runtime.ApplyDataSourceEndpointTracing(
+		reqCtx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(reqCtx) {
 		reqCtx, span = ec.tracer.Start(reqCtx, "http.input",

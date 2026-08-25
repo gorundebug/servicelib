@@ -121,6 +121,9 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	}
 	ctx, cancel := endpointContext(activityCtx, envelope, ec.tracing)
 	defer cancel()
+	ctx = runtime.ApplyDataSourceEndpointTracing(
+		ctx, ec.Stream().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "temporal.input",

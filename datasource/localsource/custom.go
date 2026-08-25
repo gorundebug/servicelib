@@ -280,6 +280,9 @@ func (ec *customEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(ctx con
 	}
 	defer ec.releaseConcurrency()
 
+	ctx = runtime.ApplyDataSourceEndpointTracing(
+		ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "local.input",

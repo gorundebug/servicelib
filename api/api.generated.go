@@ -633,6 +633,11 @@ type Endpoint struct {
 	// Topic Kafka topic name. Applies to Kafka endpoints.
 	Topic *string `json:"topic,omitempty"`
 
+	// TracingEnabled Enables tracing for events admitted by this DataSource endpoint. The current
+	// reloadable value is evaluated for every inbound event. DataSink adapters ignore
+	// this flag and only propagate tracing already present in the message context.
+	TracingEnabled *bool `json:"tracingEnabled,omitempty"`
+
 	// WorkflowExecutionTimeout Temporal Workflow execution timeout in milliseconds; zero means SDK default.
 	WorkflowExecutionTimeout *int `json:"workflowExecutionTimeout,omitempty"`
 }

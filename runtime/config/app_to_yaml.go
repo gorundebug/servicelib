@@ -402,6 +402,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					if ep.Enabled != nil {
 						epObj["enabled"] = *ep.Enabled
 					}
+					if ep.TracingEnabled != nil {
+						epObj["tracingEnabled"] = *ep.TracingEnabled
+					}
 					if ep.Partitions != nil {
 						epObj["partitions"] = *ep.Partitions
 					}

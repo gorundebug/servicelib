@@ -283,6 +283,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		Id:              ep.GetID(),
 		Name:            ep.GetName(),
 		IdDataConnector: ep.GetIdDataConnector(),
+		TracingEnabled:  boolOptPtr(ep.GetTracingEnabled()),
 	}
 	switch c := ep.(type) {
 	case *HttpEndpointConfig:

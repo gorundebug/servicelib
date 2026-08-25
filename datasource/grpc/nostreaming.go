@@ -181,6 +181,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 			}
 		}
 	}
+	ctx = runtime.ApplyDataSourceEndpointTracing(
+		ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "grpc.input",
