@@ -3,6 +3,7 @@ package temporal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -75,6 +76,12 @@ func TestTemporalRuntimeIdentityUsesEndpointContract(t *testing.T) {
 	}
 	if got := temporalEndpointWorkflowID("Temporal", "Durable Job", "job-1"); got != "temporal/endpoint/durable_job/job-1" {
 		t.Fatalf("endpoint workflow id = %q", got)
+	}
+	if got := temporalDirectWorkflowType("Temporal", "Durable Job"); got != "temporal.endpoint.durable_job.workflow.v1" {
+		t.Fatalf("direct endpoint workflow type = %q", got)
+	}
+	if got := temporalScheduleWorkflowID("Temporal Connector", "Durable Job"); got != "temporal_connector/schedule/durable_job" {
+		t.Fatalf("schedule workflow id = %q", got)
 	}
 }
 
@@ -155,6 +162,78 @@ func TestTemporalScheduleWorkflowCreatesExecutionIdentity(t *testing.T) {
 		Envelope: EndpointEnvelope{
 			Version: 1, EndpointID: 8, Scheduled: true, ScheduleID: "schedule-8",
 		},
+	})
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTemporalWorkflowEndpointRunsGraphContractWithDurableTimer(t *testing.T) {
+	registration := endpointRegistration{
+		id: 9, workflowType: "temporal.endpoint.workflow_job.v1",
+		handler: func(ctx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			if envelope.MessageID != "workflow-1" || envelope.StreamID != "request-1" {
+				t.Fatalf("unexpected workflow endpoint envelope: %+v", envelope)
+			}
+			if !runtime.IsDurableWorkflowContext(ctx) {
+				t.Fatal("workflow endpoint did not receive durable Workflow context")
+			}
+			if err := runtime.DurableCallHeartbeat(ctx, "ignored outside Activity"); err != nil {
+				return EndpointResult{}, err
+			}
+			resumed := false
+			handled, err := runtime.RunDurableCallDelay(ctx, time.Hour, func() { resumed = true })
+			if err != nil || !handled || !resumed {
+				return EndpointResult{}, fmt.Errorf("durable delay handled=%v resumed=%v: %w", handled, resumed, err)
+			}
+			return EndpointResult{Payload: []byte("workflow-result")}, nil
+		},
+	}
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterWorkflowWithOptions(
+		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		},
+		workflow.RegisterOptions{Name: registration.workflowType},
+	)
+	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
+		Version: 1, EndpointID: 9, MessageID: "workflow-1", StreamID: "request-1",
+	})
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	var result EndpointResult
+	if err := environment.GetWorkflowResult(&result); err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Payload) != "workflow-result" {
+		t.Fatalf("unexpected workflow result: %+v", result)
+	}
+}
+
+func TestScheduledTemporalWorkflowEndpointCreatesTriggerIdentity(t *testing.T) {
+	registration := endpointRegistration{
+		id: 10, workflowType: "temporal.endpoint.scheduled_workflow.v1",
+		handler: func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			if !envelope.Scheduled || envelope.ScheduleID != "workflow-schedule" ||
+				envelope.MessageID == "" || envelope.StreamID != envelope.MessageID ||
+				envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
+				return EndpointResult{}, fmt.Errorf("unexpected scheduled Workflow envelope: %+v", envelope)
+			}
+			return EndpointResult{}, nil
+		},
+	}
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterWorkflowWithOptions(
+		func(ctx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return executeEndpointWorkflow(ctx, envelope, registration, temporalContextPropagator{})
+		},
+		workflow.RegisterOptions{Name: registration.workflowType},
+	)
+	environment.ExecuteWorkflow(registration.workflowType, EndpointEnvelope{
+		Version: 1, EndpointID: 10, Scheduled: true, ScheduleID: "workflow-schedule",
 	})
 	if err := environment.GetWorkflowError(); err != nil {
 		t.Fatal(err)

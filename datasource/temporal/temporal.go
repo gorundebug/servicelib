@@ -189,10 +189,22 @@ func endpointContext(parent context.Context, envelope EndpointEnvelope) (context
 	if envelope.DeadlineUnixNano > 0 {
 		deadline := time.Unix(0, envelope.DeadlineUnixNano)
 		if current, ok := ctx.Deadline(); !ok || deadline.Before(current) {
+			if runtime.IsDurableWorkflowContext(ctx) {
+				return workflowDeadlineContext{Context: ctx, deadline: deadline}, func() {}
+			}
 			return context.WithDeadline(ctx, deadline)
 		}
 	}
 	return ctx, func() {}
+}
+
+type workflowDeadlineContext struct {
+	context.Context
+	deadline time.Time
+}
+
+func (ctx workflowDeadlineContext) Deadline() (time.Time, bool) {
+	return ctx.deadline, true
 }
 
 func getOrCreateDataSource(id int, env runtime.RuntimeEnvironment) (runtime.DataSource, *Connector, error) {

@@ -102,6 +102,12 @@ func temporalEndpointActivityType(connectorName, endpointName string) string {
 	)
 }
 
+func temporalDirectWorkflowType(connectorName, endpointName string) string {
+	return fmt.Sprintf("%s.endpoint.%s.workflow.v1",
+		temporalIdentityName(connectorName), temporalIdentityName(endpointName),
+	)
+}
+
 func temporalEndpointWorkflowID(connectorName, endpointName, messageID string) string {
 	return fmt.Sprintf("%s/endpoint/%s/%s",
 		temporalIdentityName(connectorName),
@@ -112,6 +118,12 @@ func temporalEndpointWorkflowID(connectorName, endpointName, messageID string) s
 
 func temporalEndpointOwner(connectorName, endpointName string) string {
 	return fmt.Sprintf("%s/endpoint/%s/v1",
+		temporalIdentityName(connectorName), temporalIdentityName(endpointName),
+	)
+}
+
+func temporalScheduleWorkflowID(connectorName, endpointName string) string {
+	return fmt.Sprintf("%s/schedule/%s",
 		temporalIdentityName(connectorName), temporalIdentityName(endpointName),
 	)
 }
@@ -153,6 +165,7 @@ type endpointWorkflowRequest struct {
 type endpointRegistration struct {
 	id           int
 	activityType string
+	workflowType string
 	handler      connectorEndpointHandler
 }
 
@@ -263,9 +276,53 @@ func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHa
 	c.endpointRegistrations[endpointID] = endpointRegistration{
 		id:           endpointID,
 		activityType: temporalEndpointActivityType(c.name, cfg.Name),
+		workflowType: temporalDirectWorkflowType(c.name, cfg.Name),
 		handler:      handler,
 	}
 	return nil
+}
+
+func executeEndpointWorkflow(
+	workflowCtx workflow.Context,
+	envelope EndpointEnvelope,
+	registration endpointRegistration,
+	propagator temporalContextPropagator,
+) (EndpointResult, error) {
+	if envelope.Version != 1 || envelope.EndpointID != registration.id {
+		return EndpointResult{}, fmt.Errorf("invalid endpoint envelope for Temporal endpoint %d", registration.id)
+	}
+	if envelope.Scheduled {
+		info := workflow.GetInfo(workflowCtx)
+		envelope.MessageID = info.WorkflowExecution.ID
+		envelope.StreamID = info.WorkflowExecution.ID
+		envelope.ScheduledAtNano = scheduledTimeFromWorkflowID(
+			info.WorkflowExecution.ID, info.WorkflowStartTime,
+		).UnixNano()
+		envelope.FiredAtNano = workflow.Now(workflowCtx).UTC().UnixNano()
+	}
+	if envelope.MessageID == "" || envelope.StreamID == "" {
+		return EndpointResult{}, fmt.Errorf("invalid endpoint identity for Temporal endpoint %d", registration.id)
+	}
+	carrier, _ := workflowCtx.Value(temporalCarrierContextKey{}).(map[string]string)
+	workflowCarrier := make(map[string]string, len(carrier))
+	for key, value := range carrier {
+		if key != temporalHeaderDeadlineUnixNano {
+			workflowCarrier[key] = value
+		}
+	}
+	ctx := propagator.extractContext(context.Background(), workflowCarrier)
+	durable := runtime.NewDurableWorkflowContext(
+		envelope.MessageID,
+		func(duration time.Duration) error { return workflow.Sleep(workflowCtx, duration) },
+		func() bool { return workflow.IsReplaying(workflowCtx) },
+	)
+	var result EndpointResult
+	err := runtime.RunDurableWorkflow(ctx, durable, func(ctx context.Context) error {
+		var invokeErr error
+		result, invokeErr = registration.handler(ctx, envelope)
+		return invokeErr
+	})
+	return result, err
 }
 
 func (c *Connector) endpointConfig(endpointID int) (*config.TemporalEndpointConfig, error) {
@@ -350,24 +407,38 @@ func (c *Connector) Start(ctx context.Context) error {
 			continue
 		}
 		registered := getWorker(cfg.TaskQueue)
-		if !registered.endpointRegistered {
-			registered.worker.RegisterWorkflowWithOptions(temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType})
-			registered.endpointRegistered = true
-		}
 		registration := registration
-		registered.worker.RegisterActivityWithOptions(
-			func(activityCtx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
-				return executeEndpointActivity(
-					activityCtx, envelope, registration,
-					func(ctx context.Context, details any) error {
-						activity.RecordHeartbeat(ctx, details)
-						return nil
-					},
-					c.activityDiagnostics("endpoint", fmt.Sprintf("%d", registration.id)),
-				)
-			},
-			activity.RegisterOptions{Name: registration.activityType},
-		)
+		switch cfg.TemporalExecutionType {
+		case api.Activity:
+			if !registered.endpointRegistered {
+				registered.worker.RegisterWorkflowWithOptions(temporalEndpointWorkflow, workflow.RegisterOptions{Name: endpointWorkflowType})
+				registered.endpointRegistered = true
+			}
+			registered.worker.RegisterActivityWithOptions(
+				func(activityCtx context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+					return executeEndpointActivity(
+						activityCtx, envelope, registration,
+						func(ctx context.Context, details any) error {
+							activity.RecordHeartbeat(ctx, details)
+							return nil
+						},
+						c.activityDiagnostics("endpoint", fmt.Sprintf("%d", registration.id)),
+					)
+				},
+				activity.RegisterOptions{Name: registration.activityType},
+			)
+		case api.Workflow:
+			propagator := temporalContextPropagator{tracing: c.environment.Tracing()}
+			registered.worker.RegisterWorkflowWithOptions(
+				func(workflowCtx workflow.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+					return executeEndpointWorkflow(workflowCtx, envelope, registration, propagator)
+				},
+				workflow.RegisterOptions{Name: registration.workflowType},
+			)
+		default:
+			temporalClient.Close()
+			return fmt.Errorf("Temporal endpoint %q has unsupported execution type %q", cfg.Name, cfg.TemporalExecutionType)
+		}
 	}
 	startedWorkers := make([]worker.Worker, 0, len(workersByQueue))
 	for _, registered := range workersByQueue {
@@ -498,15 +569,22 @@ func (c *Connector) ensureSchedule(
 	cfg *config.TemporalEndpointConfig,
 ) error {
 	owner := temporalEndpointOwner(c.name, cfg.Name)
+	envelope := EndpointEnvelope{
+		Version: 1, EndpointID: cfg.ID, Scheduled: true, ScheduleID: cfg.ScheduleID,
+	}
 	request := endpointWorkflowRequest{
 		ActivityType:               registration.activityType,
 		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
 		ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
 		MaximumAttempts:            int32(cfg.MaximumAttempts),
 		Priority:                   runtime.NormalizeTemporalPriority(0),
-		Envelope: EndpointEnvelope{
-			Version: 1, EndpointID: cfg.ID, Scheduled: true, ScheduleID: cfg.ScheduleID,
-		},
+		Envelope:                   envelope,
+	}
+	workflowType := endpointWorkflowType
+	var args []interface{} = []interface{}{request}
+	if cfg.TemporalExecutionType == api.Workflow {
+		workflowType = registration.workflowType
+		args = []interface{}{envelope}
 	}
 	overlap := enums.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL
 	if cfg.OverlapPolicy == api.ScheduleOverlapPolicySkip {
@@ -520,9 +598,9 @@ func (c *Connector) ensureSchedule(
 		catchupWindow = 365 * 24 * time.Hour
 	}
 	action := &client.ScheduleWorkflowAction{
-		ID:        fmt.Sprintf("%s/schedule/%s", c.name, cfg.Name),
-		Workflow:  endpointWorkflowType,
-		Args:      []interface{}{request},
+		ID:        temporalScheduleWorkflowID(c.name, cfg.Name),
+		Workflow:  workflowType,
+		Args:      args,
 		TaskQueue: cfg.TaskQueue,
 		Memo: map[string]interface{}{
 			durableMemoManagedBy: "servicelib",
@@ -563,7 +641,7 @@ func (c *Connector) ensureSchedule(
 		return fmt.Errorf("Temporal schedule %q ownership collision: %w", cfg.ScheduleID, err)
 	}
 	existingAction, ok := description.Schedule.Action.(*client.ScheduleWorkflowAction)
-	if !ok || existingAction.Workflow != endpointWorkflowType || existingAction.TaskQueue != cfg.TaskQueue {
+	if !ok || existingAction.Workflow != workflowType || existingAction.TaskQueue != cfg.TaskQueue {
 		return fmt.Errorf(
 			"Temporal schedule %q ownership collision: action workflow=%v taskQueue=%q",
 			cfg.ScheduleID, existingActionWorkflow(existingAction), existingActionTaskQueue(existingAction),
@@ -633,6 +711,16 @@ func (c *Connector) SubmitEndpoint(
 		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                   envelope,
 	}
+	registration, registered := c.endpointRegistrations[endpointID]
+	if !registered {
+		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q is not registered", cfg.Name)
+	}
+	workflowType := endpointWorkflowType
+	var workflowInput interface{} = request
+	if cfg.TemporalExecutionType == api.Workflow {
+		workflowType = registration.workflowType
+		workflowInput = envelope
+	}
 	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.MessageID)
 	owner := temporalEndpointOwner(c.name, cfg.Name)
 	options := client.StartWorkflowOptions{
@@ -650,7 +738,7 @@ func (c *Connector) SubmitEndpoint(
 	if cfg.WorkflowExecutionTimeout > 0 {
 		options.WorkflowExecutionTimeout = time.Duration(cfg.WorkflowExecutionTimeout) * time.Millisecond
 	}
-	run, err := temporalClient.ExecuteWorkflow(ctx, options, endpointWorkflowType, request)
+	run, err := temporalClient.ExecuteWorkflow(ctx, options, workflowType, workflowInput)
 	if err != nil {
 		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
 		if !errors.As(err, &alreadyStarted) {
@@ -658,7 +746,7 @@ func (c *Connector) SubmitEndpoint(
 		}
 		run = temporalClient.GetWorkflow(ctx, workflowID, "")
 	}
-	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), endpointWorkflowType, owner, envelope.MessageID); err != nil {
+	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), workflowType, owner, envelope.MessageID); err != nil {
 		return EndpointResult{}, err
 	}
 	if !waitForResult {

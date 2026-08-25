@@ -113,6 +113,8 @@ func SpanAttrs(span Span, attrs ...Attribute) {
 
 // samplingKey is the context key used to enable per-request tracing.
 type samplingKey struct{}
+type recordingDisabledKey struct{}
+type recordingPolicyKey struct{}
 
 // EnableSampling returns a new context that instructs the tracing engine to
 // record the current request. Used in HTTP/gRPC middleware when a caller
@@ -124,8 +126,25 @@ func EnableSampling(ctx context.Context) context.Context {
 
 // SamplingEnabled reports whether the context was marked for tracing.
 func SamplingEnabled(ctx context.Context) bool {
+	if policy, ok := ctx.Value(recordingPolicyKey{}).(func() bool); ok && policy != nil && !policy() {
+		return false
+	}
+	if disabled, _ := ctx.Value(recordingDisabledKey{}).(bool); disabled {
+		return false
+	}
 	v, _ := ctx.Value(samplingKey{}).(bool)
 	return v
+}
+
+// WithRecordingPolicy installs a replay-aware tracing decision.
+func WithRecordingPolicy(ctx context.Context, policy func() bool) context.Context {
+	return context.WithValue(ctx, recordingPolicyKey{}, policy)
+}
+
+// WithoutRecording suppresses ordinary graph spans during Workflow replay.
+// Temporal SDK interceptors own replay-aware Workflow tracing.
+func WithoutRecording(ctx context.Context) context.Context {
+	return context.WithValue(ctx, recordingDisabledKey{}, true)
 }
 
 // SamplingRequestedByCarrier reports whether a transport carrier explicitly

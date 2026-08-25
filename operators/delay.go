@@ -93,14 +93,23 @@ func (s *DelayStream[T]) Consume(ctx context.Context, value T) {
 	ctx, span := s.StartSpan(ctx, "stream.delay")
 	duration := s.f.call(ctx, value)
 	if duration > 0 {
-		if err := s.GetRuntimeEnvironment().Delay(ctx, duration, func() {
+		resume := func() {
 			defer span.End()
 			if err := ctx.Err(); err != nil {
 				tracing.SpanEvent(span, "delay.skipped", tracing.StringAttr("reason", err.Error()))
 				return
 			}
 			s.downstreamCollector.Out(ctx, value)
-		}); err != nil {
+		}
+		if handled, err := runtime.RunDurableCallDelay(ctx, duration, resume); handled {
+			if err != nil {
+				tracing.SpanError(span, err)
+				s.f.callError(ctx, value, err, s.downstreamCollector)
+				span.End()
+			}
+			return
+		}
+		if err := s.GetRuntimeEnvironment().Delay(ctx, duration, resume); err != nil {
 			tracing.SpanError(span, err)
 			s.f.callError(ctx, value, err, s.downstreamCollector)
 			span.End()

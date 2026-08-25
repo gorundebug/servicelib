@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -50,6 +51,23 @@ func TestDurableActivityReturnsEndpointErrorAndRecordsClosure(t *testing.T) {
 
 func TestDurableCallHeartbeatOutsideActivityIsNoop(t *testing.T) {
 	require.NoError(t, DurableCallHeartbeat(context.Background(), "progress"))
+}
+
+func TestDurableWorkflowUsesDurableDelayAndIgnoresHeartbeat(t *testing.T) {
+	var waited time.Duration
+	durable := NewDurableWorkflowContext("workflow", func(duration time.Duration) error {
+		waited = duration
+		return nil
+	}, nil)
+	called := false
+	require.NoError(t, RunDurableWorkflow(context.Background(), durable, func(ctx context.Context) error {
+		require.NoError(t, DurableCallHeartbeat(ctx, "ignored"))
+		handled, err := RunDurableCallDelay(ctx, 3*time.Second, func() { called = true })
+		require.True(t, handled)
+		return err
+	}))
+	require.Equal(t, 3*time.Second, waited)
+	require.True(t, called)
 }
 
 func TestDurableActivityLifecycleIsRecordedOnActivitySpan(t *testing.T) {

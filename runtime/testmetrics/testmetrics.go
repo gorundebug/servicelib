@@ -40,8 +40,16 @@ type TestInt64Counter struct {
 	count atomic.Int64
 }
 
-func (c *TestInt64Counter) Inc(_ context.Context)          { c.count.Add(1) }
-func (c *TestInt64Counter) Add(_ context.Context, v int64) { c.count.Add(v) }
+func (c *TestInt64Counter) Inc(ctx context.Context) {
+	if metrics.RecordingEnabled(ctx) {
+		c.count.Add(1)
+	}
+}
+func (c *TestInt64Counter) Add(ctx context.Context, v int64) {
+	if metrics.RecordingEnabled(ctx) {
+		c.count.Add(v)
+	}
+}
 
 // Count returns the current counter value.
 func (c *TestInt64Counter) Count() int64 { return c.count.Load() }
@@ -70,7 +78,10 @@ type TestFloat64Histogram struct {
 	values []float64
 }
 
-func (h *TestFloat64Histogram) Observe(_ context.Context, v float64) {
+func (h *TestFloat64Histogram) Observe(ctx context.Context, v float64) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	h.mu.Lock()
 	h.count++
 	h.sum += v

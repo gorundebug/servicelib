@@ -90,6 +90,22 @@ func TestTemporalEndpointRequiresExplicitExecutionType(t *testing.T) {
 	require.ErrorContains(t, err, "requires temporalExecutionType Activity or Workflow")
 }
 
+func TestTemporalWorkflowEndpointDoesNotRequireActivityTimeout(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "workflow", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", TemporalExecutionType: api.Workflow, MaximumAttempts: 1,
+		}},
+	}
+
+	_, err := NewRuntimeConfig(cfg)
+	require.NoError(t, err)
+}
+
 func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
 	cron := &temporalTestConfig{
 		connectors: []DataConnectorConfig{&CronDataConnectorConfig{

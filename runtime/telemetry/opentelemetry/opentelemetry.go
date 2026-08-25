@@ -90,10 +90,16 @@ type int64Counter struct {
 }
 
 func (c *int64Counter) Inc(ctx context.Context) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	c.c.Add(ctx, 1, otelmetric.WithAttributes(c.attrs...))
 }
 
 func (c *int64Counter) Add(ctx context.Context, v int64) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	c.c.Add(ctx, v, otelmetric.WithAttributes(c.attrs...))
 }
 
@@ -113,6 +119,9 @@ type float64Counter struct {
 }
 
 func (c *float64Counter) Add(ctx context.Context, v float64) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	c.c.Add(ctx, v, otelmetric.WithAttributes(c.attrs...))
 }
 
@@ -390,6 +399,9 @@ type float64Histogram struct {
 }
 
 func (h *float64Histogram) Observe(ctx context.Context, v float64) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	h.h.Record(ctx, v, otelmetric.WithAttributes(h.attrs...))
 }
 
@@ -409,6 +421,9 @@ type int64Histogram struct {
 }
 
 func (h *int64Histogram) Observe(ctx context.Context, v int64) {
+	if !metrics.RecordingEnabled(ctx) {
+		return
+	}
 	h.h.Record(ctx, v, otelmetric.WithAttributes(h.attrs...))
 }
 

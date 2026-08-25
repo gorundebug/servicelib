@@ -11,7 +11,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
@@ -42,6 +44,11 @@ type DurableCallDiagnostics func(context.Context, DurableCallEvent, error)
 // official Temporal Activity heartbeat operation on the processing side.
 type DurableCallHeartbeatRecorder func(context.Context, any) error
 
+// DurableCallDelay waits through the durable Workflow scheduler. It is set
+// only for Workflow endpoint execution; Activity endpoints retain the normal
+// language-runtime Delay implementation.
+type DurableCallDelay func(time.Duration) error
+
 type durableCallContextKeyType struct{}
 
 var durableCallContextKey = durableCallContextKeyType{}
@@ -55,9 +62,23 @@ type DurableCallContext struct {
 	mu          sync.Mutex
 	closed      bool
 	heartbeat   DurableCallHeartbeatRecorder
+	delay       DurableCallDelay
 	diagnostics DurableCallDiagnostics
+	workflow    bool
+	replaying   func() bool
 	span        tracing.Span
 	spanEnded   bool
+}
+
+// NewDurableWorkflowContext constructs processing-side Workflow state. A
+// Workflow has no Activity heartbeat, but the same context marker lets the
+// unchanged Delay operator select the official durable timer backend.
+func NewDurableWorkflowContext(
+	messageID string,
+	delay DurableCallDelay,
+	replaying func() bool,
+) *DurableCallContext {
+	return &DurableCallContext{messageID: messageID, delay: delay, workflow: true, replaying: replaying}
 }
 
 // NewDurableCallContext constructs processing-side Activity state. Temporal
@@ -80,7 +101,13 @@ func WithDurableCallContext(ctx context.Context, durable *DurableCallContext) co
 	if durable == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, durableCallContextKey, durable)
+	ctx = context.WithValue(ctx, durableCallContextKey, durable)
+	if durable.workflow {
+		policy := func() bool { return durable.replaying == nil || !durable.replaying() }
+		ctx = metrics.WithRecordingPolicy(ctx, policy)
+		ctx = tracing.WithRecordingPolicy(ctx, policy)
+	}
+	return ctx
 }
 
 // DurableCallContextFromContext returns the current processing-side scope.
@@ -90,6 +117,18 @@ func DurableCallContextFromContext(ctx context.Context) (*DurableCallContext, bo
 	}
 	durable, ok := ctx.Value(durableCallContextKey).(*DurableCallContext)
 	return durable, ok && durable != nil
+}
+
+// IsDurableWorkflowContext reports whether execution entered through a
+// Workflow endpoint rather than an Activity endpoint.
+func IsDurableWorkflowContext(ctx context.Context) bool {
+	durable, ok := DurableCallContextFromContext(ctx)
+	if !ok {
+		return false
+	}
+	durable.mu.Lock()
+	defer durable.mu.Unlock()
+	return durable.workflow
 }
 
 func (d *DurableCallContext) report(ctx context.Context, event DurableCallEvent, err error) {
@@ -166,6 +205,11 @@ func DurableCallHeartbeat(ctx context.Context, message any) error {
 		return err
 	}
 	heartbeat := durable.heartbeat
+	workflow := durable.workflow
+	if workflow {
+		durable.mu.Unlock()
+		return nil
+	}
 	durable.mu.Unlock()
 	if heartbeat != nil {
 		if err := heartbeat(ctx, message); err != nil {
@@ -175,6 +219,31 @@ func DurableCallHeartbeat(ctx context.Context, message any) error {
 	}
 	durable.report(ctx, DurableCallEventHeartbeat, nil)
 	return nil
+}
+
+// RunDurableCallDelay executes fn after a durable Workflow timer when ctx came
+// from a Workflow endpoint. handled=false means the caller must use its normal
+// local timer backend.
+func RunDurableCallDelay(
+	ctx context.Context,
+	duration time.Duration,
+	fn func(),
+) (handled bool, err error) {
+	durable, ok := DurableCallContextFromContext(ctx)
+	if !ok {
+		return false, nil
+	}
+	durable.mu.Lock()
+	delay := durable.delay
+	durable.mu.Unlock()
+	if delay == nil {
+		return false, nil
+	}
+	if err := delay(duration); err != nil {
+		return true, err
+	}
+	fn()
+	return true, nil
 }
 
 // RunDurableActivity attaches the processing-side context for exactly one
@@ -191,5 +260,22 @@ func RunDurableActivity(
 	activityCtx := WithDurableCallContext(ctx, durable)
 	err := invoke(activityCtx)
 	durable.close(activityCtx, err)
+	return err
+}
+
+// RunDurableWorkflow attaches processing-side state for one Workflow endpoint.
+// The adapter closes the execution scope when the ordinary endpoint contract
+// returns; heartbeat remains a silent no-op in this domain.
+func RunDurableWorkflow(
+	ctx context.Context,
+	durable *DurableCallContext,
+	invoke func(context.Context) error,
+) error {
+	if durable == nil {
+		return errors.New("durable workflow context is nil")
+	}
+	workflowCtx := WithDurableCallContext(ctx, durable)
+	err := invoke(workflowCtx)
+	durable.close(workflowCtx, err)
 	return err
 }
