@@ -10,6 +10,8 @@ package temporal
 // Temporal SDK metrics belong to the Temporal connector lifecycle.
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -23,6 +25,9 @@ import (
 	tally "github.com/uber-go/tally/v4"
 	promreporter "github.com/uber-go/tally/v4/prometheus"
 	"go.temporal.io/sdk/client"
+
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 )
 
 const sdkMetricsBindAddressEnvironment = "TEMPORAL_SDK_METRICS_BIND_ADDRESS"
@@ -76,7 +81,7 @@ func (h temporalMetricsHandler) Timer(name string) client.MetricsTimer {
 // deployment explicitly provides a bind address. The exporter is process-wide:
 // Temporal clients and workers share one runtime metric source, independently
 // of how many graph connectors use it.
-func sdkMetricsHandler() (client.MetricsHandler, error) {
+func sdkMetricsHandler(environment runtime.RuntimeEnvironment) (client.MetricsHandler, error) {
 	address := strings.TrimSpace(os.Getenv(sdkMetricsBindAddressEnvironment))
 	if address == "" {
 		return nil, nil
@@ -115,7 +120,14 @@ func sdkMetricsHandler() (client.MetricsHandler, error) {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
-		_ = server.Serve(listener)
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			environment.Log().Error(
+				context.Background(),
+				"Temporal SDK metrics server failed",
+				log.Str("address", address),
+				log.Err(err),
+			)
+		}
 	}()
 
 	sdkMetrics.address = address

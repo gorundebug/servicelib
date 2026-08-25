@@ -9,6 +9,7 @@ package cron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -208,7 +209,9 @@ func (ds *dataSource) Start(context.Context) error {
 	endpoints := ds.GetEndpoints()
 	for index := 0; index < endpoints.Len(); index++ {
 		if err := endpoints.At(index).(inputEndpoint).register(scheduler); err != nil {
-			_ = scheduler.Shutdown()
+			if shutdownErr := scheduler.Shutdown(); shutdownErr != nil {
+				return errors.Join(err, fmt.Errorf("shutdown cron scheduler after registration failure: %w", shutdownErr))
+			}
 			return err
 		}
 	}

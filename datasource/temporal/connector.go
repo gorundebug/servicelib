@@ -547,7 +547,7 @@ func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (
 			temporalContextPropagator{tracing: c.environment.Tracing()},
 		},
 	}
-	metricsHandler, err := sdkMetricsHandler()
+	metricsHandler, err := sdkMetricsHandler(c.environment)
 	if err != nil {
 		return options, err
 	}
