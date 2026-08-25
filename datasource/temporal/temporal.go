@@ -18,7 +18,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
-	runtimetemporal "github.com/gorundebug/servicelib/runtime/temporal"
 )
 
 type StreamContext[T, R, E any] = runtime.StreamContext[T, R, E]
@@ -78,7 +77,7 @@ type endpointConsumer[HandlerState, Input, T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
 	handler   EndpointHandler[HandlerState, Input, T, R, E]
 	sc        StreamContext[T, R, E]
-	decode    func(runtimetemporal.EndpointEnvelope) (Input, error)
+	decode    func(EndpointEnvelope) (Input, error)
 	resultSer runtime.TypedSerializedStream[R]
 	mu        sync.Mutex
 	pending   map[string]chan R
@@ -114,8 +113,8 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) consumeResult(ctx cont
 
 func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	activityCtx context.Context,
-	envelope runtimetemporal.EndpointEnvelope,
-) (result runtimetemporal.EndpointResult, err error) {
+	envelope EndpointEnvelope,
+) (result EndpointResult, err error) {
 	value, err := ec.decode(envelope)
 	if err != nil {
 		return result, err
@@ -178,7 +177,7 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	}
 }
 
-func endpointContext(parent context.Context, envelope runtimetemporal.EndpointEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
+func endpointContext(parent context.Context, envelope EndpointEnvelope, engine tracing.Tracing) (context.Context, context.CancelFunc) {
 	ctx := parent
 	if engine != nil && len(envelope.TraceCarrier) > 0 {
 		ctx = engine.Extract(ctx, envelope.TraceCarrier)
@@ -197,8 +196,8 @@ func endpointContext(parent context.Context, envelope runtimetemporal.EndpointEn
 	return ctx, func() {}
 }
 
-func getOrCreateDataSource(id int, env runtime.RuntimeEnvironment) (runtime.DataSource, *runtimetemporal.Connector, error) {
-	connector, err := runtimetemporal.MakeConnector(id, env)
+func getOrCreateDataSource(id int, env runtime.RuntimeEnvironment) (runtime.DataSource, *Connector, error) {
+	connector, err := MakeConnector(id, env)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -218,7 +217,7 @@ func getOrCreateDataSource(id int, env runtime.RuntimeEnvironment) (runtime.Data
 func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	stream runtime.TypedInputStream[T, R, E],
 	handler EndpointHandler[HandlerState, Input, T, R, E],
-	decode func(runtimetemporal.EndpointEnvelope) (Input, error),
+	decode func(EndpointEnvelope) (Input, error),
 ) (runtime.Consumer[T], error) {
 	if handler == nil {
 		return nil, fmt.Errorf("handler is nil for Temporal endpoint stream %q", stream.GetName())
@@ -271,7 +270,7 @@ func MakeEndpointConsumer[HandlerState, T, R, E any](
 	handler EndpointHandler[HandlerState, T, T, R, E],
 ) (runtime.Consumer[T], error) {
 	serde := stream.GetSerde()
-	return makeEndpointConsumer(stream, handler, func(envelope runtimetemporal.EndpointEnvelope) (T, error) {
+	return makeEndpointConsumer(stream, handler, func(envelope EndpointEnvelope) (T, error) {
 		return serde.Deserialize(envelope.Payload)
 	})
 }
@@ -292,7 +291,7 @@ func MakeScheduleEndpointConsumer[HandlerState, T, R, E any](
 	stream runtime.TypedInputStream[T, R, E],
 	handler EndpointHandler[HandlerState, runtime.ScheduleTrigger, T, R, E],
 ) (runtime.Consumer[T], error) {
-	return makeEndpointConsumer(stream, handler, func(envelope runtimetemporal.EndpointEnvelope) (runtime.ScheduleTrigger, error) {
+	return makeEndpointConsumer(stream, handler, func(envelope EndpointEnvelope) (runtime.ScheduleTrigger, error) {
 		if !envelope.Scheduled || envelope.ScheduleID == "" || envelope.ScheduledAtNano == 0 || envelope.FiredAtNano == 0 {
 			return runtime.ScheduleTrigger{}, fmt.Errorf("invalid Temporal schedule envelope for endpoint %d", envelope.EndpointID)
 		}

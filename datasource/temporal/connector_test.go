@@ -1,5 +1,7 @@
 package temporal
 
+// Connector behavior is tested at its owning data-source boundary.
+
 import (
 	"context"
 	"testing"

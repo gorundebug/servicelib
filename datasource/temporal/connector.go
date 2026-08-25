@@ -6,7 +6,8 @@
  */
 
 // Package temporal implements the official Temporal SDK boundary used by
-// DurableCall and Temporal endpoints. Business nodes never import this package.
+// DurableCall and Temporal data-source endpoints. Business nodes never import
+// this package.
 package temporal
 
 import (
@@ -80,7 +81,7 @@ type EndpointResult struct {
 	Payload []byte `json:"payload,omitempty"`
 }
 
-type EndpointHandler func(context.Context, EndpointEnvelope) (EndpointResult, error)
+type connectorEndpointHandler func(context.Context, EndpointEnvelope) (EndpointResult, error)
 
 type endpointWorkflowRequest struct {
 	ActivityType               string           `json:"activityType"`
@@ -102,7 +103,7 @@ type endpointRegistration struct {
 	id           int
 	config       config.TemporalEndpointConfig
 	activityType string
-	handler      EndpointHandler
+	handler      connectorEndpointHandler
 }
 
 // Connector owns exactly one Temporal client and the Workers registered for
@@ -187,7 +188,7 @@ func (c *Connector) RegisterLink(id config.LinkID, handler runtime.DurableLinkHa
 // RegisterEndpoint binds one configured endpoint Activity to its existing
 // input graph adapter. The Activity is infrastructure; handler invokes the
 // ordinary endpoint consumer and never replaces a business node.
-func (c *Connector) RegisterEndpoint(endpointID int, handler EndpointHandler) error {
+func (c *Connector) RegisterEndpoint(endpointID int, handler connectorEndpointHandler) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.started {

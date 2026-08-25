@@ -15,11 +15,11 @@ import (
 	"fmt"
 	"sync"
 
+	datasourcetemporal "github.com/gorundebug/servicelib/datasource/temporal"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/serde"
-	runtimetemporal "github.com/gorundebug/servicelib/runtime/temporal"
 )
 
 // EndpointHandler owns only per-submission application identity/lifecycle.
@@ -81,7 +81,7 @@ type endpointConsumer[HandlerState, T, R, E any] struct {
 	endpoint    *sinkEndpoint
 	stream      runtime.RuntimeStream
 	handler     EndpointHandler[HandlerState, T]
-	connector   *runtimetemporal.Connector
+	connector   *datasourcetemporal.Connector
 	inputSerde  serde.StreamSerde[T]
 	resultSerde serde.StreamSerde[R]
 	waitResult  bool
@@ -155,7 +155,7 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 		streamID = sid.GetID()
 	}
 	priority, _ := runtime.PriorityFromContext(handlerCtx)
-	envelope := runtimetemporal.EndpointEnvelope{
+	envelope := datasourcetemporal.EndpointEnvelope{
 		Version: 1, EndpointID: ec.endpoint.GetID(), ExecutionID: executionID,
 		StreamID: streamID, Priority: priority,
 		SamplingEnabled: tracing.SamplingEnabled(handlerCtx), Payload: payload,
@@ -181,8 +181,8 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 	}
 }
 
-func getOrCreateDataSink(id int, env runtime.RuntimeEnvironment) (*outputDataSink, *runtimetemporal.Connector, error) {
-	connector, err := runtimetemporal.MakeConnector(id, env)
+func getOrCreateDataSink(id int, env runtime.RuntimeEnvironment) (*outputDataSink, *datasourcetemporal.Connector, error) {
+	connector, err := datasourcetemporal.MakeConnector(id, env)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -203,7 +203,7 @@ func getOrCreateDataSink(id int, env runtime.RuntimeEnvironment) (*outputDataSin
 	return ds, connector, nil
 }
 
-func createEndpoint(id int, env runtime.RuntimeEnvironment) (*sinkEndpoint, *outputDataSink, *runtimetemporal.Connector, error) {
+func createEndpoint(id int, env runtime.RuntimeEnvironment) (*sinkEndpoint, *outputDataSink, *datasourcetemporal.Connector, error) {
 	configured := env.RuntimeConfig().GetEndpointConfigByID(id)
 	cfg, ok := configured.(*config.TemporalEndpointConfig)
 	if !ok {

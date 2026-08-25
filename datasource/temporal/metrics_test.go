@@ -7,6 +7,8 @@
 
 package temporal
 
+// Metrics behavior is tested at its owning data-source boundary.
+
 import (
 	"testing"
 	"time"

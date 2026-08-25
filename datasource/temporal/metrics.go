@@ -7,6 +7,8 @@
 
 package temporal
 
+// Temporal SDK metrics belong to the Temporal connector lifecycle.
+
 import (
 	"fmt"
 	"io"
