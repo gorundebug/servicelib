@@ -10,8 +10,13 @@ package runtime
 import (
 	"context"
 
+	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
+
+type endpointTracingEnvironment interface {
+	RuntimeConfig() *config.RuntimeConfig
+}
 
 // ApplyDataSourceEndpointTracing force-enables sampling for one inbound event
 // when the endpoint's current reloadable configuration requests it. Callers
@@ -19,7 +24,7 @@ import (
 // DataSink adapters deliberately never call this function.
 func ApplyDataSourceEndpointTracing(
 	ctx context.Context,
-	environment RuntimeEnvironment,
+	environment endpointTracingEnvironment,
 	endpointID int,
 ) context.Context {
 	if environment == nil || environment.RuntimeConfig() == nil {
