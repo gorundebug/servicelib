@@ -653,6 +653,15 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 			}
 			activityCtx, cancel := durableEnvelopeContext(activityCtx, envelope, env.Tracing())
 			defer cancel()
+			if tr != nil && tracing.SamplingEnabled(activityCtx) {
+				var span tracing.Span
+				activityCtx, span = tr.Start(activityCtx, "temporal.activity",
+					tracing.StringAttr("boundary", "durable_call"),
+					tracing.StringAttr("from", fromName),
+					tracing.StringAttr("to", toName),
+				)
+				BindDurableCallSpan(activityCtx, span)
+			}
 			consumer.Consume(activityCtx, value)
 			return nil
 		}); err != nil {
@@ -693,23 +702,13 @@ func (c *durableCaller[T]) startSpan(ctx context.Context) (context.Context, trac
 	)
 }
 
-type durableInvocationScope struct {
-	parentID string
-	mu       sync.Mutex
-	counts   map[string]uint64
-}
-
-type durableInvocationScopeKeyType struct{}
-
-var durableInvocationScopeKey = durableInvocationScopeKeyType{}
-
 // nextDurableCallID returns one identity for one logical DurableCall emission.
 // Calls made while executing a Temporal Activity are derived from the parent
 // call and a per-payload occurrence number. An Activity retry recreates the
 // scope and therefore produces the same child IDs, while two equal values
 // emitted by the same Activity still remain two distinct durable calls.
 func nextDurableCallID(ctx context.Context, linkID config.LinkID, payload []byte) string {
-	scope, ok := ctx.Value(durableInvocationScopeKey).(*durableInvocationScope)
+	scope, ok := DurableCallContextFromContext(ctx)
 	if !ok || scope == nil {
 		// There is no durable parent outside an Activity. A fresh identity is the
 		// only honest default: stream IDs identify a request, not every message
@@ -776,10 +775,12 @@ func durableEnvelopeContext(parent context.Context, envelope DurableEnvelope, en
 	if engine != nil && len(envelope.TraceCarrier) > 0 {
 		ctx = engine.Extract(ctx, envelope.TraceCarrier)
 	}
-	ctx = context.WithValue(ctx, durableInvocationScopeKey, &durableInvocationScope{
-		parentID: envelope.CallID,
-		counts:   make(map[string]uint64),
-	})
+	if _, present := DurableCallContextFromContext(ctx); !present {
+		// Transport adapters normally attach the processing-side scope before
+		// invoking this handler. Keep envelope reconstruction self-contained for
+		// direct adapters and tests while never replacing an already active scope.
+		ctx = WithDurableCallContext(ctx, NewDurableCallContext(envelope.CallID, nil, nil))
+	}
 	if envelope.StreamID != "" {
 		ctx = WithStreamId(ctx, envelope.StreamID)
 	}

@@ -127,7 +127,9 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 			tracing.StringAttr("stream", ec.Stream().GetName()),
 			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
 		)
-		defer span.End()
+		if !runtime.BindDurableCallSpan(ctx, span) {
+			defer span.End()
+		}
 	}
 	handlerCtx, state, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {

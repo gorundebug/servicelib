@@ -34,6 +34,8 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 const durableWorkflowType = "servicegen.durable-link.v1"
@@ -118,6 +120,7 @@ type Connector struct {
 	workers               []worker.Worker
 	linkRegistrations     map[config.LinkID]linkRegistration
 	endpointRegistrations map[int]endpointRegistration
+	durableEvents         metrics.Int64CounterVec
 	started               bool
 }
 
@@ -136,10 +139,18 @@ func MakeConnector(connectorID int, environment runtime.RuntimeEnvironment) (*Co
 		}
 		return connector, nil
 	}
+	durableEvents, err := environment.Metrics().Scope(
+		"durable_call",
+		metrics.Labels{"connector": cfg.Name},
+	).CounterVec("events_total", "Total number of DurableCall Activity lifecycle events")
+	if err != nil {
+		return nil, fmt.Errorf("create DurableCall metrics for Temporal connector %q: %w", cfg.Name, err)
+	}
 	connector := &Connector{
 		id: connectorID, name: cfg.Name, environment: environment,
 		linkRegistrations:     make(map[config.LinkID]linkRegistration),
 		endpointRegistrations: make(map[int]endpointRegistration),
+		durableEvents:         durableEvents,
 	}
 	environment.AddDurableTransport(connector)
 	return connector, nil
@@ -147,6 +158,36 @@ func MakeConnector(connectorID int, environment runtime.RuntimeEnvironment) (*Co
 
 func (c *Connector) GetID() int      { return c.id }
 func (c *Connector) GetName() string { return c.name }
+
+func (c *Connector) durableCallDiagnostics(boundary, target string) runtime.DurableCallDiagnostics {
+	return func(ctx context.Context, event runtime.DurableCallEvent, err error) {
+		if c.durableEvents != nil {
+			c.durableEvents.With(metrics.Labels{
+				"boundary": boundary,
+				"target":   target,
+				"event":    string(event),
+			}).Inc(ctx)
+		}
+		if err == nil {
+			return
+		}
+		fields := []log.Field{
+			log.Str("connector", c.name),
+			log.Str("boundary", boundary),
+			log.Str("target", target),
+			log.Str("event", string(event)),
+			log.Err(err),
+		}
+		switch event {
+		case runtime.DurableCallEventMissingOutcome,
+			runtime.DurableCallEventDuplicateResult,
+			runtime.DurableCallEventLateHeartbeat:
+			c.environment.Log().Warn(ctx, "DurableCall Activity lifecycle misuse", fields...)
+		default:
+			c.environment.Log().Error(ctx, "DurableCall Activity failed", fields...)
+		}
+	}
+}
 
 func (c *Connector) temporalConfig() (*config.TemporalDataConnectorConfig, error) {
 	configured := c.environment.RuntimeConfig().GetDataConnectorByID(c.id)
@@ -261,7 +302,17 @@ func (c *Connector) Start(ctx context.Context) error {
 				if envelope.Version != 1 || envelope.From != registration.id.From || envelope.To != registration.id.To || envelope.CallID == "" {
 					return fmt.Errorf("invalid durable envelope for link %d->%d", registration.id.From, registration.id.To)
 				}
-				return registration.handler(activityCtx, envelope)
+				durable := runtime.NewDurableCallContext(
+					envelope.CallID,
+					func(ctx context.Context, details any) error {
+						activity.RecordHeartbeat(ctx, details)
+						return nil
+					},
+					c.durableCallDiagnostics("link", fmt.Sprintf("%d:%d", registration.id.From, registration.id.To)),
+				)
+				return runtime.RunDurableCallActivity(activityCtx, durable, func(ctx context.Context) error {
+					return registration.handler(ctx, envelope)
+				})
 			},
 			activity.RegisterOptions{Name: registration.activityType},
 		)
@@ -282,7 +333,24 @@ func (c *Connector) Start(ctx context.Context) error {
 					return EndpointResult{}, fmt.Errorf("invalid durable envelope for Temporal endpoint %d", registration.id)
 				}
 				envelope.FiredAtNano = time.Now().UTC().UnixNano()
-				return registration.handler(activityCtx, envelope)
+				if !envelope.Scheduled {
+					return registration.handler(activityCtx, envelope)
+				}
+				durable := runtime.NewDurableCallContext(
+					envelope.ExecutionID,
+					func(ctx context.Context, details any) error {
+						activity.RecordHeartbeat(ctx, details)
+						return nil
+					},
+					c.durableCallDiagnostics("schedule", fmt.Sprintf("%d", registration.id)),
+				)
+				var result EndpointResult
+				err := runtime.RunDurableCallActivity(activityCtx, durable, func(ctx context.Context) error {
+					var invokeErr error
+					result, invokeErr = registration.handler(ctx, envelope)
+					return invokeErr
+				})
+				return result, err
 			},
 			activity.RegisterOptions{Name: registration.activityType},
 		)
