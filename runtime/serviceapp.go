@@ -152,6 +152,52 @@ func (app *ServiceApp) beginParallel() { app.parallel.Add(1) }
 
 func (app *ServiceApp) endParallel() { app.parallel.Done() }
 
+// RunParallel schedules graph work using the process runtime. Workflow-backed
+// environments override this method with their deterministic SDK scheduler;
+// ordinary services retain the existing goroutine and drain semantics.
+func (app *ServiceApp) RunParallel(_ context.Context, fn func()) {
+	app.beginParallel()
+	go func() {
+		defer app.endParallel()
+		fn()
+	}()
+}
+
+// InitIsolatedGraphRuntime initializes only the in-memory graph registry of a
+// ServiceApp. It deliberately starts no server, watcher, telemetry exporter,
+// connector or process pool. A specialized environment embeds ServiceApp,
+// supplies those policies itself, and uses the same stream/operator runtime.
+func (app *ServiceApp) InitIsolatedGraphRuntime(
+	runtimeConfig *config.RuntimeConfig,
+	env RuntimeEnvironment,
+	serviceID int,
+) error {
+	if runtimeConfig == nil {
+		return errors.New("isolated graph runtime config is nil")
+	}
+	if env == nil {
+		return errors.New("isolated graph environment is nil")
+	}
+	if runtimeConfig.GetServiceConfigByID(serviceID) == nil {
+		return fmt.Errorf("isolated graph service id=%d not found", serviceID)
+	}
+	app.id = serviceID
+	app.environment = env
+	app.config.Store(runtimeConfig)
+	app.streams = make(map[int]RuntimeStream)
+	app.endpointConsumers = make(map[int]RuntimeEndpointConsumer)
+	app.consumeStatistics = make(map[config.LinkID]ConsumeStatistics)
+	app.runtimeLinks = nil
+	app.serdes = make(map[reflect.Type]serde.StreamSerializer)
+	app.dataSources = make(map[int]DataSource)
+	app.dataSinks = make(map[int]DataSink)
+	app.managedDataConnectors = make(map[int]ManagedDataConnector)
+	app.storages = nil
+	app.taskPools = make(map[string]pool.TaskPool)
+	app.priorityTaskPools = make(map[string]pool.PriorityTaskPool)
+	return nil
+}
+
 func (app *ServiceApp) Log() log.Logger {
 	return app.log
 }

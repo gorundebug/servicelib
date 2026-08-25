@@ -42,6 +42,7 @@ type RuntimeEnvironment interface {
 
 	GetTaskPool(name string) pool.TaskPool
 	GetPriorityTaskPool(name string) pool.PriorityTaskPool
+	RunParallel(context.Context, func())
 
 	AddDataSource(dataSource DataSource)
 	GetDataSource(id int) DataSource

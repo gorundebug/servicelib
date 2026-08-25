@@ -633,7 +633,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				messagesCounter: messagesCounter,
 				tracer:          tr,
 			},
-			runtime: env.GetRuntime(),
+			environment: env,
 		}
 		streamCaller = c
 
@@ -792,7 +792,7 @@ func (c *priorityTaskPoolCaller[T]) IsAsync() bool {
 
 type parallelCaller[T any] struct {
 	caller[T]
-	runtime ServiceExecutionRuntime
+	environment RuntimeEnvironment
 }
 
 func (c *parallelCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
@@ -812,12 +812,10 @@ func (c *parallelCaller[T]) Consume(ctx context.Context, value T) {
 		c.messagesCounter.Inc(ctx)
 	}
 	ctx, span := c.startSpan(ctx)
-	c.runtime.beginParallel()
-	go func() {
-		defer c.runtime.endParallel()
+	c.environment.RunParallel(ctx, func() {
 		defer span.End()
 		c.consumer.Consume(ctx, value)
-	}()
+	})
 }
 
 func (c *parallelCaller[T]) IsAsync() bool {
