@@ -281,6 +281,10 @@ func (cfg *RuntimeConfig) GetEndpointConfigByID(id int) EndpointConfig {
 	return cfg.endpointsByID[id]
 }
 
+func (cfg *RuntimeConfig) GetEndpointConfigByName(name string) EndpointConfig {
+	return cfg.endpointsByName[name]
+}
+
 func (cfg *RuntimeConfig) GetServiceConfigByName(name string) *ServiceConfig {
 	return cfg.servicesByName[name]
 }

@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"go.temporal.io/sdk/workflow"
+
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
@@ -76,14 +78,15 @@ func (c *resultConsumer[R]) Consume(ctx context.Context, value R) { c.consume(ct
 
 type endpointConsumer[HandlerState, Input, T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	handler   EndpointHandler[HandlerState, Input, T, R, E]
-	sc        StreamContext[T, R, E]
-	decode    func(EndpointEnvelope) (Input, error)
-	resultSer runtime.TypedSerializedStream[R]
-	mu        sync.Mutex
-	pending   map[string]chan R
-	tracer    tracing.Tracer
-	tracing   tracing.Tracing
+	handler         EndpointHandler[HandlerState, Input, T, R, E]
+	sc              StreamContext[T, R, E]
+	decode          func(EndpointEnvelope) (Input, error)
+	resultSer       runtime.TypedSerializedStream[R]
+	mu              sync.Mutex
+	pending         map[string]chan R
+	workflowPending map[string]workflow.Channel
+	tracer          tracing.Tracer
+	tracing         tracing.Tracing
 }
 
 func (ec *endpointConsumer[HandlerState, Input, T, R, E]) GetID() int { return ec.Endpoint().GetID() }
@@ -96,6 +99,15 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) consumeResult(ctx cont
 	sid, ok := runtime.StreamIdFromContext(ctx)
 	if !ok {
 		ec.Endpoint().OnMissingStreamID(ctx)
+		return
+	}
+	if state, workflowMode := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); workflowMode {
+		result := ec.workflowPending[sid.GetID()]
+		if result == nil {
+			ec.Endpoint().OnLateResult(ctx, sid.GetID())
+			return
+		}
+		result.Send(state.workflowCtx, value)
 		return
 	}
 	ec.mu.Lock()
@@ -149,20 +161,34 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 
 	hasResult := ec.resultSer != nil
 	var resultCh chan R
+	var workflowResult workflow.Channel
+	workflowState, workflowMode := handlerCtx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext)
 	if hasResult {
-		resultCh = make(chan R, 1)
-		ec.mu.Lock()
-		if _, exists := ec.pending[envelope.StreamID]; exists {
+		if workflowMode {
+			if _, exists := ec.workflowPending[envelope.StreamID]; exists {
+				return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
+			}
+			workflowResult = workflow.NewBufferedChannel(workflowState.workflowCtx, 1)
+			ec.workflowPending[envelope.StreamID] = workflowResult
+		} else {
+			resultCh = make(chan R, 1)
+			ec.mu.Lock()
+			if _, exists := ec.pending[envelope.StreamID]; exists {
+				ec.mu.Unlock()
+				return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
+			}
+			ec.pending[envelope.StreamID] = resultCh
 			ec.mu.Unlock()
-			return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
 		}
-		ec.pending[envelope.StreamID] = resultCh
-		ec.mu.Unlock()
 		ec.Endpoint().OnPendingAdd(handlerCtx, envelope.StreamID)
 		defer func() {
-			ec.mu.Lock()
-			delete(ec.pending, envelope.StreamID)
-			ec.mu.Unlock()
+			if workflowMode {
+				delete(ec.workflowPending, envelope.StreamID)
+			} else {
+				ec.mu.Lock()
+				delete(ec.pending, envelope.StreamID)
+				ec.mu.Unlock()
+			}
 			ec.Endpoint().OnPendingRemove(handlerCtx, envelope.StreamID)
 		}()
 	}
@@ -173,6 +199,23 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	}
 	if !hasResult {
 		return result, nil
+	}
+	if workflowMode {
+		var value R
+		cancelled := false
+		selector := workflow.NewSelector(workflowState.workflowCtx)
+		selector.AddReceive(workflowResult, func(channel workflow.ReceiveChannel, _ bool) {
+			channel.Receive(workflowState.workflowCtx, &value)
+		})
+		selector.AddReceive(workflowState.workflowCtx.Done(), func(workflow.ReceiveChannel, bool) {
+			cancelled = true
+		})
+		selector.Select(workflowState.workflowCtx)
+		if cancelled {
+			return result, workflowState.workflowCtx.Err()
+		}
+		result.Payload, err = ec.resultSer.GetSerde().Serialize(value)
+		return result, err
 	}
 	select {
 	case value := <-resultCh:
@@ -257,7 +300,8 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	consumer := &endpointConsumer[HandlerState, Input, T, R, E]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](ep, stream),
 		handler:                    handler, decode: decode, pending: make(map[string]chan R),
-		resultSer: stream.GetResultStream(),
+		workflowPending: make(map[string]workflow.Channel),
+		resultSer:       stream.GetResultStream(),
 	}
 	if tracer := env.Tracing(); tracer != nil {
 		consumer.tracing = tracer
