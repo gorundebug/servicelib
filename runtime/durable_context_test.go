@@ -44,6 +44,26 @@ func TestDurableCallContextExplicitErrorAndFirstTerminalWins(t *testing.T) {
 	require.ErrorIs(t, durable.outcome, want)
 }
 
+func TestDurableCallInvocationErrorAfterSuccessIsDiagnosedWithoutChangingOutcome(t *testing.T) {
+	invokeFailure := errors.New("handler returned after success")
+	var mu sync.Mutex
+	var events []DurableCallEvent
+	durable := NewDurableCallContext("parent", nil, func(_ context.Context, event DurableCallEvent, _ error) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, event)
+	})
+
+	err := RunDurableCallActivity(context.Background(), durable, func(ctx context.Context) error {
+		require.NoError(t, DurableCallSuccess(ctx))
+		return invokeFailure
+	})
+	require.NoError(t, err)
+	mu.Lock()
+	require.Equal(t, []DurableCallEvent{DurableCallEventSuccess, DurableCallEventDuplicateResult}, events)
+	mu.Unlock()
+}
+
 func TestDurableCallHeartbeatOnlyWhileOpen(t *testing.T) {
 	var mu sync.Mutex
 	var messages []any

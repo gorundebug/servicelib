@@ -160,20 +160,41 @@ func (d *DurableCallContext) finishSpan() {
 	span.End()
 }
 
-func (d *DurableCallContext) complete(ctx context.Context, event DurableCallEvent, outcome error) error {
+func (d *DurableCallContext) beginCompletion(outcome error) bool {
 	d.mu.Lock()
 	if d.completed {
 		d.mu.Unlock()
-		err := fmt.Errorf("%w: attempted %s", ErrDurableCallAlreadyCompleted, event)
-		d.report(ctx, DurableCallEventDuplicateResult, err)
-		return err
+		return false
 	}
 	d.completed = true
 	d.outcome = outcome
 	d.mu.Unlock()
+	return true
+}
+
+func (d *DurableCallContext) complete(ctx context.Context, event DurableCallEvent, outcome error) error {
+	if !d.beginCompletion(outcome) {
+		err := fmt.Errorf("%w: attempted %s", ErrDurableCallAlreadyCompleted, event)
+		d.report(ctx, DurableCallEventDuplicateResult, err)
+		return err
+	}
 	d.report(ctx, event, outcome)
 	close(d.done)
 	return nil
+}
+
+// completeInvocationFailure is the Activity-adapter path for an error returned
+// by the graph invocation itself. It deliberately has no discarded error:
+// first-terminal-wins is preserved, while a conflicting terminal outcome is
+// emitted through the configured diagnostics callback (metrics, log and span).
+func (d *DurableCallContext) completeInvocationFailure(ctx context.Context, outcome error) {
+	if !d.beginCompletion(outcome) {
+		err := fmt.Errorf("%w: Activity invocation returned error: %v", ErrDurableCallAlreadyCompleted, outcome)
+		d.report(ctx, DurableCallEventDuplicateResult, err)
+		return
+	}
+	d.report(ctx, DurableCallEventError, outcome)
+	close(d.done)
 }
 
 // DurableCallHeartbeat records user-declared progress for the current Activity.
@@ -263,7 +284,7 @@ func RunDurableCallActivity(
 		if cause := context.Cause(activityCtx); cause != nil {
 			durable.cancelWithoutOutcome(activityCtx, cause)
 		} else {
-			_ = durable.complete(activityCtx, DurableCallEventError, err)
+			durable.completeInvocationFailure(activityCtx, err)
 		}
 	}
 	<-durable.done
