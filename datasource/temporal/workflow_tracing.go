@@ -16,21 +16,23 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	sdkotel "go.temporal.io/sdk/contrib/opentelemetry"
 	"go.temporal.io/sdk/workflow"
 
 	servicetracing "github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
-// workflowTracing adapts ServiceLib graph spans to the replay-safe Temporal
-// interceptor span. Calls are suppressed by the durable context recording
+// workflowTracing adapts ServiceLib graph spans to the W3C parent carried in
+// Temporal Header. Calls are suppressed by the durable context recording
 // policy during replay; exporters therefore observe each graph span once.
 type workflowTracing struct {
-	root oteltrace.Span
+	root context.Context
 }
 
 func newWorkflowTracing(ctx workflow.Context) servicetracing.Tracing {
-	root, _ := sdkotel.SpanFromWorkflowContext(ctx)
+	carrier, _ := ctx.Value(temporalCarrierContextKey{}).(map[string]string)
+	root := otel.GetTextMapPropagator().Extract(
+		context.Background(), propagation.MapCarrier(carrier),
+	)
 	return &workflowTracing{root: root}
 }
 
@@ -48,7 +50,7 @@ func (*workflowTracing) Extract(ctx context.Context, carrier map[string]string) 
 
 type workflowTracer struct {
 	tracer oteltrace.Tracer
-	root   oteltrace.Span
+	root   context.Context
 }
 
 func (t *workflowTracer) Start(
@@ -57,7 +59,9 @@ func (t *workflowTracer) Start(
 	attrs ...servicetracing.Attribute,
 ) (context.Context, servicetracing.Span) {
 	if !oteltrace.SpanContextFromContext(ctx).IsValid() && t.root != nil {
-		ctx = oteltrace.ContextWithSpan(ctx, t.root)
+		if root := oteltrace.SpanContextFromContext(t.root); root.IsValid() {
+			ctx = oteltrace.ContextWithRemoteSpanContext(ctx, root)
+		}
 	}
 	ctx, span := t.tracer.Start(ctx, name, oteltrace.WithAttributes(workflowAttributes(attrs)...))
 	return ctx, workflowSpan{span: span}

@@ -5,9 +5,47 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/trace"
+	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 )
+
+func workflowW3CParent(ctx workflow.Context) (string, error) {
+	_, span := newWorkflowTracing(ctx).Tracer("workflow-test").Start(
+		context.Background(), "workflow-test",
+	)
+	defer span.End()
+	return span.SpanContext().TraceID, nil
+}
+
+func TestWorkflowTracingContinuesW3CHeader(t *testing.T) {
+	previousPropagator := otel.GetTextMapPropagator()
+	previousProvider := otel.GetTracerProvider()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSampler(trace.AlwaysSample())))
+	t.Cleanup(func() {
+		otel.SetTextMapPropagator(previousPropagator)
+		otel.SetTracerProvider(previousProvider)
+	})
+
+	headers := temporalHeaderMap{}
+	require.NoError(t, writeTemporalCarrier(headers, map[string]string{
+		"traceparent": "00-0102030405060708090a0b0c0d0e0f10-0102030405060708-01",
+	}))
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.SetHeader(&commonpb.Header{Fields: headers})
+	env.SetContextPropagators([]workflow.ContextPropagator{temporalContextPropagator{}})
+	env.RegisterWorkflow(workflowW3CParent)
+	env.ExecuteWorkflow(workflowW3CParent)
+	require.NoError(t, env.GetWorkflowError())
+	var traceID string
+	require.NoError(t, env.GetWorkflowResult(&traceID))
+	require.Equal(t, "0102030405060708090a0b0c0d0e0f10", traceID)
+}
 
 func workflowPoolSemantics(ctx workflow.Context) ([]int, error) {
 	_ = newWorkflowLogger(ctx)
