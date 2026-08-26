@@ -40,6 +40,8 @@ type WorkflowEnvironment struct {
 	taskPools   map[string]*workflowPool
 	priority    map[string]*workflowPool
 	parallel    int
+	failure     error
+	failureCh   workflow.Channel
 	started     bool
 }
 
@@ -76,6 +78,7 @@ func NewWorkflowEnvironment(
 		metrics:     newWorkflowMetrics(ctx),
 		logger:      newWorkflowLogger(ctx),
 		tracing:     newWorkflowTracing(ctx),
+		failureCh:   workflow.NewBufferedChannel(ctx, 1),
 		taskPools:   make(map[string]*workflowPool),
 		priority:    make(map[string]*workflowPool),
 	}
@@ -137,6 +140,11 @@ func (env *WorkflowEnvironment) RunParallelWithContext(ctx context.Context, fn f
 	env.parallel++
 	workflow.Go(workflowExecutionContext(ctx, env.workflowCtx), func(parallelCtx workflow.Context) {
 		defer func() { env.parallel-- }()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				env.recordFailure(recovered)
+			}
+		}()
 		fn(withWorkflowExecutionContext(ctx, parallelCtx))
 	})
 }
@@ -167,7 +175,8 @@ func (env *WorkflowEnvironment) makePool(name string, priority bool) *workflowPo
 	return &workflowPool{
 		ctx: env.workflowCtx, name: name,
 		executors: max(1, cfg.ExecutorsCount), priority: priority,
-		metrics: makeWorkflowPoolMetrics(env.metrics, env.ServiceConfig().Name, name, priority),
+		metrics:       makeWorkflowPoolMetrics(env.metrics, env.ServiceConfig().Name, name, priority),
+		recordFailure: env.recordFailure,
 	}
 }
 
@@ -258,22 +267,17 @@ func (env *WorkflowEnvironment) Stop(context.Context) {
 	if !env.started {
 		return
 	}
-	if err := workflow.Await(env.workflowCtx, func() bool {
-		if env.parallel != 0 {
-			return false
+	if env.failure != nil {
+		for _, item := range sortedWorkflowPools(env.taskPools) {
+			item.abort()
 		}
-		for _, item := range env.taskPools {
-			if item.pending != 0 {
-				return false
-			}
+		for _, item := range sortedWorkflowPools(env.priority) {
+			item.abort()
 		}
-		for _, item := range env.priority {
-			if item.pending != 0 {
-				return false
-			}
-		}
-		return true
-	}); err != nil {
+		env.started = false
+		return
+	}
+	if err := env.AwaitWorkflowGraph(env.workflowCtx); err != nil {
 		panic(fmt.Errorf("wait for Temporal Workflow graph quiescence: %w", err))
 	}
 	for _, item := range sortedWorkflowPools(env.taskPools) {
@@ -283,6 +287,57 @@ func (env *WorkflowEnvironment) Stop(context.Context) {
 		item.Stop(context.Background())
 	}
 	env.started = false
+}
+
+// AwaitWorkflowGraph waits until all asynchronous graph callers have become
+// quiescent or returns the first deterministic graph failure. Temporal input
+// endpoints use it as their completion boundary, so a result cannot race a
+// failed TaskPool, PriorityTaskPool or ParallelCall branch.
+func (env *WorkflowEnvironment) AwaitWorkflowGraph(ctx workflow.Context) error {
+	if err := workflow.Await(ctx, func() bool {
+		return env.failure != nil || env.workflowGraphQuiescent()
+	}); err != nil {
+		return err
+	}
+	return env.failure
+}
+
+// WorkflowFailureChannel wakes a Workflow endpoint waiting for its result
+// when an asynchronous graph caller fails or requests Continue-As-New.
+func (env *WorkflowEnvironment) WorkflowFailureChannel() workflow.ReceiveChannel {
+	return env.failureCh
+}
+
+// WorkflowFailure returns the first failure recorded by this isolated graph.
+func (env *WorkflowEnvironment) WorkflowFailure() error { return env.failure }
+
+func (env *WorkflowEnvironment) workflowGraphQuiescent() bool {
+	if env.parallel != 0 {
+		return false
+	}
+	for _, item := range env.taskPools {
+		if item.pending != 0 {
+			return false
+		}
+	}
+	for _, item := range env.priority {
+		if item.pending != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (env *WorkflowEnvironment) recordFailure(value any) {
+	if env.failure != nil {
+		return
+	}
+	if err, ok := value.(error); ok {
+		env.failure = err
+	} else {
+		env.failure = fmt.Errorf("Temporal Workflow graph panic: %v", value)
+	}
+	env.failureCh.SendAsync(struct{}{})
 }
 
 func sortedWorkflowPools(values map[string]*workflowPool) []*workflowPool {
@@ -316,17 +371,18 @@ type workflowPoolMetrics struct {
 }
 
 type workflowPool struct {
-	ctx       workflow.Context
-	name      string
-	executors int
-	priority  bool
-	metrics   workflowPoolMetrics
-	queue     []workflowTask
-	sequence  uint64
-	pending   int
-	workers   int
-	started   bool
-	stopped   bool
+	ctx           workflow.Context
+	name          string
+	executors     int
+	priority      bool
+	metrics       workflowPoolMetrics
+	queue         []workflowTask
+	sequence      uint64
+	pending       int
+	workers       int
+	started       bool
+	stopped       bool
+	recordFailure func(any)
 }
 
 func (p *workflowPool) GetName() string        { return p.name }
@@ -368,12 +424,25 @@ func (p *workflowPool) run(ctx workflow.Context) {
 		p.metrics.queueLength.Dec()
 		p.metrics.executorsBusy.Inc()
 		started := workflow.Now(ctx)
-		task.fn(withWorkflowExecutionContext(task.ctx, ctx))
+		failure := runWorkflowTask(task.fn, withWorkflowExecutionContext(task.ctx, ctx))
 		p.metrics.executorsBusy.Dec()
+		p.pending--
+		if failure != nil {
+			if p.recordFailure == nil {
+				panic(failure)
+			}
+			p.recordFailure(failure)
+			return
+		}
 		p.metrics.tasksTotal.Inc(task.ctx)
 		p.metrics.executionDuration.Observe(task.ctx, workflow.Now(ctx).Sub(started).Seconds())
-		p.pending--
 	}
+}
+
+func runWorkflowTask(fn func(context.Context), ctx context.Context) (failure any) {
+	defer func() { failure = recover() }()
+	fn(ctx)
+	return nil
 }
 
 func (p *workflowPool) Stop(context.Context) {
@@ -387,6 +456,16 @@ func (p *workflowPool) Stop(context.Context) {
 	if err := workflow.Await(p.ctx, func() bool { return p.workers == 0 }); err != nil {
 		panic(fmt.Errorf("stop Temporal Workflow pool %q: %w", p.name, err))
 	}
+}
+
+func (p *workflowPool) abort() {
+	if p.stopped {
+		return
+	}
+	p.pending -= len(p.queue)
+	p.queue = nil
+	p.metrics.queueLength.Set(0)
+	p.stopped = true
 }
 
 func (p *workflowPool) AddTask(ctx context.Context, fn func()) error {

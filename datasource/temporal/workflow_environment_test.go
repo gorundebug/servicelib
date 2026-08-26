@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 func workflowW3CParent(ctx workflow.Context) (string, error) {
@@ -200,4 +203,47 @@ func TestWorkflowPoolTaskFailureFailsWorkflow(t *testing.T) {
 	env.RegisterWorkflow(workflowPoolTaskFailure)
 	env.ExecuteWorkflow(workflowPoolTaskFailure)
 	require.ErrorContains(t, env.GetWorkflowError(), "expected workflow pool failure")
+}
+
+func workflowPoolPropagatesContinueAsNew(ctx workflow.Context) (string, error) {
+	env := &WorkflowEnvironment{
+		workflowCtx: ctx,
+		metrics:     newWorkflowMetrics(ctx),
+		failureCh:   workflow.NewBufferedChannel(ctx, 1),
+		taskPools:   make(map[string]*workflowPool),
+		priority:    make(map[string]*workflowPool),
+	}
+	pool := &workflowPool{
+		ctx: ctx, name: "continue-as-new", executors: 1,
+		metrics:       makeWorkflowPoolMetrics(env.metrics, "workflow-service", "continue-as-new", false),
+		recordFailure: env.recordFailure,
+	}
+	env.taskPools[pool.name] = pool
+	if err := pool.Start(context.Background()); err != nil {
+		return "", err
+	}
+	durable := runtime.NewDurableWorkflowContext("workflow-id", nil, nil)
+	graphCtx := runtime.WithDurableCallContext(context.Background(), durable)
+	if err := pool.AddTaskWithContext(graphCtx, func(taskCtx context.Context) {
+		runtime.TemporalContinueAsNew(taskCtx, "next-run")
+	}); err != nil {
+		return "", err
+	}
+	err := env.AwaitWorkflowGraph(ctx)
+	var continuation *runtime.TemporalContinueAsNewRequest
+	if !errors.As(err, &continuation) {
+		return "", err
+	}
+	return continuation.NextInput.(string), nil
+}
+
+func TestWorkflowPoolPropagatesContinueAsNewToWorkflowBoundary(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(workflowPoolPropagatesContinueAsNew)
+	env.ExecuteWorkflow(workflowPoolPropagatesContinueAsNew)
+	require.NoError(t, env.GetWorkflowError())
+	var next string
+	require.NoError(t, env.GetWorkflowResult(&next))
+	require.Equal(t, "next-run", next)
 }

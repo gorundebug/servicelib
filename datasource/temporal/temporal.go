@@ -163,6 +163,17 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	var resultCh chan R
 	var workflowResult workflow.Channel
 	workflowState, workflowMode := handlerCtx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext)
+	var workflowLifecycle workflowGraphLifecycle
+	if workflowMode {
+		var ok bool
+		workflowLifecycle, ok = ec.Stream().GetRuntimeEnvironment().(workflowGraphLifecycle)
+		if !ok {
+			return result, fmt.Errorf(
+				"Temporal Workflow endpoint %q has no graph lifecycle",
+				ec.Endpoint().GetName(),
+			)
+		}
+	}
 	if hasResult {
 		if workflowMode {
 			if _, exists := ec.workflowPending[envelope.StreamID]; exists {
@@ -198,11 +209,15 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 		return result, err
 	}
 	if !hasResult {
+		if workflowMode {
+			return result, workflowLifecycle.AwaitWorkflowGraph(workflowState.workflowCtx)
+		}
 		return result, nil
 	}
 	if workflowMode {
 		var value R
 		cancelled := false
+		failed := false
 		selector := workflow.NewSelector(workflowState.workflowCtx)
 		selector.AddReceive(workflowResult, func(channel workflow.ReceiveChannel, _ bool) {
 			channel.Receive(workflowState.workflowCtx, &value)
@@ -210,9 +225,18 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 		selector.AddReceive(workflowState.workflowCtx.Done(), func(workflow.ReceiveChannel, bool) {
 			cancelled = true
 		})
+		selector.AddReceive(workflowLifecycle.WorkflowFailureChannel(), func(workflow.ReceiveChannel, bool) {
+			failed = true
+		})
 		selector.Select(workflowState.workflowCtx)
+		if failed {
+			return result, workflowLifecycle.WorkflowFailure()
+		}
 		if cancelled {
 			return result, workflowState.workflowCtx.Err()
+		}
+		if err = workflowLifecycle.AwaitWorkflowGraph(workflowState.workflowCtx); err != nil {
+			return result, err
 		}
 		result.Payload, err = ec.resultSer.GetSerde().Serialize(value)
 		return result, err
@@ -245,6 +269,12 @@ func endpointContext(parent context.Context, envelope EndpointEnvelope) (context
 type workflowDeadlineContext struct {
 	context.Context
 	deadline time.Time
+}
+
+type workflowGraphLifecycle interface {
+	AwaitWorkflowGraph(workflow.Context) error
+	WorkflowFailureChannel() workflow.ReceiveChannel
+	WorkflowFailure() error
 }
 
 func (ctx workflowDeadlineContext) Deadline() (time.Time, bool) {
