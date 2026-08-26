@@ -206,6 +206,13 @@ func (env *WorkflowEnvironment) Start(context.Context) error {
 	if env.started {
 		return nil
 	}
+	info := workflow.GetInfo(env.workflowCtx)
+	env.logger.Info(
+		context.Background(),
+		"temporal workflow graph started",
+		log.Str("workflow_id", info.WorkflowExecution.ID),
+		log.Str("workflow_type", info.WorkflowType.Name),
+	)
 	if err := env.ServiceApp.BuildRegisteredStreams(); err != nil {
 		return err
 	}
