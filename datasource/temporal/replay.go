@@ -8,29 +8,19 @@
 package temporal
 
 import (
-	"fmt"
-
-	"go.opentelemetry.io/otel"
-	sdkotel "go.temporal.io/sdk/contrib/opentelemetry"
-	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 )
 
 // NewWorkflowReplayer constructs a history replayer with the same Workflow
-// interceptors and serializable context propagation used by a live Connector.
-// Process-owned metrics and exporters are deliberately absent: the SDK's
-// replay-aware Workflow logger, metric handler and tracing interceptor suppress
-// duplicate telemetry while replaying recorded commands.
+// serializable context propagation used by a live Connector. Worker
+// interceptors are deliberately absent: history replay validates the Workflow
+// commands below that boundary, while production replay exercises the SDK's
+// replay-aware tracing interceptor. Registering a new tracing interceptor on an
+// already traced history changes the inbound interceptor chain and can prevent
+// the Workflow body from producing its recorded first command.
 func NewWorkflowReplayer() (worker.WorkflowReplayer, error) {
-	tracingInterceptor, err := sdkotel.NewTracingInterceptor(sdkotel.TracerOptions{
-		TextMapPropagator: otel.GetTextMapPropagator(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create Temporal replay tracing interceptor: %w", err)
-	}
 	return worker.NewWorkflowReplayerWithOptions(worker.WorkflowReplayerOptions{
-		Interceptors: []interceptor.WorkerInterceptor{tracingInterceptor},
 		ContextPropagators: []workflow.ContextPropagator{
 			temporalContextPropagator{},
 		},
