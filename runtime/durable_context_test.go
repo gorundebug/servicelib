@@ -55,7 +55,7 @@ func TestDurableCallHeartbeatOutsideActivityIsNoop(t *testing.T) {
 
 func TestDurableWorkflowUsesDurableDelayAndIgnoresHeartbeat(t *testing.T) {
 	var waited time.Duration
-	durable := NewDurableWorkflowContext("workflow", func(duration time.Duration) error {
+	durable := NewDurableWorkflowContext("workflow", func(_ context.Context, duration time.Duration) error {
 		waited = duration
 		return nil
 	}, nil)

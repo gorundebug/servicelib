@@ -37,6 +37,13 @@ type PriorityTaskPool interface {
 	GetExecutorsCount() int
 }
 
+// ContextPriorityTaskPool is the context-aware workflow-local extension of
+// PriorityTaskPool. Ordinary process pools keep the smaller contract above.
+type ContextPriorityTaskPool interface {
+	PriorityTaskPool
+	AddTaskWithContext(ctx context.Context, priority int, fn func(context.Context)) error
+}
+
 type PriorityTaskPoolImpl struct {
 	lock                    sync.Mutex
 	name                    string

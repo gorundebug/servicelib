@@ -734,10 +734,17 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		c.messagesCounter.Inc(ctx)
 	}
 	ctx, span := c.startSpan(ctx)
-	if err := c.pool.AddTask(ctx, func() {
+	consume := func(taskCtx context.Context) {
 		defer span.End()
-		c.consumer.Consume(ctx, value)
-	}); err != nil {
+		c.consumer.Consume(taskCtx, value)
+	}
+	var err error
+	if contextual, ok := c.pool.(pool.ContextTaskPool); ok {
+		err = contextual.AddTaskWithContext(ctx, consume)
+	} else {
+		err = c.pool.AddTask(ctx, func() { consume(ctx) })
+	}
+	if err != nil {
 		tracing.SpanError(span, err)
 		span.End()
 		c.source.GetEnvironment().Log().Warn(ctx, "task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
@@ -776,10 +783,17 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 	if p, ok := PriorityFromContext(ctx); ok {
 		priority = p
 	}
-	if err := c.pool.AddTask(ctx, priority, func() {
+	consume := func(taskCtx context.Context) {
 		defer span.End()
-		c.consumer.Consume(ctx, value)
-	}); err != nil {
+		c.consumer.Consume(taskCtx, value)
+	}
+	var err error
+	if contextual, ok := c.pool.(pool.ContextPriorityTaskPool); ok {
+		err = contextual.AddTaskWithContext(ctx, priority, consume)
+	} else {
+		err = c.pool.AddTask(ctx, priority, func() { consume(ctx) })
+	}
+	if err != nil {
 		tracing.SpanError(span, err)
 		span.End()
 		c.source.GetEnvironment().Log().Warn(ctx, "priority task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
@@ -812,10 +826,17 @@ func (c *parallelCaller[T]) Consume(ctx context.Context, value T) {
 		c.messagesCounter.Inc(ctx)
 	}
 	ctx, span := c.startSpan(ctx)
-	c.environment.RunParallel(ctx, func() {
+	consume := func(parallelCtx context.Context) {
 		defer span.End()
-		c.consumer.Consume(ctx, value)
-	})
+		c.consumer.Consume(parallelCtx, value)
+	}
+	if contextual, ok := c.environment.(interface {
+		RunParallelWithContext(context.Context, func(context.Context))
+	}); ok {
+		contextual.RunParallelWithContext(ctx, consume)
+		return
+	}
+	c.environment.RunParallel(ctx, func() { consume(ctx) })
 }
 
 func (c *parallelCaller[T]) IsAsync() bool {

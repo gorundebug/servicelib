@@ -43,6 +43,26 @@ type WorkflowEnvironment struct {
 	started     bool
 }
 
+type workflowExecutionContextKey struct{}
+
+func withWorkflowExecutionContext(ctx context.Context, workflowCtx workflow.Context) context.Context {
+	ctx = context.WithValue(ctx, workflowExecutionContextKey{}, workflowCtx)
+	if state, ok := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); ok {
+		state.workflowCtx = workflowCtx
+		ctx = context.WithValue(ctx, workflowSubmissionContextKey{}, state)
+	}
+	return ctx
+}
+
+func workflowExecutionContext(ctx context.Context, fallback workflow.Context) workflow.Context {
+	if ctx != nil {
+		if current, ok := ctx.Value(workflowExecutionContextKey{}).(workflow.Context); ok {
+			return current
+		}
+	}
+	return fallback
+}
+
 func NewWorkflowEnvironment(
 	ctx workflow.Context,
 	runtimeConfig *config.RuntimeConfig,
@@ -98,22 +118,26 @@ func (env *WorkflowEnvironment) GetSerde(reflect.Type) (serde.Serializer, error)
 }
 
 func (env *WorkflowEnvironment) Delay(
-	_ context.Context,
+	ctx context.Context,
 	duration time.Duration,
 	fn func(),
 ) error {
-	if err := workflow.Sleep(env.workflowCtx, duration); err != nil {
+	if err := workflow.Sleep(workflowExecutionContext(ctx, env.workflowCtx), duration); err != nil {
 		return err
 	}
 	fn()
 	return nil
 }
 
-func (env *WorkflowEnvironment) RunParallel(_ context.Context, fn func()) {
+func (env *WorkflowEnvironment) RunParallel(ctx context.Context, fn func()) {
+	env.RunParallelWithContext(ctx, func(context.Context) { fn() })
+}
+
+func (env *WorkflowEnvironment) RunParallelWithContext(ctx context.Context, fn func(context.Context)) {
 	env.parallel++
-	workflow.Go(env.workflowCtx, func(workflow.Context) {
+	workflow.Go(workflowExecutionContext(ctx, env.workflowCtx), func(parallelCtx workflow.Context) {
 		defer func() { env.parallel-- }()
-		fn()
+		fn(withWorkflowExecutionContext(ctx, parallelCtx))
 	})
 }
 
@@ -278,7 +302,7 @@ type workflowTask struct {
 	ctx      context.Context
 	priority int
 	sequence uint64
-	fn       func()
+	fn       func(context.Context)
 }
 
 type workflowPoolMetrics struct {
@@ -344,7 +368,7 @@ func (p *workflowPool) run(ctx workflow.Context) {
 		p.metrics.queueLength.Dec()
 		p.metrics.executorsBusy.Inc()
 		started := workflow.Now(ctx)
-		task.fn()
+		task.fn(withWorkflowExecutionContext(task.ctx, ctx))
 		p.metrics.executorsBusy.Dec()
 		p.metrics.tasksTotal.Inc(task.ctx)
 		p.metrics.executionDuration.Observe(task.ctx, workflow.Now(ctx).Sub(started).Seconds())
@@ -366,6 +390,13 @@ func (p *workflowPool) Stop(context.Context) {
 }
 
 func (p *workflowPool) AddTask(ctx context.Context, fn func()) error {
+	return p.add(ctx, 0, func(context.Context) { fn() })
+}
+
+func (p *workflowPool) AddTaskWithContext(
+	ctx context.Context,
+	fn func(context.Context),
+) error {
 	return p.add(ctx, 0, fn)
 }
 
@@ -374,10 +405,14 @@ func (p *workflowPool) AddTaskWithPriority(
 	priority int,
 	fn func(),
 ) error {
-	return p.add(ctx, priority, fn)
+	return p.add(ctx, priority, func(context.Context) { fn() })
 }
 
-func (p *workflowPool) add(ctx context.Context, priority int, fn func()) error {
+func (p *workflowPool) add(
+	ctx context.Context,
+	priority int,
+	fn func(context.Context),
+) error {
 	if err := ctx.Err(); err != nil {
 		p.metrics.taskRejected.Inc(ctx)
 		return err
@@ -408,6 +443,16 @@ func (p workflowPriorityPool) AddTask(ctx context.Context, priority int, fn func
 	return p.AddTaskWithPriority(ctx, priority, fn)
 }
 
+func (p workflowPriorityPool) AddTaskWithContext(
+	ctx context.Context,
+	priority int,
+	fn func(context.Context),
+) error {
+	return p.add(ctx, priority, fn)
+}
+
 var _ runtime.RuntimeEnvironment = (*WorkflowEnvironment)(nil)
 var _ pool.TaskPool = (*workflowPool)(nil)
+var _ pool.ContextTaskPool = (*workflowPool)(nil)
 var _ pool.PriorityTaskPool = workflowPriorityPool{}
+var _ pool.ContextPriorityTaskPool = workflowPriorityPool{}

@@ -3,6 +3,7 @@ package temporal
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -115,4 +116,88 @@ func TestWorkflowTaskPoolKeepsCanonicalUnboundedQueue(t *testing.T) {
 	env.RegisterWorkflow(workflowUnboundedPool)
 	env.ExecuteWorkflow(workflowUnboundedPool)
 	require.NoError(t, env.GetWorkflowError())
+}
+
+func workflowPoolLifecycle(ctx workflow.Context) ([]int, error) {
+	pool := &workflowPool{
+		ctx: ctx, name: "lifecycle", executors: 2,
+		metrics: makeWorkflowPoolMetrics(newWorkflowMetrics(ctx), "workflow-service", "lifecycle", false),
+	}
+	if err := pool.Start(context.Background()); err != nil {
+		return nil, err
+	}
+	active := 0
+	maximumActive := 0
+	completed := 0
+	for range 5 {
+		if err := pool.AddTaskWithContext(context.Background(), func(taskCtx context.Context) {
+			active++
+			maximumActive = max(maximumActive, active)
+			_ = workflow.Sleep(workflowExecutionContext(taskCtx, ctx), time.Second)
+			completed++
+			active--
+		}); err != nil {
+			return nil, err
+		}
+	}
+	pool.Stop(context.Background())
+	pool.Stop(context.Background())
+	return []int{maximumActive, completed, pool.pending, pool.workers}, nil
+}
+
+func TestWorkflowPoolLimitsLogicalExecutorsAndDrains(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(workflowPoolLifecycle)
+	env.ExecuteWorkflow(workflowPoolLifecycle)
+	require.NoError(t, env.GetWorkflowError())
+	var result []int
+	require.NoError(t, env.GetWorkflowResult(&result))
+	require.Equal(t, []int{2, 5, 0, 0}, result)
+}
+
+func workflowPoolRejectsCanceledAdmission(ctx workflow.Context) error {
+	pool := &workflowPool{
+		ctx: ctx, name: "cancel", executors: 1,
+		metrics: makeWorkflowPoolMetrics(newWorkflowMetrics(ctx), "workflow-service", "cancel", false),
+	}
+	if err := pool.Start(context.Background()); err != nil {
+		return err
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := pool.AddTask(canceled, func() {})
+	pool.Stop(context.Background())
+	return err
+}
+
+func TestWorkflowPoolRejectsCanceledAdmission(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(workflowPoolRejectsCanceledAdmission)
+	env.ExecuteWorkflow(workflowPoolRejectsCanceledAdmission)
+	require.ErrorContains(t, env.GetWorkflowError(), context.Canceled.Error())
+}
+
+func workflowPoolTaskFailure(ctx workflow.Context) error {
+	pool := &workflowPool{
+		ctx: ctx, name: "failure", executors: 1,
+		metrics: makeWorkflowPoolMetrics(newWorkflowMetrics(ctx), "workflow-service", "failure", false),
+	}
+	if err := pool.Start(context.Background()); err != nil {
+		return err
+	}
+	if err := pool.AddTask(context.Background(), func() { panic("expected workflow pool failure") }); err != nil {
+		return err
+	}
+	pool.Stop(context.Background())
+	return nil
+}
+
+func TestWorkflowPoolTaskFailureFailsWorkflow(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(workflowPoolTaskFailure)
+	env.ExecuteWorkflow(workflowPoolTaskFailure)
+	require.ErrorContains(t, env.GetWorkflowError(), "expected workflow pool failure")
 }

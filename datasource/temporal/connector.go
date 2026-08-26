@@ -458,9 +458,12 @@ func executeWorkflowEndpoint(
 	})
 	durable := runtime.NewDurableWorkflowContext(
 		envelope.MessageID,
-		func(duration time.Duration) error { return workflow.Sleep(workflowCtx, duration) },
+		func(ctx context.Context, duration time.Duration) error {
+			return workflow.Sleep(workflowExecutionContext(ctx, workflowCtx), duration)
+		},
 		func() bool { return workflow.IsReplaying(workflowCtx) },
 	)
+	ctx = withWorkflowExecutionContext(ctx, workflowCtx)
 	var result EndpointResult
 	err := runtime.RunDurableWorkflow(ctx, durable, func(ctx context.Context) error {
 		var invokeErr error

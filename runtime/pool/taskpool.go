@@ -34,6 +34,13 @@ type TaskPool interface {
 	GetExecutorsCount() int
 }
 
+// ContextTaskPool is an optional workflow-local extension that supplies the
+// deterministic executor context to downstream graph processing.
+type ContextTaskPool interface {
+	TaskPool
+	AddTaskWithContext(ctx context.Context, fn func(context.Context)) error
+}
+
 type TaskPoolImpl struct {
 	head                    *Task
 	tail                    *Task

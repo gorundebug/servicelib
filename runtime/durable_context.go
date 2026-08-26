@@ -50,7 +50,7 @@ type DurableCallHeartbeatRecorder func(context.Context, any) error
 // DurableCallDelay waits through the durable Workflow scheduler. It is set
 // only for Workflow endpoint execution; Activity endpoints retain the normal
 // language-runtime Delay implementation.
-type DurableCallDelay func(time.Duration) error
+type DurableCallDelay func(context.Context, time.Duration) error
 
 type durableCallContextKeyType struct{}
 
@@ -273,7 +273,7 @@ func RunDurableCallDelay(
 	if delay == nil {
 		return false, nil
 	}
-	if err := delay(duration); err != nil {
+	if err := delay(ctx, duration); err != nil {
 		return true, err
 	}
 	fn()
