@@ -1147,7 +1147,7 @@ components:
               'float', 'double',
               'int8', 'int16', 'int32', 'int64',
               'uint8', 'uint16', 'uint32', 'uint64',
-              'any', 'error', 'schedule trigger', 'array', 'map', 'struct', 'custom'
+              'any', 'error', 'array', 'map', 'struct', 'custom'
       ]
       x-enum-varnames:
         - Undefined
@@ -1171,7 +1171,6 @@ components:
         - uint64
         - any
         - error
-        - scheduleTrigger
         - array
         - map
         - struct
