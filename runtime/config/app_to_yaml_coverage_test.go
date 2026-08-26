@@ -29,6 +29,9 @@ var appToYamlOnlyKeys = map[string]string{
 	"endpoint":      "idEndpoint serialised as endpoint name ref",
 	"dataConnector": "endpoint idDataConnector serialised as data connector name ref",
 	"pipelines":     "structural grouping section — not an api.StreamApp field",
+	"appearance":    "DSL-only presentation subtree mapped from service and stream fields",
+	"x":             "api.Stream.XPos written below appearance",
+	"y":             "api.Stream.YPos written below appearance",
 	"errorStream":   "frontend-only visual reference; not an api.Stream field",
 }
 
@@ -47,6 +50,8 @@ var appToYamlExceptions = map[string]string{
 	"streams": `written as pipeline map values, no "streams" key`,
 	// pipeline is used as the pipelines map key, not a value field.
 	"pipeline": "used as pipelines section map key",
+	"xPos":     `written as appearance coordinate "x"`,
+	"yPos":     `written as appearance coordinate "y"`,
 	// Schema sentinel — never serialised.
 	"undefinedEnum": "schema sentinel, not written",
 }

@@ -519,7 +519,6 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				"grpcPort":               svc.GrpcPort,
 				"shutdownTimeout":        svc.ShutdownTimeout,
 				"environment":            svc.Environment,
-				"color":                  svc.Color,
 				"statusHandler":          svc.StatusHandler,
 				"metricsHandler":         svc.MetricsHandler,
 				"startupHandler":         svc.StartupHandler,
@@ -527,6 +526,7 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				"livenessHandler":        svc.LivenessHandler,
 				"kubernetesWorkloadType": svc.KubernetesWorkloadType,
 			}
+			appearanceObj := map[string]interface{}{"color": svc.Color}
 			if svc.GolangVersion != nil {
 				svcObj["golangVersion"] = *svc.GolangVersion
 			}
@@ -538,6 +538,7 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			}
 
 			pipelinesNode := make(map[string]interface{})
+			appearancePipelinesNode := make(map[string]interface{})
 			if pipes, ok := streamsBySvcPipeline[svc.Id]; ok {
 				pipeNames := make([]string, 0, len(pipes))
 				for p := range pipes {
@@ -547,12 +548,11 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				for _, pipeName := range pipeNames {
 					pipeStreams := pipes[pipeName]
 					pipeNode := make(map[string]interface{})
+					appearancePipeNode := make(map[string]interface{})
 					for _, s := range pipeStreams {
 						sNode := map[string]interface{}{
 							"type": enumNameFromMap(rev, "TransformationType", int(s.Type)),
 							"name": s.Name,
-							"xPos": s.XPos,
-							"yPos": s.YPos,
 						}
 						if s.IdSource != 0 {
 							sNode["source"] = streamKey[s.IdSource]
@@ -618,12 +618,20 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 						if s.Duration != nil {
 							sNode["duration"] = *s.Duration
 						}
-						pipeNode[streamKey[s.Id]] = sNode
+						key := streamKey[s.Id]
+						pipeNode[key] = sNode
+						appearancePipeNode[key] = map[string]interface{}{
+							"x": s.XPos,
+							"y": s.YPos,
+						}
 					}
 					pipelinesNode[pipeName] = pipeNode
+					appearancePipelinesNode[pipeName] = appearancePipeNode
 				}
 			}
 			svcObj["pipelines"] = pipelinesNode
+			appearanceObj["pipelines"] = appearancePipelinesNode
+			svcObj["appearance"] = appearanceObj
 
 			if links, ok := linksBySvc[svc.Id]; ok && len(links) > 0 {
 				linksNode := make(map[string]interface{})
