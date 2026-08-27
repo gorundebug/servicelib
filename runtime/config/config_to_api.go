@@ -292,7 +292,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 			e.HttpMethodType = &m
 		}
 		e.Path = strOptPtr(c.Path)
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)
@@ -304,7 +304,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 			e.GrpcMethodType = &m
 		}
 		e.MethodName = strOptPtr(c.MethodName)
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)
@@ -314,7 +314,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		e.Enabled = boolOptPtr(c.Enabled)
 		e.Topic = strOptPtr(c.Topic)
 		e.ConsumerGroup = strOptPtr(c.ConsumerGroup)
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)
@@ -335,7 +335,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 			p := c.MissedRunPolicy
 			e.MissedRunPolicy = &p
 		}
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)
@@ -363,14 +363,14 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		e.ActivityStartToCloseTimeout = intOptPtr(c.ActivityStartToCloseTimeout)
 		e.ActivityHeartbeatTimeout = intOptPtr(c.ActivityHeartbeatTimeout)
 		e.MaximumAttempts = intOptPtr(c.MaximumAttempts)
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)
 		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
 		e.PublicFunction = boolOptPtr(c.PublicFunction)
 	case *CustomEndpointConfig:
-		e.FunctionName = strOptPtr(c.FunctionName)
+		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)
 		e.FunctionDescription = strOptPtr(c.FunctionDescription)

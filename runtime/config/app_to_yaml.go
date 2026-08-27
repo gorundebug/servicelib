@@ -453,9 +453,7 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					if ep.MaximumAttempts != nil {
 						epObj["maximumAttempts"] = *ep.MaximumAttempts
 					}
-					if ep.FunctionName != nil {
-						epObj["functionName"] = *ep.FunctionName
-					}
+					epObj["functionName"] = ep.FunctionName
 					if ep.FunctionPackage != nil {
 						epObj["functionPackage"] = *ep.FunctionPackage
 					}

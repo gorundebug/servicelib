@@ -22,8 +22,16 @@ func TemporalEndpointConsumer[T, E any](stream runtime.TypedSinkStream[T, E]) (r
 	return temporalsink.MakeDirectEndpointConsumer(stream)
 }
 
+func TemporalEndpointConsumerWithHandler[HandlerState, T, E any](stream runtime.TypedSinkStream[T, E], handler temporalsink.EndpointHandler[HandlerState, T]) (runtime.Consumer[T], error) {
+	return temporalsink.MakeEndpointConsumer(stream, handler)
+}
+
 func TemporalEndpointConsumerWithResult[T, R, E any](stream runtime.TypedSinkStreamWithResult[T, R, E]) (runtime.Consumer[T], error) {
 	return temporalsink.MakeDirectEndpointConsumerWithResult(stream)
+}
+
+func TemporalEndpointConsumerWithResultAndHandler[HandlerState, T, R, E any](stream runtime.TypedSinkStreamWithResult[T, R, E], handler temporalsink.EndpointHandler[HandlerState, T]) (runtime.Consumer[T], error) {
+	return temporalsink.MakeEndpointConsumerWithResult(stream, handler)
 }
 
 func CustomEndpointConsumer[HandlerState, T, E any](stream runtime.TypedSinkStream[T, E], handler localsink.EndpointHandler[HandlerState, T, E]) (runtime.Consumer[T], error) {

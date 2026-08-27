@@ -376,6 +376,19 @@ func MakeEndpointConsumer[HandlerState, T, R, E any](
 	}, nil)
 }
 
+// MakeWorkflowEndpointConsumer registers an on-demand Workflow endpoint with
+// both the user endpoint lifecycle and the generated deterministic Workflow.
+func MakeWorkflowEndpointConsumer[HandlerState, T, R, E any](
+	stream runtime.TypedInputStream[T, R, E],
+	handler EndpointHandler[HandlerState, T, T, R, E],
+	workflowHandler WorkflowEndpointHandler,
+) (runtime.Consumer[T], error) {
+	serde := stream.GetSerde()
+	return makeEndpointConsumer(stream, handler, func(envelope EndpointEnvelope) (T, error) {
+		return serde.Deserialize(envelope.Payload)
+	}, workflowHandler)
+}
+
 // MakeDirectEndpointConsumer registers a generated on-demand Temporal input
 // without inventing a transport-specific business function. The Activity calls
 // the ordinary input consumer directly.

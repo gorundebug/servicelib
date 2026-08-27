@@ -571,7 +571,7 @@ type Endpoint struct {
 	FunctionModule *string `json:"functionModule,omitempty"`
 
 	// FunctionName Name of the generated Go handler struct for this endpoint.
-	FunctionName *string `json:"functionName,omitempty"`
+	FunctionName string `json:"functionName"`
 
 	// FunctionPackage Subdirectory under the functions package where the generated handler is placed.
 	FunctionPackage *string `json:"functionPackage,omitempty"`

@@ -172,7 +172,7 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 		for i := 0; i < eps.Len(); i++ {
 			ep := config.EndpointConfigToAPI(eps.At(i).GetConfig())
 			if ec, ok := app.endpointConsumers[ep.Id]; ok {
-				applyFunctionImpl(ec.FunctionImplementation(), &ep.FunctionName, &ep.FunctionPackage, &ep.FunctionModule, &ep.PublicFunction, mainModulePath, modulesByPath)
+				applyEndpointFunctionImpl(ec.FunctionImplementation(), &ep, mainModulePath, modulesByPath)
 			}
 			endpoints = append(endpoints, ep)
 		}
@@ -183,7 +183,7 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 		for i := 0; i < eps.Len(); i++ {
 			ep := config.EndpointConfigToAPI(eps.At(i).GetConfig())
 			if ec, ok := app.endpointConsumers[ep.Id]; ok {
-				applyFunctionImpl(ec.FunctionImplementation(), &ep.FunctionName, &ep.FunctionPackage, &ep.FunctionModule, &ep.PublicFunction, mainModulePath, modulesByPath)
+				applyEndpointFunctionImpl(ec.FunctionImplementation(), &ep, mainModulePath, modulesByPath)
 			}
 			endpoints = append(endpoints, ep)
 		}
@@ -398,6 +398,14 @@ func addTypeEntry(name string, dt api.DataType, pkgPath string, isPtr bool,
 		}
 	}
 	typeMap[name] = entry
+}
+
+func applyEndpointFunctionImpl(impl interface{}, endpoint *api.Endpoint, mainModulePath string, modules map[string]api.Module) {
+	functionName := &endpoint.FunctionName
+	applyFunctionImpl(impl, &functionName, &endpoint.FunctionPackage, &endpoint.FunctionModule, &endpoint.PublicFunction, mainModulePath, modules)
+	if functionName != nil {
+		endpoint.FunctionName = *functionName
+	}
 }
 
 // applyFunctionImpl extracts the type name and package path from impl
