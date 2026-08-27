@@ -106,6 +106,40 @@ func TestTemporalWorkflowEndpointDoesNotRequireActivityTimeout(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestOnDemandTemporalEndpointAcceptsDefaultUTCTimezone(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "activity", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", TemporalExecutionType: api.Activity,
+			Timezone: "UTC", ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+
+	_, err := NewRuntimeConfig(cfg)
+	require.NoError(t, err)
+}
+
+func TestOnDemandTemporalEndpointRejectsNonDefaultTimezone(t *testing.T) {
+	cfg := &temporalTestConfig{
+		connectors: []DataConnectorConfig{&TemporalDataConnectorConfig{
+			ID: 7, Name: "temporal", Implementation: api.DataConnectorImplementationTemporalGo,
+			Address: "temporal:7233", Namespace: "default", MaxConcurrentActivities: 1, MaxConcurrentWorkflows: 1,
+		}},
+		endpoints: []EndpointConfig{&TemporalEndpointConfig{
+			ID: 11, Name: "activity", IdDataConnector: 7, Enabled: true,
+			TaskQueue: "automation", TemporalExecutionType: api.Activity,
+			Timezone: "Europe/Moscow", ActivityStartToCloseTimeout: 1_000, MaximumAttempts: 1,
+		}},
+	}
+
+	_, err := NewRuntimeConfig(cfg)
+	require.ErrorContains(t, err, "cannot configure scheduleId or timezone")
+}
+
 func TestScheduledEndpointsRejectNonUTCTimezone(t *testing.T) {
 	cron := &temporalTestConfig{
 		connectors: []DataConnectorConfig{&CronDataConnectorConfig{

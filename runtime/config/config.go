@@ -236,7 +236,8 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 			if temporalEndpoint.OverlapPolicy == "" || temporalEndpoint.MissedRunPolicy == "" {
 				return nil, fmt.Errorf("scheduled Temporal endpoint %q requires overlapPolicy and missedRunPolicy", temporalEndpoint.Name)
 			}
-		} else if temporalEndpoint.ScheduleID != "" || temporalEndpoint.Timezone != "" {
+		} else if temporalEndpoint.ScheduleID != "" ||
+			(temporalEndpoint.Timezone != "" && temporalEndpoint.Timezone != "UTC") {
 			return nil, fmt.Errorf("on-demand Temporal endpoint %q cannot configure scheduleId or timezone without schedule", temporalEndpoint.Name)
 		}
 	}
