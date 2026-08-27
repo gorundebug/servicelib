@@ -11,7 +11,7 @@ cd "$SCRIPT_DIR"
 echo "==> Building Docker image for ${SERVICE_NAME}..."
 docker build \
     --build-arg SERVICE_NAME="${SERVICE_NAME}" \
-    --build-arg SERVICEGEN_GITHUB_RAW_URL="${SERVICEGEN_GITHUB_RAW_URL:-https://github.com}" \
+    --build-arg DEPENDENCY_GITHUB_RAW_URL="${DEPENDENCY_GITHUB_RAW_URL:-https://github.com}" \
     -t "$IMAGE" .
 
 mkdir -p "$OUT_DIR"
