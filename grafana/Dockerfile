@@ -1,6 +1,17 @@
-FROM alpine:3.19
+ARG DEPENDENCY_DOCKER_REGISTRY=docker.io
+FROM ${DEPENDENCY_DOCKER_REGISTRY}/library/debian:bookworm-slim
 
-RUN apk add --no-cache curl tar
+ARG DEPENDENCY_APT_DEBIAN_URL=
+ARG DEPENDENCY_APT_DEBIAN_SECURITY_URL=
+
+RUN if [ -n "${DEPENDENCY_APT_DEBIAN_URL}${DEPENDENCY_APT_DEBIAN_SECURITY_URL}" ]; then \
+      find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i \
+        -e "s|http://deb.debian.org/debian-security|${DEPENDENCY_APT_DEBIAN_SECURITY_URL}|g" \
+        -e "s|http://deb.debian.org/debian|${DEPENDENCY_APT_DEBIAN_URL}|g" {} +; \
+    fi && \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tar
 
 ARG GO_JSONNET_VERSION=0.20.0
 ARG GRAFONNET_REVISION=41e6bfcbe4ef1054298ffff8664f1354c897dd2d
