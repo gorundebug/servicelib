@@ -9,9 +9,13 @@ OUT_DIR="$SCRIPT_DIR/dist"
 cd "$SCRIPT_DIR"
 
 echo "==> Building Docker image for ${SERVICE_NAME}..."
-read -r -a dependency_docker_args <<< "${DEPENDENCY_PROXY_DOCKER_ARGS:-}"
+set --
+if [[ -n "${DEPENDENCY_PROXY_DOCKER_ARGS:-}" ]]; then
+    read -r -a dependency_docker_args <<< "${DEPENDENCY_PROXY_DOCKER_ARGS}"
+    set -- "${dependency_docker_args[@]}"
+fi
 docker build \
-    "${dependency_docker_args[@]}" \
+    "$@" \
     --build-arg SERVICE_NAME="${SERVICE_NAME}" \
     --build-arg DEPENDENCY_DOCKER_REGISTRY="${DEPENDENCY_DOCKER_REGISTRY:-docker.io}" \
     --build-arg DEPENDENCY_GITHUB_RAW_URL="${DEPENDENCY_GITHUB_RAW_URL:-https://github.com}" \
