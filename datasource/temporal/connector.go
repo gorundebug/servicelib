@@ -595,6 +595,7 @@ func (c *Connector) Start(ctx context.Context) error {
 			registered = &queueWorker{worker: worker.New(temporalClient, taskQueue, worker.Options{
 				MaxConcurrentActivityExecutionSize:     cfg.MaxConcurrentActivities,
 				MaxConcurrentWorkflowTaskExecutionSize: cfg.MaxConcurrentWorkflows,
+				WorkerStopTimeout:                      time.Duration(max(0, c.environment.ServiceConfig().ShutdownTimeout)) * time.Millisecond,
 			})}
 			workersByQueue[taskQueue] = registered
 		}

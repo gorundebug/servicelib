@@ -594,28 +594,6 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		app.loader.Stop(ctx)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		app.delayPool.Stop(ctx)
-	}()
-
-	for _, v := range app.taskPools {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
-
-	for _, v := range app.priorityTaskPools {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			v.Stop(ctx)
-		}()
-	}
-
 	for _, v := range app.components {
 		wg.Add(1)
 		go func() {
@@ -663,24 +641,67 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		close(done)
 	}()
 
-	timeout := false
-
 	select {
 	case <-done:
 	case <-ctx.Done():
-		timeout = true
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
-	if timeout {
-		// The deadline is diagnostic, not permission to release ownership
-		// while a component can still reach the execution graph.
-		<-done
+	// Source admission has stopped and source-owned work (including Cron and
+	// Temporal worker executions) has drained. Keep pools and storages alive
+	// until nested graph work has also completed.
+	parallelDone := make(chan struct{})
+	go func() {
+		app.parallel.Wait()
+		close(parallelDone)
+	}()
+	select {
+	case <-parallelDone:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "ServiceApp graph drain timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
-	// All admission sources and managed pools have stopped. Drain nested
-	// goroutine-per-message work before stopping the sinks it may still call.
-	app.parallel.Wait()
+	wg = sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.delayPool.Stop(ctx)
+	}()
+
+	for _, v := range app.taskPools {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
+	for _, v := range app.priorityTaskPools {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
+	for _, v := range app.storages {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v.Stop(ctx)
+		}()
+	}
+
+	done = make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "runtime pool and storage shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+	}
 
 	wg = sync.WaitGroup{}
 	for _, v := range app.dataSinks {
@@ -701,24 +722,44 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
-		<-done
 	}
 
 	// Durable clients remain open until every sink submission has drained.
 	// Their Activity Workers were stopped with the admission sources above.
+	wg = sync.WaitGroup{}
 	for _, connector := range app.managedDataConnectors {
-		connector.Stop(ctx)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			connector.Stop(ctx)
+		}()
+	}
+	done = make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "managed connector shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
-	if err := app.metricsEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "metrics engine shutdown", log.Err(err))
+	shutdownTelemetry := func(name string, shutdown func(context.Context) error) {
+		result := make(chan error, 1)
+		go func() { result <- shutdown(ctx) }()
+		select {
+		case err := <-result:
+			if err != nil {
+				app.environment.Log().Warn(ctx, name+" shutdown", log.Err(err))
+			}
+		case <-ctx.Done():
+			app.environment.Log().Warn(ctx, name+" shutdown timeout", log.Err(ctx.Err()))
+		}
 	}
-	if err := app.tracingEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "tracing engine shutdown", log.Err(err))
-	}
-	if err := app.logsEngine.Shutdown(ctx); err != nil {
-		app.environment.Log().Warn(ctx, "logs engine shutdown", log.Err(err))
-	}
+	shutdownTelemetry("metrics engine", app.metricsEngine.Shutdown)
+	shutdownTelemetry("tracing engine", app.tracingEngine.Shutdown)
+	shutdownTelemetry("logs engine", app.logsEngine.Shutdown)
 }
 
 func (app *ServiceApp) Delay(ctx context.Context, duration time.Duration, f func()) error {

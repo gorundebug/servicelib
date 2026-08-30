@@ -44,11 +44,36 @@ type endpoint[T, R, E any] struct {
 
 type endpointConsumer[T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	function runtime.ScheduleEndpointFunction[T]
-	out      runtime.Collect[T]
+	function  runtime.ScheduleEndpointFunction[T]
+	out       runtime.Collect[T]
+	hasResult bool
+	mu        sync.Mutex
+	pending   map[string]chan struct{}
+}
+
+type resultConsumer[R any] struct {
+	consume func(context.Context, R)
+}
+
+func (consumer *resultConsumer[R]) Consume(ctx context.Context, value R) {
+	consumer.consume(ctx, value)
 }
 
 func (ec *endpointConsumer[T, R, E]) GetID() int { return ec.Endpoint().GetID() }
+
+func (ec *endpointConsumer[T, R, E]) endpoint() runtime.InputEndpoint {
+	if ec.DataSourceEndpointConsumer == nil {
+		return nil
+	}
+	return ec.Endpoint()
+}
+
+func (ec *endpointConsumer[T, R, E]) endpointName() string {
+	if endpoint := ec.endpoint(); endpoint != nil {
+		return endpoint.GetName()
+	}
+	return "cron"
+}
 
 func (ec *endpointConsumer[T, R, E]) FunctionImplementation() interface{} {
 	return ec.function
@@ -57,8 +82,70 @@ func (ec *endpointConsumer[T, R, E]) FunctionImplementation() interface{} {
 func (ec *endpointConsumer[T, R, E]) onTrigger(
 	ctx context.Context,
 	trigger runtime.ScheduleTrigger,
-) {
+) error {
+	if !ec.hasResult {
+		ec.function.OnTrigger(ctx, trigger, ec.out)
+		return nil
+	}
+	streamID, ok := runtime.StreamIdFromContext(ctx)
+	if !ok || streamID.GetID() == "" {
+		return fmt.Errorf("cron endpoint %q activation has no stream id", ec.endpointName())
+	}
+	done := make(chan struct{}, 1)
+	id := streamID.GetID()
+	ec.mu.Lock()
+	if _, exists := ec.pending[id]; exists {
+		ec.mu.Unlock()
+		return fmt.Errorf("cron endpoint %q already has an active execution %q", ec.endpointName(), id)
+	}
+	ec.pending[id] = done
+	ec.mu.Unlock()
+	if endpoint := ec.endpoint(); endpoint != nil {
+		endpoint.OnPendingAdd(ctx, id)
+	}
+	defer func() {
+		ec.mu.Lock()
+		delete(ec.pending, id)
+		ec.mu.Unlock()
+		if endpoint := ec.endpoint(); endpoint != nil {
+			endpoint.OnPendingRemove(ctx, id)
+		}
+	}()
+
 	ec.function.OnTrigger(ctx, trigger, ec.out)
+	// A scheduled input with a result stream has the same contract as the
+	// other datasource endpoints: the activation is complete only when the
+	// correlated terminal result reaches the input stream. In particular this
+	// keeps the cron job active while pooled/parallel graph work is outstanding.
+	<-done
+	return nil
+}
+
+func (ec *endpointConsumer[T, R, E]) consumeResult(ctx context.Context, _ R) {
+	streamID, ok := runtime.StreamIdFromContext(ctx)
+	if !ok || streamID.GetID() == "" {
+		if endpoint := ec.endpoint(); endpoint != nil {
+			endpoint.OnMissingStreamID(ctx)
+		}
+		return
+	}
+	id := streamID.GetID()
+	ec.mu.Lock()
+	done := ec.pending[id]
+	ec.mu.Unlock()
+	if done == nil {
+		if endpoint := ec.endpoint(); endpoint != nil {
+			endpoint.OnLateResult(ctx, id)
+		}
+		return
+	}
+	select {
+	case done <- struct{}{}:
+	default:
+		if endpoint := ec.endpoint(); endpoint != nil {
+			endpoint.OnDuplicateMessageID(ctx, id, id)
+		}
+	}
 }
 
 func (ep *endpoint[T, R, E]) register(scheduler gocron.Scheduler) error {
@@ -97,6 +184,10 @@ func cronExpression(expression, timezone string) string {
 }
 
 func (ep *endpoint[T, R, E]) fire(ctx context.Context) {
+	// gocron cancels its executor context as part of Shutdown. That cancellation
+	// closes admission, but an occurrence already accepted by ServiceLib must
+	// drain through its configured result boundary just like an RPC request.
+	ctx = context.WithoutCancel(ctx)
 	firedAt := time.Now().UTC()
 	if ep.tracker == nil {
 		return
@@ -108,10 +199,10 @@ func (ep *endpoint[T, R, E]) fire(ctx context.Context) {
 	ctx = runtime.WithStreamId(ctx, runtime.NewStreamID())
 	ctx = runtime.ApplyDataSourceEndpointTracing(ctx, ep.GetRuntimeEnvironment(), ep.GetID())
 	start := ep.OnRequestStart(ctx)
-	ep.consumer.onTrigger(ctx, runtime.NewScheduleTrigger(
+	err := ep.consumer.onTrigger(ctx, runtime.NewScheduleTrigger(
 		ep.GetID(), ep.GetName(), scheduledAt, firedAt, runtime.ScheduleBackendLocal,
 	))
-	ep.OnRequestEnd(ctx, start, nil)
+	ep.OnRequestEnd(ctx, start, err)
 }
 
 // portableCron lets gocron retain ownership of scheduling, overlap control,
@@ -293,8 +384,13 @@ func MakeGocronEndpointConsumer[T, R, E any](
 	consumer := &endpointConsumer[T, R, E]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](baseEndpoint, stream),
 		function:                   function,
+		hasResult:                  stream.GetResultStream() != nil,
+		pending:                    make(map[string]chan struct{}),
 	}
 	consumer.out = runtime.CollectFunc[T](consumer.Consume)
+	if consumer.hasResult {
+		stream.SetResultConsumer(&resultConsumer[R]{consume: consumer.consumeResult})
+	}
 	ep := &endpoint[T, R, E]{DataSourceEndpoint: baseEndpoint, consumer: consumer}
 	ds.AddEndpoint(ep)
 	environment.RegisterEndpointConsumer(consumer)

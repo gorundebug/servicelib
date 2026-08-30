@@ -404,6 +404,67 @@ func TestWorkflowTemporalSinkResultCanFanOutToTwoActivities(t *testing.T) {
 	}
 }
 
+func TestWorkflowTemporalSinkWithResultHasSameContractForActivityAndWorkflow(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	environment := suite.NewTestWorkflowEnvironment()
+	environment.RegisterActivityWithOptions(
+		func(_ context.Context, envelope EndpointEnvelope) (EndpointResult, error) {
+			return EndpointResult{Payload: append(envelope.Payload, []byte("-activity")...)}, nil
+		},
+		activity.RegisterOptions{Name: "temporal.endpoint.result_activity.v1"},
+	)
+	environment.RegisterWorkflowWithOptions(
+		func(_ workflow.Context, request directEndpointWorkflowRequest) (EndpointResult, error) {
+			return EndpointResult{
+				Payload: append(request.Envelope.Payload, []byte("-workflow")...),
+			}, nil
+		},
+		workflow.RegisterOptions{Name: "temporal.endpoint.result_workflow.v1"},
+	)
+	parent := func(ctx workflow.Context) ([]string, error) {
+		workflowConfig := workflowEndpointConfig{
+			ID: 2, Name: "resultWorkflow", TaskQueue: "temporal-test",
+			ExecutionType:           api.Workflow,
+			WorkflowType:            "temporal.endpoint.result_workflow.v1",
+			WorkflowExecutionMillis: 1000, MaximumAttempts: 1,
+		}
+		state := workflowSubmissionContext{
+			workflowCtx: ctx,
+			connector:   "temporal",
+			endpoints: map[int]workflowEndpointConfig{
+				1: testWorkflowActivityConfig(
+					1, "resultActivity", "temporal.endpoint.result_activity.v1",
+				),
+				2: workflowConfig,
+			},
+		}
+		activityResult, err := submitEndpointFromWorkflow(state, 1, EndpointEnvelope{
+			MessageID: "activity-result", StreamID: "result-contract", Payload: []byte("value"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		workflowResult, err := submitEndpointFromWorkflow(state, 2, EndpointEnvelope{
+			MessageID: "workflow-result", StreamID: "result-contract", Payload: []byte("value"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return []string{string(activityResult.Payload), string(workflowResult.Payload)}, nil
+	}
+	environment.ExecuteWorkflow(parent)
+	if err := environment.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	var results []string
+	if err := environment.GetWorkflowResult(&results); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(results) != "[value-activity value-workflow]" {
+		t.Fatalf("sink-with-result contracts differ: %v", results)
+	}
+}
+
 func testWorkflowActivityConfig(id int, name, activityType string) workflowEndpointConfig {
 	return workflowEndpointConfig{
 		ID: id, Name: name, TaskQueue: "temporal-test", ExecutionType: api.Activity,

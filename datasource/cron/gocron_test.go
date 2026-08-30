@@ -69,7 +69,9 @@ func TestEndpointConsumerInvokesUserFunctionAndCollectsItsOutput(t *testing.T) {
 		}),
 	}
 
-	consumer.onTrigger(context.Background(), trigger)
+	if err := consumer.onTrigger(context.Background(), trigger); err != nil {
+		t.Fatal(err)
+	}
 
 	if !function.called {
 		t.Fatal("scheduled endpoint did not invoke its user function")
@@ -79,5 +81,39 @@ func TestEndpointConsumerInvokesUserFunctionAndCollectsItsOutput(t *testing.T) {
 	}
 	if collected != "job:hourly" {
 		t.Fatalf("collector received %q, want user function output", collected)
+	}
+}
+
+func TestEndpointConsumerWaitsForCorrelatedResult(t *testing.T) {
+	trigger := runtime.NewScheduleTrigger(
+		17,
+		"hourly",
+		time.Date(2026, 8, 24, 12, 30, 0, 0, time.UTC),
+		time.Date(2026, 8, 24, 12, 30, 1, 0, time.UTC),
+		runtime.ScheduleBackendLocal,
+	)
+	function := &scheduleFunctionProbe{}
+	emitted := make(chan context.Context, 1)
+	consumer := endpointConsumer[string, string, error]{
+		function:  function,
+		hasResult: true,
+		pending:   make(map[string]chan struct{}),
+	}
+	consumer.out = runtime.CollectFunc[string](func(ctx context.Context, _ string) {
+		emitted <- ctx
+	})
+	ctx := runtime.WithStreamId(context.Background(), "cron-call-1")
+	completed := make(chan error, 1)
+	go func() { completed <- consumer.onTrigger(ctx, trigger) }()
+
+	resultCtx := <-emitted
+	select {
+	case err := <-completed:
+		t.Fatalf("cron activation completed before its result: %v", err)
+	default:
+	}
+	consumer.consumeResult(resultCtx, "done")
+	if err := <-completed; err != nil {
+		t.Fatal(err)
 	}
 }
