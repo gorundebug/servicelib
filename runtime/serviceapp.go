@@ -479,16 +479,6 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 	}
-	for _, v := range app.dataSources {
-		if err := v.Start(ctx); err != nil {
-			return err
-		}
-	}
-	for _, v := range app.dataSinks {
-		if err := v.Start(ctx); err != nil {
-			return err
-		}
-	}
 	for _, v := range app.storages {
 		if err := v.Start(ctx); err != nil {
 			return err
@@ -509,6 +499,18 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 	}
 	for _, component := range app.components {
 		if err := component.Start(ctx); err != nil {
+			return err
+		}
+	}
+	for _, v := range app.dataSinks {
+		if err := v.Start(ctx); err != nil {
+			return err
+		}
+	}
+	// Sources are the graph admission boundary and may emit from Start. Start
+	// them only after every downstream resource is ready.
+	for _, v := range app.dataSources {
+		if err := v.Start(ctx); err != nil {
 			return err
 		}
 	}
