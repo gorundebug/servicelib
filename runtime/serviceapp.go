@@ -604,14 +604,6 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		}()
 	}
 
-	for _, connector := range app.managedDataConnectors {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			connector.StopAdmission(ctx)
-		}()
-	}
-
 	for _, v := range app.dataSources {
 		wg.Add(1)
 		go func() {
@@ -647,6 +639,29 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+	}
+
+	// Managed connectors may be used by graph work already admitted by another
+	// source. In particular, a Cron job can be waiting for a Temporal result.
+	// Drain ordinary sources first while those shared clients/workers are still
+	// available; stopping both groups concurrently can strand the accepted job.
+	wg = sync.WaitGroup{}
+	for _, connector := range app.managedDataConnectors {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			connector.StopAdmission(ctx)
+		}()
+	}
+	done = make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "managed connector admission shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
 	// Source admission has stopped and source-owned work (including Cron and

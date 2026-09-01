@@ -951,6 +951,9 @@ components:
           type: integer
           minimum: 1
           description: Maximum Workflow slots owned by this Temporal connector's Worker.
+        workerStopTimeout:
+          type: integer
+          description: Maximum milliseconds for Temporal Workers to drain during shutdown; zero inherits the owning service shutdownTimeout.
       required:
         - id
         - name

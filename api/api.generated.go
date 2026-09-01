@@ -500,6 +500,9 @@ type DataConnector struct {
 
 	// Version Kafka protocol version expected by the broker (e.g. `2.8.0`). Applies to Kafka connectors.
 	Version *string `json:"version,omitempty"`
+
+	// WorkerStopTimeout Maximum milliseconds for Temporal Workers to drain during shutdown; zero inherits the owning service shutdownTimeout.
+	WorkerStopTimeout *int `json:"workerStopTimeout,omitempty"`
 }
 
 // DataConnectorImplementation The specific library used to implement a data connector.

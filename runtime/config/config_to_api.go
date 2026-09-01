@@ -274,6 +274,7 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
 		d.MaxConcurrentActivities = intOptPtr(c.MaxConcurrentActivities)
 		d.MaxConcurrentWorkflows = intOptPtr(c.MaxConcurrentWorkflows)
+		d.WorkerStopTimeout = intOptPtr(c.WorkerStopTimeout)
 	}
 	return d
 }

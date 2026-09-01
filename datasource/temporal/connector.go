@@ -576,6 +576,13 @@ func (c *Connector) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	workerStopTimeout, err := resolveWorkerStopTimeout(
+		cfg.WorkerStopTimeout,
+		c.environment.ServiceConfig().ShutdownTimeout,
+	)
+	if err != nil {
+		return fmt.Errorf("Temporal data connector %q: %w", c.name, err)
+	}
 	clientOptions, err := c.makeClientOptions(cfg)
 	if err != nil {
 		return err
@@ -595,7 +602,7 @@ func (c *Connector) Start(ctx context.Context) error {
 			registered = &queueWorker{worker: worker.New(temporalClient, taskQueue, worker.Options{
 				MaxConcurrentActivityExecutionSize:     cfg.MaxConcurrentActivities,
 				MaxConcurrentWorkflowTaskExecutionSize: cfg.MaxConcurrentWorkflows,
-				WorkerStopTimeout:                      time.Duration(max(0, c.environment.ServiceConfig().ShutdownTimeout)) * time.Millisecond,
+				WorkerStopTimeout:                      workerStopTimeout,
 			})}
 			workersByQueue[taskQueue] = registered
 		}
@@ -679,6 +686,25 @@ func (c *Connector) Start(ctx context.Context) error {
 	c.workers = startedWorkers
 	c.started = true
 	return nil
+}
+
+func resolveWorkerStopTimeout(configuredMillis, serviceShutdownMillis int) (time.Duration, error) {
+	if configuredMillis < 0 {
+		return 0, fmt.Errorf("workerStopTimeout must not be negative")
+	}
+	if serviceShutdownMillis < 0 {
+		return 0, fmt.Errorf("service shutdownTimeout must not be negative")
+	}
+	if configuredMillis == 0 {
+		configuredMillis = serviceShutdownMillis
+	}
+	if configuredMillis > serviceShutdownMillis {
+		return 0, fmt.Errorf(
+			"workerStopTimeout %dms exceeds service shutdownTimeout %dms",
+			configuredMillis, serviceShutdownMillis,
+		)
+	}
+	return time.Duration(configuredMillis) * time.Millisecond, nil
 }
 
 func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {

@@ -381,6 +381,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.MaxConcurrentWorkflows != nil {
 				dcObj["maxConcurrentWorkflows"] = *dc.MaxConcurrentWorkflows
 			}
+			if dc.WorkerStopTimeout != nil {
+				dcObj["workerStopTimeout"] = *dc.WorkerStopTimeout
+			}
 			if eps, ok := dcEndpoints[dc.Id]; ok && len(eps) > 0 {
 				epsNode := make(map[string]interface{})
 				for _, ep := range eps {

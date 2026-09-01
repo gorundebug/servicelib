@@ -471,3 +471,29 @@ func testWorkflowActivityConfig(id int, name, activityType string) workflowEndpo
 		ActivityType: activityType, ActivityStartToCloseMillis: 1000, MaximumAttempts: 1,
 	}
 }
+
+func TestResolveWorkerStopTimeout(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured int
+		shutdown   int
+		want       time.Duration
+		wantErr    bool
+	}{
+		{name: "inherits service timeout", configured: 0, shutdown: 30_000, want: 30 * time.Second},
+		{name: "uses smaller worker timeout", configured: 5_000, shutdown: 30_000, want: 5 * time.Second},
+		{name: "rejects negative worker timeout", configured: -1, shutdown: 30_000, wantErr: true},
+		{name: "rejects timeout above service boundary", configured: 30_001, shutdown: 30_000, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := resolveWorkerStopTimeout(test.configured, test.shutdown)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("resolveWorkerStopTimeout() error = %v, wantErr %v", err, test.wantErr)
+			}
+			if got != test.want {
+				t.Fatalf("resolveWorkerStopTimeout() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}

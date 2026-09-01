@@ -118,6 +118,7 @@ type TemporalDataConnectorConfig struct {
 	TLSKeyFile              string                          `yaml:"tlsKeyFile,omitempty" mapstructure:"tlsKeyFile"`
 	MaxConcurrentActivities int                             `yaml:"maxConcurrentActivities,omitempty" mapstructure:"maxConcurrentActivities"`
 	MaxConcurrentWorkflows  int                             `yaml:"maxConcurrentWorkflows,omitempty" mapstructure:"maxConcurrentWorkflows"`
+	WorkerStopTimeout       int                             `yaml:"workerStopTimeout,omitempty" mapstructure:"workerStopTimeout"`
 	Properties              map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
 }
 
