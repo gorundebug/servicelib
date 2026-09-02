@@ -665,19 +665,9 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	}
 
 	// Source admission has stopped and source-owned work (including Cron and
-	// Temporal worker executions) has drained. Keep pools and storages alive
-	// until nested graph work has also completed.
-	parallelDone := make(chan struct{})
-	go func() {
-		app.parallel.Wait()
-		close(parallelDone)
-	}()
-	select {
-	case <-parallelDone:
-	case <-ctx.Done():
-		app.environment.Log().Warn(ctx, "ServiceApp graph drain timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
-	}
-
+	// Temporal worker executions) has drained. Task/delay pools are still graph
+	// producers: drain them before observing the ParallelCall counter, because
+	// an accepted pool task may create a parallel child near the end of shutdown.
 	wg = sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -718,6 +708,17 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "runtime pool and storage shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+	}
+
+	parallelDone := make(chan struct{})
+	go func() {
+		app.parallel.Wait()
+		close(parallelDone)
+	}()
+	select {
+	case <-parallelDone:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "ServiceApp graph drain timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
 	wg = sync.WaitGroup{}
