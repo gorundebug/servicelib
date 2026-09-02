@@ -1,0 +1,6 @@
+.git
+.DS_Store
+.ruff_cache
+coverage.out
+screen.png
+docs
