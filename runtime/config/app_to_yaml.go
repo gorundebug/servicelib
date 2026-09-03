@@ -375,12 +375,6 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.TlsKeyFile != nil {
 				dcObj["tlsKeyFile"] = *dc.TlsKeyFile
 			}
-			if dc.MaxConcurrentActivities != nil {
-				dcObj["maxConcurrentActivities"] = *dc.MaxConcurrentActivities
-			}
-			if dc.MaxConcurrentWorkflows != nil {
-				dcObj["maxConcurrentWorkflows"] = *dc.MaxConcurrentWorkflows
-			}
 			if dc.WorkerStopTimeout != nil {
 				dcObj["workerStopTimeout"] = *dc.WorkerStopTimeout
 			}
@@ -443,6 +437,12 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					}
 					if ep.TemporalExecutionType != nil {
 						epObj["temporalExecutionType"] = string(*ep.TemporalExecutionType)
+					}
+					if ep.MaxConcurrentActivities != nil {
+						epObj["maxConcurrentActivities"] = *ep.MaxConcurrentActivities
+					}
+					if ep.MaxConcurrentWorkflowTasks != nil {
+						epObj["maxConcurrentWorkflowTasks"] = *ep.MaxConcurrentWorkflowTasks
 					}
 					if ep.WorkflowExecutionTimeout != nil {
 						epObj["workflowExecutionTimeout"] = *ep.WorkflowExecutionTimeout

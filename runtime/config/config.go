@@ -178,9 +178,6 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 			if temporalConnector.Address == "" || temporalConnector.Namespace == "" {
 				return nil, fmt.Errorf("Temporal data connector %q requires address and namespace", temporalConnector.Name)
 			}
-			if temporalConnector.MaxConcurrentActivities < 1 || temporalConnector.MaxConcurrentWorkflows < 1 {
-				return nil, fmt.Errorf("Temporal data connector %q requires positive worker capacities", temporalConnector.Name)
-			}
 			if temporalConnector.WorkerStopTimeout < 0 {
 				return nil, fmt.Errorf("Temporal data connector %q workerStopTimeout must not be negative", temporalConnector.Name)
 			}
@@ -199,6 +196,14 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 			}
 		}
 	}
+	type temporalQueuePolicy struct {
+		activities    int
+		workflowTasks int
+	}
+	temporalQueuePolicies := make(map[struct {
+		connectorID int
+		taskQueue   string
+	}]temporalQueuePolicy)
 	for _, endpoint := range config.GetEndpoints() {
 		if cronEndpoint, ok := endpoint.(*CronEndpointConfig); ok {
 			connector := runtimeCfg.dataConnectorsByID[cronEndpoint.IdDataConnector]
@@ -226,6 +231,30 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		if temporalEndpoint.TemporalExecutionType == api.Activity && temporalEndpoint.ActivityStartToCloseTimeout < 1 {
 			return nil, fmt.Errorf("Temporal endpoint %q requires activityStartToCloseTimeout", temporalEndpoint.Name)
 		}
+		policyKey := struct {
+			connectorID int
+			taskQueue   string
+		}{temporalEndpoint.IdDataConnector, temporalEndpoint.TaskQueue}
+		policy := temporalQueuePolicies[policyKey]
+		switch temporalEndpoint.TemporalExecutionType {
+		case api.Activity:
+			if temporalEndpoint.MaxConcurrentActivities < 1 {
+				return nil, fmt.Errorf("Temporal Activity endpoint %q requires maxConcurrentActivities", temporalEndpoint.Name)
+			}
+			if policy.activities != 0 && policy.activities != temporalEndpoint.MaxConcurrentActivities {
+				return nil, fmt.Errorf("Temporal Task Queue %q has conflicting maxConcurrentActivities", temporalEndpoint.TaskQueue)
+			}
+			policy.activities = temporalEndpoint.MaxConcurrentActivities
+		case api.Workflow:
+			if temporalEndpoint.MaxConcurrentWorkflowTasks < 1 {
+				return nil, fmt.Errorf("Temporal Workflow endpoint %q requires maxConcurrentWorkflowTasks", temporalEndpoint.Name)
+			}
+			if policy.workflowTasks != 0 && policy.workflowTasks != temporalEndpoint.MaxConcurrentWorkflowTasks {
+				return nil, fmt.Errorf("Temporal Task Queue %q has conflicting maxConcurrentWorkflowTasks", temporalEndpoint.TaskQueue)
+			}
+			policy.workflowTasks = temporalEndpoint.MaxConcurrentWorkflowTasks
+		}
+		temporalQueuePolicies[policyKey] = policy
 		if temporalEndpoint.MaximumAttempts < 1 {
 			return nil, fmt.Errorf("Temporal endpoint %q requires maximumAttempts", temporalEndpoint.Name)
 		}

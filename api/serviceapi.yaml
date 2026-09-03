@@ -943,14 +943,6 @@ components:
           type: string
           writeOnly: true
           description: Path to the PEM private key paired with tlsCertFile.
-        maxConcurrentActivities:
-          type: integer
-          minimum: 1
-          description: Maximum Activity slots owned by this Temporal connector's Worker.
-        maxConcurrentWorkflows:
-          type: integer
-          minimum: 1
-          description: Maximum Workflow slots owned by this Temporal connector's Worker.
         workerStopTimeout:
           type: integer
           description: Maximum milliseconds for Temporal Workers to drain during shutdown; zero inherits the owning service shutdownTimeout.
@@ -1097,6 +1089,14 @@ components:
         temporalExecutionType:
           $ref: '#/components/schemas/TemporalExecutionType'
           description: Required immutable execution domain for a Temporal endpoint.
+        maxConcurrentActivities:
+          type: integer
+          minimum: 1
+          description: Maximum Activity Task executions for this endpoint's Task Queue. Applies to Activity endpoints.
+        maxConcurrentWorkflowTasks:
+          type: integer
+          minimum: 1
+          description: Maximum Workflow Task executions for this endpoint's Task Queue. Applies to Workflow endpoints; this does not limit open Workflow executions.
         workflowExecutionTimeout:
           type: integer
           minimum: 0

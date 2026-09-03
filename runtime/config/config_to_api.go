@@ -272,8 +272,6 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 		d.TlsCaFile = strOptPtr(c.TLSCAFile)
 		d.TlsCertFile = strOptPtr(c.TLSCertFile)
 		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
-		d.MaxConcurrentActivities = intOptPtr(c.MaxConcurrentActivities)
-		d.MaxConcurrentWorkflows = intOptPtr(c.MaxConcurrentWorkflows)
 		d.WorkerStopTimeout = intOptPtr(c.WorkerStopTimeout)
 	}
 	return d
@@ -361,6 +359,8 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 			e.MissedRunPolicy = &p
 		}
 		e.WorkflowExecutionTimeout = intOptPtr(c.WorkflowExecutionTimeout)
+		e.MaxConcurrentActivities = intOptPtr(c.MaxConcurrentActivities)
+		e.MaxConcurrentWorkflowTasks = intOptPtr(c.MaxConcurrentWorkflowTasks)
 		e.ActivityStartToCloseTimeout = intOptPtr(c.ActivityStartToCloseTimeout)
 		e.ActivityHeartbeatTimeout = intOptPtr(c.ActivityHeartbeatTimeout)
 		e.MaximumAttempts = intOptPtr(c.MaximumAttempts)

@@ -101,25 +101,23 @@ func (d *CronDataConnectorConfig) GetImplementation() api.DataConnectorImplement
 func (d *CronDataConnectorConfig) GetProperty(name string) interface{} { return d.Properties[name] }
 
 // TemporalDataConnectorConfig configures one Temporal client and its Workers.
-// Connection and capacity fields are reloadable runtime policy; graph objects
-// retain only this connector's immutable ID.
+// Connection fields are reloadable runtime policy; graph objects retain only
+// this connector's immutable ID. Worker capacity is configured per endpoint.
 type TemporalDataConnectorConfig struct {
-	ID                      int                             `yaml:"id" mapstructure:"id"`
-	Name                    string                          `yaml:"name" mapstructure:"name"`
-	Implementation          api.DataConnectorImplementation `yaml:"implementation" mapstructure:"implementation"`
-	Address                 string                          `yaml:"address" mapstructure:"address"`
-	Namespace               string                          `yaml:"namespace" mapstructure:"namespace"`
-	Identity                string                          `yaml:"identity,omitempty" mapstructure:"identity"`
-	APIKey                  string                          `yaml:"apiKey,omitempty" mapstructure:"apiKey"`
-	TLSEnabled              bool                            `yaml:"tlsEnabled,omitempty" mapstructure:"tlsEnabled"`
-	TLSServerName           string                          `yaml:"tlsServerName,omitempty" mapstructure:"tlsServerName"`
-	TLSCAFile               string                          `yaml:"tlsCaFile,omitempty" mapstructure:"tlsCaFile"`
-	TLSCertFile             string                          `yaml:"tlsCertFile,omitempty" mapstructure:"tlsCertFile"`
-	TLSKeyFile              string                          `yaml:"tlsKeyFile,omitempty" mapstructure:"tlsKeyFile"`
-	MaxConcurrentActivities int                             `yaml:"maxConcurrentActivities,omitempty" mapstructure:"maxConcurrentActivities"`
-	MaxConcurrentWorkflows  int                             `yaml:"maxConcurrentWorkflows,omitempty" mapstructure:"maxConcurrentWorkflows"`
-	WorkerStopTimeout       int                             `yaml:"workerStopTimeout,omitempty" mapstructure:"workerStopTimeout"`
-	Properties              map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
+	ID                int                             `yaml:"id" mapstructure:"id"`
+	Name              string                          `yaml:"name" mapstructure:"name"`
+	Implementation    api.DataConnectorImplementation `yaml:"implementation" mapstructure:"implementation"`
+	Address           string                          `yaml:"address" mapstructure:"address"`
+	Namespace         string                          `yaml:"namespace" mapstructure:"namespace"`
+	Identity          string                          `yaml:"identity,omitempty" mapstructure:"identity"`
+	APIKey            string                          `yaml:"apiKey,omitempty" mapstructure:"apiKey"`
+	TLSEnabled        bool                            `yaml:"tlsEnabled,omitempty" mapstructure:"tlsEnabled"`
+	TLSServerName     string                          `yaml:"tlsServerName,omitempty" mapstructure:"tlsServerName"`
+	TLSCAFile         string                          `yaml:"tlsCaFile,omitempty" mapstructure:"tlsCaFile"`
+	TLSCertFile       string                          `yaml:"tlsCertFile,omitempty" mapstructure:"tlsCertFile"`
+	TLSKeyFile        string                          `yaml:"tlsKeyFile,omitempty" mapstructure:"tlsKeyFile"`
+	WorkerStopTimeout int                             `yaml:"workerStopTimeout,omitempty" mapstructure:"workerStopTimeout"`
+	Properties        map[string]interface{}          `yaml:",inline" mapstructure:",remain"`
 }
 
 func (d *TemporalDataConnectorConfig) GetID() int      { return d.ID }

@@ -366,12 +366,6 @@ type DataConnector struct {
 	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
-	// MaxConcurrentActivities Maximum Activity slots owned by this Temporal connector's Worker.
-	MaxConcurrentActivities *int `json:"maxConcurrentActivities,omitempty"`
-
-	// MaxConcurrentWorkflows Maximum Workflow slots owned by this Temporal connector's Worker.
-	MaxConcurrentWorkflows *int `json:"maxConcurrentWorkflows,omitempty"`
-
 	// Module Contract module containing generated gRPC protobuf types for this connector.
 	// Used to resolve the correct generated bindings for each target language.
 	// Applies to gRPC connectors.
@@ -595,6 +589,12 @@ type Endpoint struct {
 
 	// IdDataConnector ID of the data connector this endpoint belongs to.
 	IdDataConnector int `json:"idDataConnector"`
+
+	// MaxConcurrentActivities Maximum Activity Task executions for this endpoint's Task Queue. Applies to Activity endpoints.
+	MaxConcurrentActivities *int `json:"maxConcurrentActivities,omitempty"`
+
+	// MaxConcurrentWorkflowTasks Maximum Workflow Task executions for this endpoint's Task Queue. Applies to Workflow endpoints; this does not limit open Workflow executions.
+	MaxConcurrentWorkflowTasks *int `json:"maxConcurrentWorkflowTasks,omitempty"`
 
 	// MaximumAttempts Maximum Temporal Activity attempts including the initial attempt.
 	MaximumAttempts *int `json:"maximumAttempts,omitempty"`

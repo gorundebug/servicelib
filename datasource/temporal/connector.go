@@ -596,18 +596,45 @@ func (c *Connector) Start(ctx context.Context) error {
 		worker             worker.Worker
 		endpointRegistered bool
 	}
+	type queuePolicy struct {
+		maxConcurrentActivities    int
+		maxConcurrentWorkflowTasks int
+	}
+	queuePolicies := make(map[string]queuePolicy)
+	for _, registration := range c.endpointRegistrations {
+		endpointConfig, configErr := c.endpointConfig(registration.id)
+		if configErr != nil {
+			temporalClient.Close()
+			return configErr
+		}
+		if !endpointConfig.Enabled {
+			continue
+		}
+		policy := queuePolicies[endpointConfig.TaskQueue]
+		switch endpointConfig.TemporalExecutionType {
+		case api.Activity:
+			policy.maxConcurrentActivities = endpointConfig.MaxConcurrentActivities
+		case api.Workflow:
+			policy.maxConcurrentWorkflowTasks = endpointConfig.MaxConcurrentWorkflowTasks
+		}
+		queuePolicies[endpointConfig.TaskQueue] = policy
+	}
 	workersByQueue := make(map[string]*queueWorker)
-	getWorker := func(taskQueue string) *queueWorker {
+	getWorker := func(taskQueue string) (*queueWorker, error) {
 		registered := workersByQueue[taskQueue]
 		if registered == nil {
+			policy, exists := queuePolicies[taskQueue]
+			if !exists {
+				return nil, fmt.Errorf("Temporal data connector %q has no enabled endpoint for task queue %q", c.name, taskQueue)
+			}
 			registered = &queueWorker{worker: worker.New(temporalClient, taskQueue, worker.Options{
-				MaxConcurrentActivityExecutionSize:     cfg.MaxConcurrentActivities,
-				MaxConcurrentWorkflowTaskExecutionSize: cfg.MaxConcurrentWorkflows,
+				MaxConcurrentActivityExecutionSize:     policy.maxConcurrentActivities,
+				MaxConcurrentWorkflowTaskExecutionSize: policy.maxConcurrentWorkflowTasks,
 				WorkerStopTimeout:                      workerStopTimeout,
 			})}
 			workersByQueue[taskQueue] = registered
 		}
-		return registered
+		return registered, nil
 	}
 	for _, registration := range c.endpointRegistrations {
 		cfg, err := c.endpointConfig(registration.id)
@@ -618,7 +645,11 @@ func (c *Connector) Start(ctx context.Context) error {
 		if !cfg.Enabled {
 			continue
 		}
-		registered := getWorker(cfg.TaskQueue)
+		registered, err := getWorker(cfg.TaskQueue)
+		if err != nil {
+			temporalClient.Close()
+			return err
+		}
 		registration := registration
 		switch cfg.TemporalExecutionType {
 		case api.Activity:

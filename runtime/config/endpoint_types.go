@@ -127,6 +127,8 @@ type TemporalEndpointConfig struct {
 	TracingEnabled              bool                        `yaml:"tracingEnabled,omitempty" mapstructure:"tracingEnabled"`
 	TaskQueue                   string                      `yaml:"taskQueue" mapstructure:"taskQueue"`
 	TemporalExecutionType       api.TemporalExecutionType   `yaml:"temporalExecutionType" mapstructure:"temporalExecutionType"`
+	MaxConcurrentActivities     int                         `yaml:"maxConcurrentActivities,omitempty" mapstructure:"maxConcurrentActivities"`
+	MaxConcurrentWorkflowTasks  int                         `yaml:"maxConcurrentWorkflowTasks,omitempty" mapstructure:"maxConcurrentWorkflowTasks"`
 	Schedule                    string                      `yaml:"schedule,omitempty" mapstructure:"schedule"`
 	ScheduleID                  string                      `yaml:"scheduleId,omitempty" mapstructure:"scheduleId"`
 	Timezone                    string                      `yaml:"timezone,omitempty" mapstructure:"timezone"`
