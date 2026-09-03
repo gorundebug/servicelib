@@ -226,6 +226,7 @@ type Connector struct {
 	endpointRegistrations map[int]endpointRegistration
 	durableEvents         metrics.Int64CounterVec
 	started               bool
+	admissionStarted      bool
 }
 
 // MakeConnector creates and registers one durable transport. Registration is
@@ -652,39 +653,52 @@ func (c *Connector) Start(ctx context.Context) error {
 			return fmt.Errorf("Temporal endpoint %q has unsupported execution type %q", cfg.Name, cfg.TemporalExecutionType)
 		}
 	}
-	startedWorkers := make([]worker.Worker, 0, len(workersByQueue))
+	preparedWorkers := make([]worker.Worker, 0, len(workersByQueue))
 	for _, registered := range workersByQueue {
-		if err := registered.worker.Start(); err != nil {
-			for _, started := range startedWorkers {
-				started.Stop()
-			}
-			temporalClient.Close()
-			return fmt.Errorf("start Temporal worker for connector %q: %w", c.name, err)
-		}
-		startedWorkers = append(startedWorkers, registered.worker)
+		preparedWorkers = append(preparedWorkers, registered.worker)
 	}
 	for _, registration := range c.endpointRegistrations {
 		cfg, err := c.endpointConfig(registration.id)
 		if err != nil {
-			for _, started := range startedWorkers {
-				started.Stop()
-			}
 			temporalClient.Close()
 			return err
 		}
 		if cfg.Enabled && cfg.Schedule != "" {
 			if err := c.ensureSchedule(ctx, temporalClient, registration, cfg); err != nil {
-				for _, started := range startedWorkers {
-					started.Stop()
-				}
 				temporalClient.Close()
 				return err
 			}
 		}
 	}
 	c.client = temporalClient
-	c.workers = startedWorkers
+	c.workers = preparedWorkers
 	c.started = true
+	return nil
+}
+
+// StartAdmission opens Task Queue polling only after every downstream graph
+// resource has started. A Worker can receive an existing backlog immediately,
+// so starting it in Connector.Start would race storage and pool startup.
+func (c *Connector) StartAdmission(context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.started {
+		return fmt.Errorf("Temporal connector %q is not started", c.name)
+	}
+	if c.admissionStarted {
+		return nil
+	}
+	startedWorkers := make([]worker.Worker, 0, len(c.workers))
+	for _, registered := range c.workers {
+		if err := registered.Start(); err != nil {
+			for _, started := range startedWorkers {
+				started.Stop()
+			}
+			return fmt.Errorf("start Temporal worker for connector %q: %w", c.name, err)
+		}
+		startedWorkers = append(startedWorkers, registered)
+	}
+	c.admissionStarted = true
 	return nil
 }
 
@@ -778,7 +792,7 @@ func (c *Connector) Stop(context.Context) {
 		return
 	}
 	workers, temporalClient := c.workers, c.client
-	c.workers, c.client, c.started = nil, nil, false
+	c.workers, c.client, c.started, c.admissionStarted = nil, nil, false, false
 	c.mu.Unlock()
 	for _, w := range workers {
 		w.Stop()
@@ -794,6 +808,7 @@ func (c *Connector) StopAdmission(context.Context) {
 	c.mu.Lock()
 	workers := c.workers
 	c.workers = nil
+	c.admissionStarted = false
 	c.mu.Unlock()
 	for _, w := range workers {
 		w.Stop()

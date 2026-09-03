@@ -67,6 +67,7 @@ type RuntimeEnvironment interface {
 type ManagedDataConnector interface {
 	environment.Lifecycle
 	DataConnector
+	StartAdmission(context.Context) error
 	StopAdmission(context.Context)
 }
 

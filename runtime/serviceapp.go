@@ -507,6 +507,14 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 	}
+	// A managed connector may expose inbound polling as well as an outbound
+	// client. Open that admission only after every downstream graph resource
+	// and sink is ready; an existing durable backlog can arrive immediately.
+	for _, connector := range app.managedDataConnectors {
+		if err := connector.StartAdmission(ctx); err != nil {
+			return err
+		}
+	}
 	// Sources are the graph admission boundary and may emit from Start. Start
 	// them only after every downstream resource is ready.
 	for _, v := range app.dataSources {
