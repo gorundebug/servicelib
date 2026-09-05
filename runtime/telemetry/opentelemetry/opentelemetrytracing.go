@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gorundebug/servicelib/runtime/contextvalue"
 	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -147,14 +148,23 @@ type grpcServerTracingActiveKey struct{}
 func (h *samplingGRPCServerHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	requested := tracing.SamplingEnabled(ctx) || oteltrace.SpanContextFromContext(ctx).IsSampled()
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if vals := md.Get("x-trace"); len(vals) > 0 && vals[0] != "" {
+		if !contextvalue.StreamIDInspected(ctx) {
+			if values := md["x-stream-id"]; len(values) > 0 && values[0] != "" {
+				ctx = contextvalue.WithStreamID(ctx, values[0])
+			} else {
+				ctx = contextvalue.WithStreamIDInspected(ctx)
+			}
+		}
+		if vals := md["x-trace"]; len(vals) > 0 && vals[0] != "" {
 			ctx = tracing.EnableSampling(ctx)
 			requested = true
-		} else if len(md.Get("traceparent")) > 0 {
+		} else if len(md["traceparent"]) > 0 {
 			// Let otelgrpc extract even an unsampled remote parent. Requests
 			// without tracing metadata never enter otelgrpc at all.
 			requested = true
 		}
+	} else if !contextvalue.StreamIDInspected(ctx) {
+		ctx = contextvalue.WithStreamIDInspected(ctx)
 	}
 	if !requested {
 		return ctx

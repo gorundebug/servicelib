@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gorundebug/servicelib/runtime/contextvalue"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -79,6 +80,27 @@ func TestGRPCServerUnsampledBypassesTracing(t *testing.T) {
 
 	if inner.tagRPC != 0 || inner.handleRPC != 0 {
 		t.Fatalf("unsampled RPC entered tracing handler: TagRPC=%d HandleRPC=%d", inner.tagRPC, inner.handleRPC)
+	}
+	if !contextvalue.StreamIDInspected(ctx) {
+		t.Fatal("incoming metadata was not marked as inspected")
+	}
+}
+
+func TestGRPCServerCachesIncomingStreamIDForEndpoint(t *testing.T) {
+	inner := &countingStatsHandler{}
+	handler := &samplingGRPCServerHandler{inner: inner}
+	ctx := metadata.NewIncomingContext(
+		context.Background(), metadata.Pairs("x-stream-id", "stream-123"),
+	)
+
+	ctx = handler.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: "/test.Service/Call"})
+
+	id, ok := contextvalue.StreamIDFromContext(ctx)
+	if !ok || id.GetID() != "stream-123" {
+		t.Fatalf("incoming stream id was not cached: id=%v ok=%v", id, ok)
+	}
+	if inner.tagRPC != 0 {
+		t.Fatal("stream id alone unexpectedly enabled tracing")
 	}
 }
 

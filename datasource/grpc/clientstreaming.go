@@ -168,7 +168,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 }
 
 func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle(ctx context.Context, server ClientStreamingServer[ReqT, ResR]) error {
-	if _, ok := runtime.StreamIdFromContext(ctx); !ok {
+	if _, ok := runtime.StreamIdFromContext(ctx); !ok && !runtime.StreamIdInspected(ctx) {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if vals := md.Get("x-stream-id"); len(vals) > 0 && vals[0] != "" {
 				ctx = runtime.WithStreamId(ctx, vals[0])

@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/contextvalue"
 	"github.com/gorundebug/servicelib/runtime/datastruct"
 	"github.com/gorundebug/servicelib/runtime/environment"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
@@ -974,33 +975,18 @@ func (f *StreamFunction[T]) BeforeCall() {
 func (f *StreamFunction[T]) AfterCall() {
 }
 
-type StreamId interface {
-	GetID() string
-}
-
-type streamId struct {
-	id string
-}
-
-func (s *streamId) GetID() string {
-	return s.id
-}
-
-type streamIdKeyType struct{}
-
-var streamIdKey = streamIdKeyType{}
+type StreamId = contextvalue.StreamID
 
 func WithStreamId(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, streamIdKey, &streamId{id: id})
+	return contextvalue.WithStreamID(ctx, id)
 }
 
 func StreamIdFromContext(ctx context.Context) (StreamId, bool) {
-	v := ctx.Value(streamIdKey)
-	if v == nil {
-		return nil, false
-	}
-	sid, ok := v.(StreamId)
-	return sid, ok
+	return contextvalue.StreamIDFromContext(ctx)
+}
+
+func StreamIdInspected(ctx context.Context) bool {
+	return contextvalue.StreamIDInspected(ctx)
 }
 
 func NewStreamID() string {

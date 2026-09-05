@@ -174,7 +174,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 // If the stream does not expect a result, any value already buffered in replyCh is drained
 // and the call returns immediately after Eof.
 func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle(ctx context.Context, req ReqT) (ResR, error) {
-	if _, ok := runtime.StreamIdFromContext(ctx); !ok {
+	if _, ok := runtime.StreamIdFromContext(ctx); !ok && !runtime.StreamIdInspected(ctx) {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if vals := md.Get("x-stream-id"); len(vals) > 0 && vals[0] != "" {
 				ctx = runtime.WithStreamId(ctx, vals[0])
