@@ -305,6 +305,22 @@ func TestJoinValue_NoTTL_IndexOne(t *testing.T) {
 	})
 }
 
+// TestJoinValue_NoTTL_IndexGreaterThanOne verifies that MultiJoin can create
+// storage from any input, including its third and later right-hand streams.
+func TestJoinValue_NoTTL_IndexGreaterThanOne(t *testing.T) {
+	s, _ := makeStorage(t, 0, false)
+
+	s.JoinValue(context.Background(), "k1", 2, "v", func(values [][]interface{}) bool {
+		if len(values) != 3 {
+			t.Fatalf("expected three value slots, got %d", len(values))
+		}
+		if got := values[2]; len(got) != 1 || got[0] != "v" {
+			t.Fatalf("unexpected third slot: %#v", got)
+		}
+		return false
+	})
+}
+
 // TestJoinValue_NoTTL_Concurrent_NoPanic verifies that concurrent JoinValue
 // calls do not panic or produce data races.
 func TestJoinValue_NoTTL_Concurrent_NoPanic(t *testing.T) {

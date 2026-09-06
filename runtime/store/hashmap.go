@@ -136,7 +136,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
                 return item, inStorage2
             }
             newItem := &Item{
-                values: make([][]interface{}, index+1, 2),
+                values: make([][]interface{}, index+1),
                 f:      f,
             }
             s.lock.Lock()
