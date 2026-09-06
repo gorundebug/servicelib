@@ -17,9 +17,21 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"google.golang.org/grpc/metadata"
 )
 
 const pendingRotationInterval = 30 * time.Second
+
+func applyIncomingStreamID(ctx context.Context) context.Context {
+	if _, ok := runtime.StreamIdFromContext(ctx); ok || runtime.StreamIdInspected(ctx) {
+		return ctx
+	}
+	values := metadata.ValueFromIncomingContext(ctx, "x-stream-id")
+	if len(values) > 0 && values[0] != "" {
+		return runtime.WithStreamId(ctx, values[0])
+	}
+	return ctx
+}
 
 // ClientStreamingServer is satisfied structurally by grpc.ClientStreamingServer[Req, Res]
 // when T = *Req and R = *Res.
