@@ -227,6 +227,18 @@ func TestEndpointNoopMetricsSkipTiming(t *testing.T) {
 		sinkEndpoint, err := MakeDataSinkEndpoint(&testDataSink{sink}, 1, env)
 		require.NoError(t, err)
 		ctx := context.Background()
+		sourceEndpoint.OnPendingAdd(ctx, "pending")
+		stored := 0
+		for i := range sourceEndpoint.pendingShards {
+			stored += len(sourceEndpoint.pendingShards[i].started)
+		}
+		if noop {
+			require.Zero(t, stored)
+		} else {
+			require.Equal(t, 1, stored)
+		}
+		sourceEndpoint.OnPendingRemove(ctx, "pending")
+		require.Zero(t, sourceEndpoint.oldestPendingAge())
 		for _, endpoint := range []interface {
 			OnRequestStart(context.Context) time.Time
 			OnRequestEnd(context.Context, time.Time, error)

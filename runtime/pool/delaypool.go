@@ -58,11 +58,16 @@ func (t *delayTask) runNormal() {
 	}
 	defer t.p.wg.Done()
 	defer t.p.gaugeWaitQueueLength.Dec()
-	startTime := time.Now()
+	var startTime time.Time
+	if !t.p.metricsDisabled {
+		startTime = time.Now()
+	}
 	runTask(t.ctx, t.p.environment, "delay", t.fn)
 	t.fn = nil
 	t.p.tasksTotal.Inc(t.ctx)
-	t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
+	if !t.p.metricsDisabled {
+		t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
+	}
 }
 
 func (t *delayTask) onCtxDone() {
@@ -73,11 +78,16 @@ func (t *delayTask) onCtxDone() {
 func (t *delayTask) runCancelled() {
 	defer t.p.wg.Done()
 	defer t.p.gaugeWaitQueueLength.Dec()
-	startTime := time.Now()
+	var startTime time.Time
+	if !t.p.metricsDisabled {
+		startTime = time.Now()
+	}
 	runTask(t.ctx, t.p.environment, "delay", t.fn)
 	t.fn = nil
 	t.p.tasksTotal.Inc(t.ctx)
-	t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
+	if !t.p.metricsDisabled {
+		t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
+	}
 	t.p.taskCancelledCounter.Inc(t.ctx)
 }
 
@@ -102,10 +112,14 @@ type DelayPoolImpl struct {
 	stopTimeoutCounter   metrics.Int64Counter
 	taskCancelledCounter metrics.Int64Counter
 	environment          environment.ServiceEnvironment
+	metricsDisabled      bool
 }
 
 func makeDelayPool(env environment.ServiceEnvironment) (DelayPool, error) {
-	pool := &DelayPoolImpl{environment: env}
+	pool := &DelayPoolImpl{
+		environment:     env,
+		metricsDisabled: env.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
+	}
 	scope := env.Metrics().Scope("delay_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
 	})

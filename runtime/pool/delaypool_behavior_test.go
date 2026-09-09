@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/testmetrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -158,5 +159,37 @@ func TestDelayPool_StopTimeoutReportsButStillDrainsAcceptedTask(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("delay pool did not finish after the callback drained")
+	}
+}
+
+type delayMetricsEnv struct {
+	*mockPoolEnv
+	engine metrics.Metrics
+}
+
+func (e *delayMetricsEnv) Metrics() metrics.Metrics { return e.engine }
+
+func TestDelayPoolNoopMetricsPreservesCompletion(t *testing.T) {
+	for _, noop := range []bool{false, true} {
+		var m metrics.Metrics = testmetrics.New()
+		if noop {
+			m = (metrics.NoopMetricsEngine{}).Metrics()
+		}
+		rc, err := config.NewRuntimeConfig(&minimalConfig{})
+		require.NoError(t, err)
+		pool, err := makeDelayPool(&delayMetricsEnv{mockPoolEnv: &mockPoolEnv{rc: rc}, engine: m})
+		require.NoError(t, err)
+		require.NoError(t, pool.Start(context.Background()))
+		var calls atomic.Int32
+		ctx, cancel := context.WithCancel(context.Background())
+		require.NoError(t, pool.Delay(ctx, time.Hour, func() { calls.Add(1) }))
+		require.NoError(t, pool.Delay(context.Background(), 0, func() { calls.Add(1) }))
+		cancel()
+		pool.Stop(context.Background())
+		require.EqualValues(t, 2, calls.Load())
+		if !noop {
+			histogram := pool.(*DelayPoolImpl).executionDuration.(*testmetrics.TestFloat64Histogram)
+			require.EqualValues(t, 2, histogram.Count())
+		}
 	}
 }

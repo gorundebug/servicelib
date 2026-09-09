@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gorundebug/servicelib/api"
+	"github.com/gorundebug/servicelib/datasource/internal/callbackstore"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/log"
@@ -67,13 +68,13 @@ type httpResult[HandlerState, ReqT, ResR, T, R, E any] struct {
 	doneCh             chan struct{}
 	mu                 sync.RWMutex
 	cbMu               sync.Mutex
-	messageCallbackMap map[string]ResultCallback[HandlerState, ReqT, ResR, T, R, E]
+	messageCallbackMap callbackstore.Store[ResultCallback[HandlerState, ReqT, ResR, T, R, E]]
 }
 
 func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) SetResultCallback(messageID string, cb ResultCallback[HandlerState, ReqT, ResR, T, R, E]) {
 	r.cbMu.Lock()
 	defer r.cbMu.Unlock()
-	r.messageCallbackMap[messageID] = cb
+	r.messageCallbackMap.Set(messageID, cb)
 }
 
 func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) Done() {
@@ -444,11 +445,10 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 
 	doneCh := make(chan struct{})
 	result := &httpResult[HandlerState, ReqT, ResR, T, R, E]{
-		handlerState:       handlerState,
-		data:               data,
-		span:               span,
-		doneCh:             doneCh,
-		messageCallbackMap: make(map[string]ResultCallback[HandlerState, ReqT, ResR, T, R, E]),
+		handlerState: handlerState,
+		data:         data,
+		span:         span,
+		doneCh:       doneCh,
 	}
 	if ec.hasResult {
 		if err = ec.pending.Set(streamID, result); err != nil {
@@ -554,7 +554,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consu
 	messageID := ec.handler.GetMessageID(ctx, ec.sc, result.handlerState, value)
 
 	result.cbMu.Lock()
-	cb, ok := result.messageCallbackMap[messageID]
+	cb, ok := result.messageCallbackMap.Get(messageID)
 	result.cbMu.Unlock()
 	if !ok || cb == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
@@ -566,11 +566,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consu
 	if cb(ctx, ec.sc, result.handlerState, value, result.data) {
 		var duplicate bool
 		result.cbMu.Lock()
-		if _, exists := result.messageCallbackMap[messageID]; exists {
-			delete(result.messageCallbackMap, messageID)
-		} else {
-			duplicate = true
-		}
+		duplicate = !result.messageCallbackMap.Remove(messageID)
 		result.cbMu.Unlock()
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)

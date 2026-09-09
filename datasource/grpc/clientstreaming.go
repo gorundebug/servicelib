@@ -14,6 +14,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/gorundebug/servicelib/datasource/internal/callbackstore"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
@@ -55,7 +56,7 @@ type clientStreamingResult[HandlerState, T, ResR, R, E any] struct {
 	doneCh             chan struct{}
 	mu                 sync.RWMutex
 	cbMu               sync.Mutex
-	messageCallbackMap map[string]ResultCallback[HandlerState, T, ResR, R, E]
+	messageCallbackMap callbackstore.Store[ResultCallback[HandlerState, T, ResR, R, E]]
 }
 
 func makeClientStreamingResult[HandlerState, T, ResR, R, E any](
@@ -65,11 +66,10 @@ func makeClientStreamingResult[HandlerState, T, ResR, R, E any](
 	span tracing.Span,
 ) *clientStreamingResult[HandlerState, T, ResR, R, E] {
 	return &clientStreamingResult[HandlerState, T, ResR, R, E]{
-		handlerState:       handlerState,
-		sender:             sender,
-		span:               span,
-		doneCh:             doneCh,
-		messageCallbackMap: make(map[string]ResultCallback[HandlerState, T, ResR, R, E]),
+		handlerState: handlerState,
+		sender:       sender,
+		span:         span,
+		doneCh:       doneCh,
 	}
 }
 
@@ -79,7 +79,7 @@ func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) SetResultCallback(
 ) {
 	r.cbMu.Lock()
 	defer r.cbMu.Unlock()
-	r.messageCallbackMap[messageID] = cb
+	r.messageCallbackMap.Set(messageID, cb)
 }
 
 func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) Done() {
@@ -136,7 +136,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 	messageID := ec.handler.GetMessageID(ctx, ec.sc, result.handlerState, value)
 
 	result.cbMu.Lock()
-	resultCallback, ok := result.messageCallbackMap[messageID]
+	resultCallback, ok := result.messageCallbackMap.Get(messageID)
 	result.cbMu.Unlock()
 	if !ok || resultCallback == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
@@ -148,11 +148,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 	if resultCallback(ctx, ec.sc, result.handlerState, value, result.sender) {
 		var duplicate bool
 		result.cbMu.Lock()
-		if _, exists := result.messageCallbackMap[messageID]; exists {
-			delete(result.messageCallbackMap, messageID)
-		} else {
-			duplicate = true
-		}
+		duplicate = !result.messageCallbackMap.Remove(messageID)
 		result.cbMu.Unlock()
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)

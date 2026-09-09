@@ -276,6 +276,9 @@ func (ep *DataSourceEndpoint) oldestPendingAge() float64 {
 }
 
 func (ep *DataSourceEndpoint) OnPendingAdd(_ context.Context, streamID string) {
+	if ep.metricsDisabled {
+		return
+	}
 	ep.pendingRequests.Inc()
 	shard := ep.pendingShard(streamID)
 	shard.mu.Lock()
@@ -284,6 +287,9 @@ func (ep *DataSourceEndpoint) OnPendingAdd(_ context.Context, streamID string) {
 }
 
 func (ep *DataSourceEndpoint) OnPendingRemove(_ context.Context, streamID string) {
+	if ep.metricsDisabled {
+		return
+	}
 	ep.pendingRequests.Dec()
 	shard := ep.pendingShard(streamID)
 	shard.mu.Lock()
