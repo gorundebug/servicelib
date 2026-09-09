@@ -124,6 +124,7 @@ func (ds *InputDataSource) AddEndpoint(endpoint InputEndpoint) {
 }
 
 type DataSourceEndpoint struct {
+	metricsDisabled           bool
 	id                        int
 	name                      string
 	environment               RuntimeEnvironment
@@ -147,6 +148,7 @@ type DataSourceEndpoint struct {
 func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEnvironment) (*DataSourceEndpoint, error) {
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	ep := &DataSourceEndpoint{
+		metricsDisabled:   environment.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
 		dataSource:        dataSource,
 		id:                id,
 		name:              endpointName,
@@ -309,11 +311,17 @@ func (ep *DataSourceEndpoint) OnBeginRequestFailed(ctx context.Context, err erro
 }
 
 func (ep *DataSourceEndpoint) OnRequestStart(_ context.Context) time.Time {
+	if ep.metricsDisabled {
+		return time.Time{}
+	}
 	ep.activeRequests.Inc()
 	return time.Now()
 }
 
 func (ep *DataSourceEndpoint) OnRequestEnd(ctx context.Context, startTime time.Time, err error) {
+	if ep.metricsDisabled {
+		return
+	}
 	ep.activeRequests.Dec()
 	ep.requestDuration.Observe(ctx, time.Since(startTime).Seconds())
 	if err == nil {

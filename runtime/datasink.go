@@ -109,6 +109,7 @@ func (ds *OutputDataSink) AddEndpoint(endpoint SinkEndpoint) {
 }
 
 type DataSinkEndpoint struct {
+	metricsDisabled           bool
 	id                        int
 	name                      string
 	environment               RuntimeEnvironment
@@ -125,6 +126,7 @@ type DataSinkEndpoint struct {
 func MakeDataSinkEndpoint(dataSink DataSink, id int, environment RuntimeEnvironment) (*DataSinkEndpoint, error) {
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	ep := &DataSinkEndpoint{
+		metricsDisabled:   environment.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
 		dataSink:          dataSink,
 		id:                id,
 		name:              endpointName,
@@ -198,11 +200,17 @@ func (ep *DataSinkEndpoint) OnLateResult(ctx context.Context, streamID string) {
 }
 
 func (ep *DataSinkEndpoint) OnRequestStart(_ context.Context) time.Time {
+	if ep.metricsDisabled {
+		return time.Time{}
+	}
 	ep.activeRequests.Inc()
 	return time.Now()
 }
 
 func (ep *DataSinkEndpoint) OnRequestEnd(ctx context.Context, startTime time.Time, err error) {
+	if ep.metricsDisabled {
+		return
+	}
 	ep.activeRequests.Dec()
 	ep.requestDuration.Observe(ctx, time.Since(startTime).Seconds())
 	if err == nil {

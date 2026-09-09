@@ -210,3 +210,30 @@ func TestDataSinkEndpointRegistersMetrics(t *testing.T) {
 	require.ElementsMatch(t, expectedDataSinkEndpointMetrics, testMetrics(env).RegisteredNames(),
 		"datasink endpoint metrics changed — update expectedDataSinkEndpointMetrics AND grafana/dashboards/04_datasink.jsonnet")
 }
+
+func TestEndpointNoopMetricsSkipTiming(t *testing.T) {
+	for _, noop := range []bool{false, true} {
+		env := newMockRuntimeEnv(t)
+		if noop {
+			env.m = (metrics.NoopMetricsEngine{}).Metrics()
+		}
+		connector := &config.HttpDataConnectorConfig{ID: 1, Name: "http-connector"}
+		source, err := MakeInputDataSource(connector, env)
+		require.NoError(t, err)
+		sourceEndpoint, err := MakeDataSourceEndpoint(&testDataSource{source}, 1, env)
+		require.NoError(t, err)
+		sink, err := MakeOutputDataSink(connector, env)
+		require.NoError(t, err)
+		sinkEndpoint, err := MakeDataSinkEndpoint(&testDataSink{sink}, 1, env)
+		require.NoError(t, err)
+		ctx := context.Background()
+		for _, endpoint := range []interface {
+			OnRequestStart(context.Context) time.Time
+			OnRequestEnd(context.Context, time.Time, error)
+		}{sourceEndpoint, sinkEndpoint} {
+			started := endpoint.OnRequestStart(ctx)
+			require.Equal(t, noop, started.IsZero())
+			endpoint.OnRequestEnd(ctx, started, nil)
+		}
+	}
+}
