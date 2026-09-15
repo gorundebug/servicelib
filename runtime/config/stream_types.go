@@ -14,6 +14,7 @@ type StreamConfig interface {
 	GetID() int
 	GetName() string
 	GetPipeline() string
+	GetComponent() string
 	GetType() api.TransformationType
 	GetIdService() int
 	GetIdSource() int
@@ -28,6 +29,7 @@ type InputStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
@@ -41,6 +43,7 @@ type InputStreamConfig struct {
 func (s *InputStreamConfig) GetID() int                          { return s.ID }
 func (s *InputStreamConfig) GetName() string                     { return s.Name }
 func (s *InputStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *InputStreamConfig) GetComponent() string                { return s.Component }
 func (s *InputStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeInput }
 func (s *InputStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *InputStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -54,6 +57,7 @@ type MapStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -71,6 +75,7 @@ type MapStreamConfig struct {
 func (s *MapStreamConfig) GetID() int                          { return s.ID }
 func (s *MapStreamConfig) GetName() string                     { return s.Name }
 func (s *MapStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *MapStreamConfig) GetComponent() string                { return s.Component }
 func (s *MapStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeMap }
 func (s *MapStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *MapStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -84,6 +89,7 @@ type FilterStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -100,6 +106,7 @@ type FilterStreamConfig struct {
 func (s *FilterStreamConfig) GetID() int                          { return s.ID }
 func (s *FilterStreamConfig) GetName() string                     { return s.Name }
 func (s *FilterStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *FilterStreamConfig) GetComponent() string                { return s.Component }
 func (s *FilterStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeFilter }
 func (s *FilterStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *FilterStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -113,6 +120,7 @@ type JoinStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
@@ -135,6 +143,7 @@ type JoinStreamConfig struct {
 func (s *JoinStreamConfig) GetID() int                          { return s.ID }
 func (s *JoinStreamConfig) GetName() string                     { return s.Name }
 func (s *JoinStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *JoinStreamConfig) GetComponent() string                { return s.Component }
 func (s *JoinStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeJoin }
 func (s *JoinStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *JoinStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -148,6 +157,7 @@ type MultiJoinStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	IdSources                []int                  `yaml:"idSources" mapstructure:"idSources"`
@@ -166,9 +176,10 @@ type MultiJoinStreamConfig struct {
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *MultiJoinStreamConfig) GetID() int          { return s.ID }
-func (s *MultiJoinStreamConfig) GetName() string     { return s.Name }
-func (s *MultiJoinStreamConfig) GetPipeline() string { return s.Pipeline }
+func (s *MultiJoinStreamConfig) GetID() int           { return s.ID }
+func (s *MultiJoinStreamConfig) GetName() string      { return s.Name }
+func (s *MultiJoinStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *MultiJoinStreamConfig) GetComponent() string { return s.Component }
 func (s *MultiJoinStreamConfig) GetType() api.TransformationType {
 	return api.TransformationTypeMultiJoin
 }
@@ -184,6 +195,7 @@ type ProcessStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -201,6 +213,7 @@ type ProcessStreamConfig struct {
 func (s *ProcessStreamConfig) GetID() int                          { return s.ID }
 func (s *ProcessStreamConfig) GetName() string                     { return s.Name }
 func (s *ProcessStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *ProcessStreamConfig) GetComponent() string                { return s.Component }
 func (s *ProcessStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeProcess }
 func (s *ProcessStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *ProcessStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -214,6 +227,7 @@ type DelayStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -231,6 +245,7 @@ type DelayStreamConfig struct {
 func (s *DelayStreamConfig) GetID() int                          { return s.ID }
 func (s *DelayStreamConfig) GetName() string                     { return s.Name }
 func (s *DelayStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *DelayStreamConfig) GetComponent() string                { return s.Component }
 func (s *DelayStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeDelay }
 func (s *DelayStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *DelayStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -244,6 +259,7 @@ type FlatMapStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -261,6 +277,7 @@ type FlatMapStreamConfig struct {
 func (s *FlatMapStreamConfig) GetID() int                          { return s.ID }
 func (s *FlatMapStreamConfig) GetName() string                     { return s.Name }
 func (s *FlatMapStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *FlatMapStreamConfig) GetComponent() string                { return s.Component }
 func (s *FlatMapStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeFlatMap }
 func (s *FlatMapStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *FlatMapStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -274,6 +291,7 @@ type FlatMapIterableStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -282,9 +300,10 @@ type FlatMapIterableStreamConfig struct {
 	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *FlatMapIterableStreamConfig) GetID() int          { return s.ID }
-func (s *FlatMapIterableStreamConfig) GetName() string     { return s.Name }
-func (s *FlatMapIterableStreamConfig) GetPipeline() string { return s.Pipeline }
+func (s *FlatMapIterableStreamConfig) GetID() int           { return s.ID }
+func (s *FlatMapIterableStreamConfig) GetName() string      { return s.Name }
+func (s *FlatMapIterableStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *FlatMapIterableStreamConfig) GetComponent() string { return s.Component }
 func (s *FlatMapIterableStreamConfig) GetType() api.TransformationType {
 	return api.TransformationTypeFlatMapIterable
 }
@@ -300,6 +319,7 @@ type KeyByStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -318,6 +338,7 @@ type KeyByStreamConfig struct {
 func (s *KeyByStreamConfig) GetID() int                          { return s.ID }
 func (s *KeyByStreamConfig) GetName() string                     { return s.Name }
 func (s *KeyByStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *KeyByStreamConfig) GetComponent() string                { return s.Component }
 func (s *KeyByStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeKeyBy }
 func (s *KeyByStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *KeyByStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -331,6 +352,7 @@ type MergeStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSources  []int                  `yaml:"idSources" mapstructure:"idSources"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -341,6 +363,7 @@ type MergeStreamConfig struct {
 func (s *MergeStreamConfig) GetID() int                          { return s.ID }
 func (s *MergeStreamConfig) GetName() string                     { return s.Name }
 func (s *MergeStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *MergeStreamConfig) GetComponent() string                { return s.Component }
 func (s *MergeStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeMerge }
 func (s *MergeStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *MergeStreamConfig) GetIdSource() int                    { return 0 }
@@ -354,6 +377,7 @@ type SplitStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -364,6 +388,7 @@ type SplitStreamConfig struct {
 func (s *SplitStreamConfig) GetID() int                          { return s.ID }
 func (s *SplitStreamConfig) GetName() string                     { return s.Name }
 func (s *SplitStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *SplitStreamConfig) GetComponent() string                { return s.Component }
 func (s *SplitStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeSplit }
 func (s *SplitStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *SplitStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -377,6 +402,7 @@ type CaseStreamConfig struct {
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	Pipeline                 string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component                string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService                int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource                 int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos                     float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -390,9 +416,10 @@ type CaseStreamConfig struct {
 	Properties               map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *CaseStreamConfig) GetID() int          { return s.ID }
-func (s *CaseStreamConfig) GetName() string     { return s.Name }
-func (s *CaseStreamConfig) GetPipeline() string { return s.Pipeline }
+func (s *CaseStreamConfig) GetID() int           { return s.ID }
+func (s *CaseStreamConfig) GetName() string      { return s.Name }
+func (s *CaseStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *CaseStreamConfig) GetComponent() string { return s.Component }
 func (s *CaseStreamConfig) GetType() api.TransformationType {
 	return api.TransformationTypeCase
 }
@@ -408,6 +435,7 @@ type SinkStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -420,6 +448,7 @@ type SinkStreamConfig struct {
 func (s *SinkStreamConfig) GetID() int                          { return s.ID }
 func (s *SinkStreamConfig) GetName() string                     { return s.Name }
 func (s *SinkStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *SinkStreamConfig) GetComponent() string                { return s.Component }
 func (s *SinkStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeSink }
 func (s *SinkStreamConfig) GetIdService() int                   { return s.IdService }
 func (s *SinkStreamConfig) GetIdSource() int                    { return s.IdSource }
@@ -433,6 +462,7 @@ type CycleLinkStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -440,9 +470,10 @@ type CycleLinkStreamConfig struct {
 	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *CycleLinkStreamConfig) GetID() int          { return s.ID }
-func (s *CycleLinkStreamConfig) GetName() string     { return s.Name }
-func (s *CycleLinkStreamConfig) GetPipeline() string { return s.Pipeline }
+func (s *CycleLinkStreamConfig) GetID() int           { return s.ID }
+func (s *CycleLinkStreamConfig) GetName() string      { return s.Name }
+func (s *CycleLinkStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *CycleLinkStreamConfig) GetComponent() string { return s.Component }
 func (s *CycleLinkStreamConfig) GetType() api.TransformationType {
 	return api.TransformationTypeCycleLink
 }
@@ -458,6 +489,7 @@ type WhenStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`
 	Name       string                 `yaml:"name" mapstructure:"name"`
 	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
 	IdService  int                    `yaml:"idService" mapstructure:"idService"`
 	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
 	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
@@ -466,9 +498,10 @@ type WhenStreamConfig struct {
 	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
 }
 
-func (s *WhenStreamConfig) GetID() int          { return s.ID }
-func (s *WhenStreamConfig) GetName() string     { return s.Name }
-func (s *WhenStreamConfig) GetPipeline() string { return s.Pipeline }
+func (s *WhenStreamConfig) GetID() int           { return s.ID }
+func (s *WhenStreamConfig) GetName() string      { return s.Name }
+func (s *WhenStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *WhenStreamConfig) GetComponent() string { return s.Component }
 func (s *WhenStreamConfig) GetType() api.TransformationType {
 	return api.TransformationTypeWhen
 }

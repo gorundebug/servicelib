@@ -555,6 +555,9 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 							"type": enumNameFromMap(rev, "TransformationType", int(s.Type)),
 							"name": s.Name,
 						}
+						if s.Component != nil && *s.Component != "" {
+							sNode["component"] = *s.Component
+						}
 						if s.IdSource != 0 {
 							sNode["source"] = streamKey[s.IdSource]
 						}

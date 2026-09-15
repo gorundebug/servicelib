@@ -128,12 +128,13 @@ type netHTTPSinkEndpoint struct {
 }
 
 type netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
-	endpoint runtime.SinkEndpoint
-	stream   runtime.TypedSinkStreamWithResult[T, R, E]
-	sc       StreamContext[T, R, E]
-	handler  EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
-	client   Client
-	tracer   tracing.Tracer
+	endpoint       runtime.SinkEndpoint
+	stream         runtime.TypedSinkStreamWithResult[T, R, E]
+	sc             StreamContext[T, R, E]
+	handler        EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
+	client         Client
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Endpoint() runtime.SinkEndpoint {
@@ -143,10 +144,7 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) E
 func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Consume(ctx context.Context, value T) {
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "http.output",
-			tracing.StringAttr("stream", ec.stream.GetName()),
-			tracing.StringAttr("endpoint", ec.endpoint.GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "http.output", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
@@ -358,6 +356,9 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		handler:  handler,
 		client:   client,
 		tracer:   tr,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.stream, ec.endpoint)
 	}
 	ec.sc = StreamContext[T, R, E]{
 		SinkStreamContext: runtime.MakeSinkStreamContext[T, R, E](

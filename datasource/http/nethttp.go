@@ -189,11 +189,12 @@ func (c *resultConsumerProxy[T]) Consume(ctx context.Context, value T) {
 
 type netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	sc        StreamContext[T, R, E]
-	hasResult bool
-	handler   EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
-	pending   *store.RotatingMap[string, *httpResult[HandlerState, ReqT, ResR, T, R, E]]
-	tracer    tracing.Tracer
+	sc             StreamContext[T, R, E]
+	hasResult      bool
+	handler        EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
+	pending        *store.RotatingMap[string, *httpResult[HandlerState, ReqT, ResR, T, R, E]]
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Out(ctx context.Context, value T) {
@@ -413,12 +414,15 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(reqCtx) {
-		reqCtx, span = ec.tracer.Start(reqCtx, "http.input",
-			tracing.StringAttr("stream", ec.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
+		attributes := [6]tracing.Attribute{
+			ec.spanAttributes[0],
+			ec.spanAttributes[1],
+			ec.spanAttributes[2],
+			ec.spanAttributes[3],
 			tracing.StringAttr("method", r.Method),
 			tracing.StringAttr("path", r.URL.Path),
-		)
+		}
+		reqCtx, span = ec.tracer.Start(reqCtx, "http.input", attributes[:]...)
 		defer span.End()
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(reqCtx, ec.sc, data)
@@ -601,6 +605,9 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		hasResult:                  stream.GetResultStream() != nil,
 		handler:                    handler,
 		tracer:                     tr,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())
 	}
 	ec.sc = runtime.MakeStreamContext[T, R, E](
 		ec.Stream(),

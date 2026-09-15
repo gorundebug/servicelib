@@ -124,9 +124,10 @@ func (c *collector[R]) Out(ctx context.Context, value R) {
 
 type typedCustomEndpointConsumer[HandlerState, T, R any] struct {
 	*runtime.DataSinkEndpointConsumer[T, R]
-	handler      EndpointHandler[HandlerState, T, R]
-	sinkCallback runtime.SinkCallback[T]
-	tracer       tracing.Tracer
+	handler        EndpointHandler[HandlerState, T, R]
+	sinkCallback   runtime.SinkCallback[T]
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) SetSinkCallback(callback runtime.SinkCallback[T]) {
@@ -136,10 +137,7 @@ func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) SetSinkCallback(callb
 func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) Consume(ctx context.Context, value T) {
 	var span tracing.Span
 	if ep.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ep.tracer.Start(ctx, "local.output",
-			tracing.StringAttr("stream", ep.Stream().GetName()),
-			tracing.StringAttr("endpoint", ep.Endpoint().GetName()),
-		)
+		ctx, span = ep.tracer.Start(ctx, "local.output", ep.spanAttributes[:]...)
 		defer span.End()
 	}
 	stream := ep.Stream()
@@ -238,6 +236,9 @@ func MakeCustomEndpointConsumer[HandlerState, T, R any](stream runtime.TypedSink
 		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
 		handler:                  handler,
 		tracer:                   tr,
+	}
+	if typedEndpointConsumer.tracer != nil {
+		typedEndpointConsumer.spanAttributes = runtime.MakeEndpointSpanAttributes(typedEndpointConsumer.Stream(), typedEndpointConsumer.Endpoint())
 	}
 	stream.SetSinkConsumer(typedEndpointConsumer)
 	endpoint.consumer = typedEndpointConsumer

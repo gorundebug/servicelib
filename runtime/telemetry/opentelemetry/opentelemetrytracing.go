@@ -9,7 +9,6 @@ package opentelemetry
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -37,19 +36,17 @@ import (
 // ── attribute helpers ─────────────────────────────────────────────────────────
 
 func attrFromTracing(a tracing.Attribute) attribute.KeyValue {
-	switch v := a.Value.(type) {
-	case string:
-		return attribute.String(a.Key, v)
-	case int64:
-		return attribute.Int64(a.Key, v)
-	case int:
-		return attribute.Int(a.Key, v)
-	case float64:
-		return attribute.Float64(a.Key, v)
-	case bool:
-		return attribute.Bool(a.Key, v)
+	switch a.Value.Type() {
+	case tracing.StringAttribute:
+		return attribute.String(a.Key, a.Value.AsString())
+	case tracing.Int64Attribute:
+		return attribute.Int64(a.Key, a.Value.AsInt64())
+	case tracing.Float64Attribute:
+		return attribute.Float64(a.Key, a.Value.AsFloat64())
+	case tracing.BoolAttribute:
+		return attribute.Bool(a.Key, a.Value.AsBool())
 	default:
-		return attribute.String(a.Key, fmt.Sprintf("%v", v))
+		return attribute.KeyValue{Key: attribute.Key(a.Key)}
 	}
 }
 

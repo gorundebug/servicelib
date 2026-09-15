@@ -112,6 +112,14 @@ func StreamConfigToAPI(sc StreamConfig) api.Stream {
 	if p := sc.GetPipeline(); p != "" {
 		s.Pipeline = &p
 	}
+	if named, ok := sc.(interface{ GetComponent() string }); ok {
+		s.Component = strOptPtr(named.GetComponent())
+	}
+	if s.Component == nil {
+		if component, ok := sc.GetProperty("component").(string); ok {
+			s.Component = strOptPtr(component)
+		}
+	}
 	if sources := sc.GetIdSources(); len(sources) > 0 {
 		cp := make([]int, len(sources))
 		copy(cp, sources)

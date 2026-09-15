@@ -83,17 +83,18 @@ func (ds *outputDataSink) Stop(ctx context.Context) {
 type sinkEndpoint struct{ *runtime.DataSinkEndpoint }
 
 type endpointConsumer[HandlerState, T, R, E any] struct {
-	endpoint    *sinkEndpoint
-	stream      runtime.RuntimeStream
-	handler     EndpointHandler[HandlerState, T]
-	connector   *datasourcetemporal.Connector
-	inputSerde  serde.StreamSerde[T]
-	resultSerde serde.StreamSerde[R]
-	waitResult  bool
-	done        func(context.Context, T, R, error)
-	sinkDone    runtime.SinkCallback[T]
-	dataSink    *outputDataSink
-	tracer      tracing.Tracer
+	endpoint       *sinkEndpoint
+	stream         runtime.RuntimeStream
+	handler        EndpointHandler[HandlerState, T]
+	connector      *datasourcetemporal.Connector
+	inputSerde     serde.StreamSerde[T]
+	resultSerde    serde.StreamSerde[R]
+	waitResult     bool
+	done           func(context.Context, T, R, error)
+	sinkDone       runtime.SinkCallback[T]
+	dataSink       *outputDataSink
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) Endpoint() runtime.SinkEndpoint {
@@ -125,10 +126,7 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) Consume(ctx context.Context, 
 func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, value T) {
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "temporal.output",
-			tracing.StringAttr("stream", ec.stream.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.endpoint.GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "temporal.output", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	handlerCtx, state := ec.handler.BeginRequest(ctx, ec.stream.Stream())
@@ -250,6 +248,9 @@ func makeConsumer[HandlerState, T, R, E any](
 	}
 	if tracer := env.Tracing(); tracer != nil {
 		consumer.tracer = tracer.Tracer(env.ServiceConfig().Name)
+		if consumer.tracer != nil {
+			consumer.spanAttributes = runtime.MakeEndpointSpanAttributes(stream.Stream(), ep)
+		}
 	}
 	env.RegisterEndpointConsumer(consumer)
 	return consumer, nil

@@ -105,10 +105,7 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		}
 		var outputSpan tracing.Span
 		if ec.tracer != nil && tracing.SamplingEnabled(handlerCtx) {
-			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output",
-				tracing.StringAttr("stream", ec.stream.GetName()),
-				tracing.StringAttr("endpoint", ec.endpoint.GetName()),
-			)
+			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output", ec.spanAttributes[:]...)
 		}
 		requestCtx := runtime.WithStreamId(handlerCtx, runtime.NewStreamID())
 		tracing.SpanEvent(outputSpan, "begin_request")
@@ -250,6 +247,9 @@ func MakeGRPCBidiStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any
 		},
 		handler:  handler,
 		clientFn: clientFn,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.stream, ec.endpoint)
 	}
 	ec.sc = runtime.MakeSinkStreamContext[T, R, E](
 		stream,

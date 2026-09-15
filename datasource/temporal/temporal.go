@@ -86,6 +86,7 @@ type endpointConsumer[HandlerState, Input, T, R, E any] struct {
 	pending         map[string]chan R
 	workflowPending map[string]workflow.Channel
 	tracer          tracing.Tracer
+	spanAttributes  [4]tracing.Attribute
 	tracing         tracing.Tracing
 }
 
@@ -139,10 +140,7 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "temporal.input",
-			tracing.StringAttr("stream", ec.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "temporal.input", ec.spanAttributes[:]...)
 		if !runtime.BindDurableCallSpan(ctx, span) {
 			defer span.End()
 		}
@@ -336,6 +334,9 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	if tracer := env.Tracing(); tracer != nil {
 		consumer.tracing = tracer
 		consumer.tracer = tracer.Tracer(env.ServiceConfig().Name)
+		if consumer.tracer != nil {
+			consumer.spanAttributes = runtime.MakeEndpointSpanAttributes(stream, ep)
+		}
 	}
 	consumer.sc = runtime.MakeStreamContext[T, R, E](
 		stream, stream.GetResultStream(), runtime.CollectFunc[T](consumer.Consume),

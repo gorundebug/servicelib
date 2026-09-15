@@ -863,6 +863,9 @@ type Service struct {
 // (transformation, source, sink, or routing construct). The `type` field determines
 // the operator and therefore the signature of the generated Go stub.
 type Stream struct {
+	// Component Optional visual component name for this concrete stream. Used only for observability; does not define a runtime wrapper or occurrence identity.
+	Component *string `json:"component,omitempty"`
+
 	// Duration Fixed delay duration in milliseconds for the Delay operator.
 	// Used when the delay is not computed per-element.
 	Duration *int `json:"duration,omitempty"`

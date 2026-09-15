@@ -146,10 +146,7 @@ func (ec *serverStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "grpc.input",
-			tracing.StringAttr("stream", ec.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "grpc.input", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	sender := &streamSender[R, ResR]{sendFn: server.Send, active: true, span: span}
@@ -293,6 +290,9 @@ func MakeGRPCServerStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E a
 			tracer:                     tr,
 		},
 		handler: handler,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())
 	}
 	ec.sc = runtime.MakeStreamContext[T, R, E](
 		ec.Stream(),

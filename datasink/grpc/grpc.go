@@ -143,10 +143,11 @@ func (s *requestSender[ReqT]) Send(_ context.Context, req ReqT) error {
 // grpcTypedSinkEndpointConsumer is the base struct for all gRPC sink consumers.
 // It stores the typed stream, endpoint, and a cached stream context.
 type grpcTypedSinkEndpointConsumer[T, R, E any] struct {
-	endpoint runtime.SinkEndpoint
-	stream   runtime.TypedSinkStreamWithResult[T, R, E]
-	sc       StreamContext[T, R, E]
-	tracer   tracing.Tracer
+	endpoint       runtime.SinkEndpoint
+	stream         runtime.TypedSinkStreamWithResult[T, R, E]
+	sc             StreamContext[T, R, E]
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *grpcTypedSinkEndpointConsumer[T, R, E]) Endpoint() runtime.SinkEndpoint {

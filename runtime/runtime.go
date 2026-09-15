@@ -556,10 +556,13 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 
 	fromName := source.GetName()
 	toName := consumer.GetName()
+	grouping := groupingForStream(cfg.GetStreamConfigByID(consumer.GetID()))
 	scope := env.Metrics().Scope("stream", metrics.Labels{
-		"service": env.ServiceConfig().Name,
-		"from":    fromName,
-		"to":      toName,
+		"service":   env.ServiceConfig().Name,
+		"from":      fromName,
+		"to":        toName,
+		"pipeline":  grouping.pipeline,
+		"component": grouping.component,
 	})
 	messagesCounter, err := scope.Counter("messages_total", "Total number of messages processed by stream link", nil)
 	if err != nil {
@@ -582,6 +585,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				consumer:        consumer,
 				fromName:        fromName,
 				toName:          toName,
+				grouping:        grouping,
 				statistics:      consumeStat,
 				messagesCounter: messagesCounter,
 				tracer:          tr,
@@ -598,6 +602,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				consumer:        consumer,
 				fromName:        fromName,
 				toName:          toName,
+				grouping:        grouping,
 				statistics:      consumeStat,
 				messagesCounter: messagesCounter,
 				tracer:          tr,
@@ -614,6 +619,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				consumer:        consumer,
 				fromName:        fromName,
 				toName:          toName,
+				grouping:        grouping,
 				statistics:      consumeStat,
 				messagesCounter: messagesCounter,
 				tracer:          tr,
@@ -630,6 +636,7 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 				consumer:        consumer,
 				fromName:        fromName,
 				toName:          toName,
+				grouping:        grouping,
 				statistics:      consumeStat,
 				messagesCounter: messagesCounter,
 				tracer:          tr,
@@ -675,6 +682,7 @@ type caller[T any] struct {
 	consumer        TypedStreamConsumer[T]
 	fromName        string
 	toName          string
+	grouping        streamGrouping
 	messagesCounter metrics.Int64Counter
 	tracer          tracing.Tracer
 }
@@ -695,6 +703,8 @@ func (c *directCaller[T]) startSpan(ctx context.Context) (context.Context, traci
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
 		tracing.StringAttr("to", c.toName),
+		tracing.StringAttr("pipeline", c.grouping.pipeline),
+		tracing.StringAttr("component", c.grouping.component),
 	)
 }
 
@@ -724,6 +734,8 @@ func (c *taskPoolCaller[T]) startSpan(ctx context.Context) (context.Context, tra
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
 		tracing.StringAttr("to", c.toName),
+		tracing.StringAttr("pipeline", c.grouping.pipeline),
+		tracing.StringAttr("component", c.grouping.component),
 		tracing.StringAttr("type", "taskpool"),
 		tracing.StringAttr("taskpoolname", c.pool.GetName()),
 	)
@@ -769,6 +781,8 @@ func (c *priorityTaskPoolCaller[T]) startSpan(ctx context.Context) (context.Cont
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
 		tracing.StringAttr("to", c.toName),
+		tracing.StringAttr("pipeline", c.grouping.pipeline),
+		tracing.StringAttr("component", c.grouping.component),
 		tracing.StringAttr("type", "prioritytaskpool"),
 		tracing.StringAttr("taskpoolname", c.pool.GetName()),
 	)
@@ -817,6 +831,8 @@ func (c *parallelCaller[T]) startSpan(ctx context.Context) (context.Context, tra
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
 		tracing.StringAttr("to", c.toName),
+		tracing.StringAttr("pipeline", c.grouping.pipeline),
+		tracing.StringAttr("component", c.grouping.component),
 		tracing.StringAttr("type", "parallel"),
 	)
 }
@@ -849,6 +865,7 @@ type ServiceStream[T any] struct {
 	id                 int
 	name               string
 	transformationName string
+	grouping           streamGrouping
 	tracer             tracing.Tracer
 }
 
@@ -887,6 +904,7 @@ func MakeServiceStream[T any](id int, env RuntimeEnvironment) ServiceStream[T] {
 		id:                 id,
 		name:               streamConfig.GetName(),
 		transformationName: config.GetTransformationName(streamConfig.GetType()),
+		grouping:           groupingForStream(streamConfig),
 		tracer:             tr,
 	}
 }
@@ -902,7 +920,11 @@ func (s *ServiceStream[T]) StartSpan(ctx context.Context, operation string) (con
 	if s.tracer == nil || !tracing.SamplingEnabled(ctx) {
 		return ctx, noopSpan{}
 	}
-	return s.tracer.Start(ctx, operation, tracing.StringAttr("stream", s.GetName()))
+	return s.tracer.Start(ctx, operation,
+		tracing.StringAttr("stream", s.GetName()),
+		tracing.StringAttr("pipeline", s.grouping.pipeline),
+		tracing.StringAttr("component", s.grouping.component),
+	)
 }
 
 type ConsumedStream[T any] struct {

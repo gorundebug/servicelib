@@ -24,28 +24,6 @@ const (
 	StatusError
 )
 
-// Attribute is a key-value pair used to annotate spans.
-type Attribute struct {
-	Key   string
-	Value interface{}
-}
-
-func StringAttr(key, value string) Attribute {
-	return Attribute{Key: key, Value: value}
-}
-
-func Int64Attr(key string, value int64) Attribute {
-	return Attribute{Key: key, Value: value}
-}
-
-func Float64Attr(key string, value float64) Attribute {
-	return Attribute{Key: key, Value: value}
-}
-
-func BoolAttr(key string, value bool) Attribute {
-	return Attribute{Key: key, Value: value}
-}
-
 type SpanContext struct {
 	TraceID string
 	SpanID  string
@@ -82,6 +60,8 @@ func (noopSpan) SpanContext() SpanContext          { return SpanContext{} }
 
 // StartSpan starts a new span. Safe to call unconditionally; returns a no-op span
 // when tracer is nil or sampling is not requested for this context.
+// Attribute expressions are evaluated by the caller before this guard. Hot
+// paths must check tracer/sampling before constructing or formatting attributes.
 func StartSpan(ctx context.Context, tracer Tracer, operation string, attrs ...Attribute) (context.Context, Span) {
 	if tracer == nil || !SamplingEnabled(ctx) {
 		return ctx, noopSpan{}

@@ -216,15 +216,16 @@ func (ep *customEndpoint[T]) Stop(ctx context.Context) {
 
 type customEndpointConsumer[HandlerState, T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	sc        StreamContext[T, R, E]
-	hasResult bool
-	handler   EndpointHandler[HandlerState, T, R, E]
-	pending   *store.RotatingMap[string, *customResult[HandlerState, T, R, E]]
-	concMu    sync.Mutex
-	concCond  *sync.Cond
-	active    int
-	stopped   bool
-	tracer    tracing.Tracer
+	sc             StreamContext[T, R, E]
+	hasResult      bool
+	handler        EndpointHandler[HandlerState, T, R, E]
+	pending        *store.RotatingMap[string, *customResult[HandlerState, T, R, E]]
+	concMu         sync.Mutex
+	concCond       *sync.Cond
+	active         int
+	stopped        bool
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *customEndpointConsumer[HandlerState, T, R, E]) Out(ctx context.Context, value T) {
@@ -286,10 +287,7 @@ func (ec *customEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(ctx con
 	)
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "local.input",
-			tracing.StringAttr("stream", ec.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "local.input", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
@@ -546,6 +544,9 @@ func MakeCustomEndpointConsumer[HandlerState, T, R, E any](
 		hasResult:                  stream.GetResultStream() != nil,
 		handler:                    handler,
 		tracer:                     tr,
+	}
+	if endpointConsumer.tracer != nil {
+		endpointConsumer.spanAttributes = runtime.MakeEndpointSpanAttributes(endpointConsumer.Stream(), endpointConsumer.Endpoint())
 	}
 	endpointConsumer.concCond = sync.NewCond(&endpointConsumer.concMu)
 	endpointConsumer.sc = runtime.MakeStreamContext[T, R, E](

@@ -34,10 +34,7 @@ type grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E any] stru
 func (ec *grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Consume(ctx context.Context, value T) {
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "grpc.output",
-			tracing.StringAttr("stream", ec.stream.GetName()),
-			tracing.StringAttr("endpoint", ec.endpoint.GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "grpc.output", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
@@ -151,6 +148,9 @@ func MakeGRPCServerStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E a
 		},
 		handler:  handler,
 		clientFn: clientFn,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.stream, ec.endpoint)
 	}
 	ec.sc = runtime.MakeSinkStreamContext[T, R, E](
 		stream,

@@ -81,9 +81,10 @@ type grpcEndpoint struct {
 
 type grpcTypedEndpointConsumer[T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	sc        StreamContext[T, R, E]
-	hasResult bool
-	tracer    tracing.Tracer
+	sc             StreamContext[T, R, E]
+	hasResult      bool
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 // Out implements runtime.Collect[T] so custom consumers satisfy the interface.

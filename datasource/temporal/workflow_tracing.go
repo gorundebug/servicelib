@@ -9,7 +9,6 @@ package temporal
 
 import (
 	"context"
-	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -104,19 +103,17 @@ func (s workflowSpan) SpanContext() servicetracing.SpanContext {
 func workflowAttributes(values []servicetracing.Attribute) []attribute.KeyValue {
 	result := make([]attribute.KeyValue, 0, len(values))
 	for _, value := range values {
-		switch typed := value.Value.(type) {
-		case string:
-			result = append(result, attribute.String(value.Key, typed))
-		case int:
-			result = append(result, attribute.Int(value.Key, typed))
-		case int64:
-			result = append(result, attribute.Int64(value.Key, typed))
-		case float64:
-			result = append(result, attribute.Float64(value.Key, typed))
-		case bool:
-			result = append(result, attribute.Bool(value.Key, typed))
+		switch value.Value.Type() {
+		case servicetracing.StringAttribute:
+			result = append(result, attribute.String(value.Key, value.Value.AsString()))
+		case servicetracing.Int64Attribute:
+			result = append(result, attribute.Int64(value.Key, value.Value.AsInt64()))
+		case servicetracing.Float64Attribute:
+			result = append(result, attribute.Float64(value.Key, value.Value.AsFloat64()))
+		case servicetracing.BoolAttribute:
+			result = append(result, attribute.Bool(value.Key, value.Value.AsBool()))
 		default:
-			result = append(result, attribute.String(value.Key, fmt.Sprint(typed)))
+			result = append(result, attribute.KeyValue{Key: attribute.Key(value.Key)})
 		}
 	}
 	return result

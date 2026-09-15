@@ -492,9 +492,10 @@ func (rs *collector[R]) Out(ctx context.Context, value R) {
 
 type saramaKafkaEndpointConsumer[HandlerState, T, R any] struct {
 	*runtime.DataSinkEndpointConsumer[T, R]
-	handler     EndpointHandler[HandlerState, T, R]
-	partitioner Partitioner[T]
-	tracer      tracing.Tracer
+	handler        EndpointHandler[HandlerState, T, R]
+	partitioner    Partitioner[T]
+	tracer         tracing.Tracer
+	spanAttributes [4]tracing.Attribute
 }
 
 func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) getEndpoint() *saramaKafkaEndpoint {
@@ -507,10 +508,7 @@ func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 	}
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
-		ctx, span = ec.tracer.Start(ctx, "kafka.output",
-			tracing.StringAttr("stream", ec.Stream().GetName()),
-			tracing.StringAttr("endpoint", ec.Endpoint().GetName()),
-		)
+		ctx, span = ec.tracer.Start(ctx, "kafka.output", ec.spanAttributes[:]...)
 		defer span.End()
 	}
 	stream := ec.Stream()
@@ -641,6 +639,9 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
 		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
 		handler:                  handler,
 		tracer:                   tr,
+	}
+	if ec.tracer != nil {
+		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())
 	}
 	for _, opt := range opts {
 		opt(ec)

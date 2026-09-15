@@ -86,6 +86,8 @@ type Endpoint interface {
 
 type Stream interface {
 	GetName() string
+	GetPipelineName() string
+	GetComponentName() string
 	GetTransformationName() string
 	GetTypeName() string
 	GetID() int

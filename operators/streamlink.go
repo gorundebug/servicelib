@@ -8,41 +8,49 @@
 package operators
 
 import (
-    "github.com/gorundebug/servicelib/runtime"
-    "github.com/gorundebug/servicelib/runtime/config"
-    "github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment"
 )
 
 // streamLink delegates Stream interface methods to an embedded parent stream.
 // Embed this type in link structs to avoid repeating boilerplate delegation.
 type streamLink struct {
-    stream runtime.Stream
+	stream runtime.Stream
 }
 
 func (s *streamLink) GetID() int {
-    return s.stream.GetID()
+	return s.stream.GetID()
 }
 
 func (s *streamLink) GetName() string {
-    return s.stream.GetName()
+	return s.stream.GetName()
+}
+
+func (s *streamLink) GetPipelineName() string {
+	return s.stream.GetPipelineName()
+}
+
+func (s *streamLink) GetComponentName() string {
+	return s.stream.GetComponentName()
 }
 
 func (s *streamLink) GetEnvironment() environment.ServiceEnvironment {
-    return s.stream.GetEnvironment()
+	return s.stream.GetEnvironment()
 }
 
 func (s *streamLink) GetConfig() config.StreamConfig {
-    return s.stream.GetConfig()
+	return s.stream.GetConfig()
 }
 
 func (s *streamLink) GetTransformationName() string {
-    return s.stream.GetTransformationName()
+	return s.stream.GetTransformationName()
 }
 
 func (s *streamLink) GetTypeName() string {
-    return s.stream.GetTypeName()
+	return s.stream.GetTypeName()
 }
 
 func (s *streamLink) Build() error {
-    return nil
+	return nil
 }
