@@ -212,8 +212,12 @@ func createEndpoint(id int, env runtime.RuntimeEnvironment) (*sinkEndpoint, *out
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if ds.GetEndpoint(id) != nil {
-		return nil, nil, nil, fmt.Errorf("Temporal sink endpoint %q already exists", cfg.Name)
+	if existing := ds.GetEndpoint(id); existing != nil {
+		ep, ok := existing.(*sinkEndpoint)
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("Temporal sink endpoint %q has an invalid runtime type", cfg.Name)
+		}
+		return ep, ds, connector, nil
 	}
 	base, err := runtime.MakeDataSinkEndpoint(ds, id, env)
 	if err != nil {
@@ -246,6 +250,7 @@ func makeConsumer[HandlerState, T, R, E any](
 		inputSerde: inputSerde, resultSerde: resultSerde, waitResult: waitResult,
 		done: done, dataSink: ds,
 	}
+	ep.AddEndpointConsumer(consumer)
 	if tracer := env.Tracing(); tracer != nil {
 		consumer.tracer = tracer.Tracer(env.ServiceConfig().Name)
 		if consumer.tracer != nil {

@@ -180,7 +180,6 @@ type grpcSinkDataSink struct {
 
 type grpcSinkEndpoint struct {
 	*runtime.DataSinkEndpoint
-	consumer grpcSinkEndpointConsumer
 }
 
 func (ds *grpcSinkDataSink) WaitGroup() *sync.WaitGroup {
@@ -221,11 +220,11 @@ func (ds *grpcSinkDataSink) Stop(ctx context.Context) {
 }
 
 func (ep *grpcSinkEndpoint) Start(ctx context.Context) error {
-	return ep.consumer.Start(ctx)
+	return ep.StartEndpointConsumers(ctx)
 }
 
 func (ep *grpcSinkEndpoint) Stop(ctx context.Context) {
-	ep.consumer.Stop(ctx)
+	ep.StopEndpointConsumers(ctx)
 }
 
 func getOrCreateGRPCSinkDataSink(id int, env runtime.RuntimeEnvironment) (runtime.DataSink, error) {
@@ -268,7 +267,11 @@ func createGRPCSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*grpcSinkEn
 	}
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return nil, fmt.Errorf("endpoint %q already exists", epCfg.GetName())
+		ep, ok := endpoint.(*grpcSinkEndpoint)
+		if !ok {
+			return nil, fmt.Errorf("endpoint %q is not a Google gRPC sink endpoint", epCfg.GetName())
+		}
+		return ep, nil
 	}
 	sinkEndpoint, err := runtime.MakeDataSinkEndpoint(dataSink, id, env)
 	if err != nil {

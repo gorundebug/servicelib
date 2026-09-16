@@ -66,7 +66,6 @@ type customDataSink struct {
 
 type customEndpoint struct {
 	*runtime.DataSinkEndpoint
-	consumer customEndpointConsumer
 }
 
 func (ds *customDataSink) Start(ctx context.Context) error {
@@ -107,11 +106,11 @@ func (ds *customDataSink) WaitGroup() *sync.WaitGroup {
 }
 
 func (ep *customEndpoint) Start(ctx context.Context) error {
-	return ep.consumer.Start(ctx)
+	return ep.StartEndpointConsumers(ctx)
 }
 
 func (ep *customEndpoint) Stop(ctx context.Context) {
-	ep.consumer.Stop(ctx)
+	ep.StopEndpointConsumers(ctx)
 }
 
 type collector[R any] struct {
@@ -209,7 +208,11 @@ func getCustomSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*customEndpo
 	}
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return nil, fmt.Errorf("endpoint %q already exists", endpointCfg.GetName())
+		ep, ok := endpoint.(*customEndpoint)
+		if !ok {
+			return nil, fmt.Errorf("endpoint %q is not a custom sink endpoint", endpointCfg.GetName())
+		}
+		return ep, nil
 	}
 	sinkEndpoint, err := runtime.MakeDataSinkEndpoint(dataSink, id, env)
 	if err != nil {
@@ -241,7 +244,7 @@ func MakeCustomEndpointConsumer[HandlerState, T, R any](stream runtime.TypedSink
 		typedEndpointConsumer.spanAttributes = runtime.MakeEndpointSpanAttributes(typedEndpointConsumer.Stream(), typedEndpointConsumer.Endpoint())
 	}
 	stream.SetSinkConsumer(typedEndpointConsumer)
-	endpoint.consumer = typedEndpointConsumer
+	endpoint.AddEndpointConsumer(typedEndpointConsumer)
 	env.RegisterEndpointConsumer(typedEndpointConsumer)
 	return typedEndpointConsumer, nil
 }

@@ -124,7 +124,6 @@ func (ds *netHTTPSinkDataSink) WaitGroup() *sync.WaitGroup {
 
 type netHTTPSinkEndpoint struct {
 	*runtime.DataSinkEndpoint
-	consumer netHTTPSinkEndpointConsumer
 }
 
 type netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
@@ -265,11 +264,11 @@ func (ds *netHTTPSinkDataSink) Stop(ctx context.Context) {
 }
 
 func (ep *netHTTPSinkEndpoint) Start(ctx context.Context) error {
-	return ep.consumer.Start(ctx)
+	return ep.StartEndpointConsumers(ctx)
 }
 
 func (ep *netHTTPSinkEndpoint) Stop(ctx context.Context) {
-	ep.consumer.Stop(ctx)
+	ep.StopEndpointConsumers(ctx)
 }
 
 func getOrCreateNetHTTPSinkDataSink(id int, env runtime.RuntimeEnvironment) (runtime.DataSink, error) {
@@ -312,7 +311,11 @@ func createNetHTTPSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*netHTTP
 	}
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return nil, fmt.Errorf("endpoint %q already exists", epCfg.GetName())
+		ep, ok := endpoint.(*netHTTPSinkEndpoint)
+		if !ok {
+			return nil, fmt.Errorf("endpoint %q is not a Net HTTP sink endpoint", epCfg.GetName())
+		}
+		return ep, nil
 	}
 	sinkEndpoint, err := runtime.MakeDataSinkEndpoint(dataSink, id, env)
 	if err != nil {
@@ -370,7 +373,7 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		DataConnectorCfg: dsCfg,
 	}
 	stream.SetSinkConsumer(ec)
-	endpoint.consumer = ec
+	endpoint.AddEndpointConsumer(ec)
 	env.RegisterEndpointConsumer(ec)
 	return ec, nil
 }

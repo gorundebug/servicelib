@@ -46,6 +46,12 @@ type OutputEndpointConsumer interface {
 	Endpoint() SinkEndpoint
 }
 
+type outputEndpointLifecycle interface {
+	OutputEndpointConsumer
+	Start(context.Context) error
+	Stop(context.Context)
+}
+
 type OutputDataSink struct {
 	id                 int
 	name               string
@@ -183,6 +189,41 @@ func (ep *DataSinkEndpoint) GetRuntimeEnvironment() RuntimeEnvironment {
 
 func (ep *DataSinkEndpoint) GetDataSink() DataSink {
 	return ep.dataSink
+}
+
+func (ep *DataSinkEndpoint) AddEndpointConsumer(consumer OutputEndpointConsumer) {
+	ep.endpointConsumers = append(ep.endpointConsumers, consumer)
+}
+
+func (ep *DataSinkEndpoint) GetEndpointConsumers() []OutputEndpointConsumer {
+	return append([]OutputEndpointConsumer(nil), ep.endpointConsumers...)
+}
+
+func (ep *DataSinkEndpoint) StartEndpointConsumers(ctx context.Context) error {
+	for index, consumer := range ep.endpointConsumers {
+		lifecycle, ok := consumer.(outputEndpointLifecycle)
+		if !ok {
+			ep.stopEndpointConsumers(ctx, index)
+			return fmt.Errorf("sink endpoint consumer %T does not implement lifecycle", consumer)
+		}
+		if err := lifecycle.Start(ctx); err != nil {
+			ep.stopEndpointConsumers(ctx, index)
+			return err
+		}
+	}
+	return nil
+}
+
+func (ep *DataSinkEndpoint) StopEndpointConsumers(ctx context.Context) {
+	ep.stopEndpointConsumers(ctx, len(ep.endpointConsumers))
+}
+
+func (ep *DataSinkEndpoint) stopEndpointConsumers(ctx context.Context, count int) {
+	for index := count - 1; index >= 0; index-- {
+		if lifecycle, ok := ep.endpointConsumers[index].(outputEndpointLifecycle); ok {
+			lifecycle.Stop(ctx)
+		}
+	}
 }
 
 func (ep *DataSinkEndpoint) GetDataConnector() DataConnector {

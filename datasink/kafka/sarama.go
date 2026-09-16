@@ -175,9 +175,8 @@ type saramaKafkaDataSink struct {
 
 type saramaKafkaEndpoint struct {
 	*runtime.DataSinkEndpoint
-	topic    string
-	active   atomic.Bool
-	consumer kafkaEndpointConsumer
+	topic  string
+	active atomic.Bool
 }
 
 func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
@@ -437,7 +436,7 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		}
 	}
 
-	if err := ep.consumer.Start(ctx); err != nil {
+	if err := ep.StartEndpointConsumers(ctx); err != nil {
 		return err
 	}
 	ep.active.Store(true)
@@ -479,7 +478,7 @@ func (ep *saramaKafkaEndpoint) SendMessage(ctx context.Context, key []byte, valu
 
 func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
 	ep.active.Store(false)
-	ep.consumer.Stop(ctx)
+	ep.StopEndpointConsumers(ctx)
 }
 
 type collector[R any] struct {
@@ -596,7 +595,11 @@ func getSaramaKafkaDataSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*sa
 	}
 	endpoint := dataSink.GetEndpoint(id)
 	if endpoint != nil {
-		return nil, fmt.Errorf("endpoint %q already exists", endpointCfg.GetName())
+		ep, ok := endpoint.(*saramaKafkaEndpoint)
+		if !ok {
+			return nil, fmt.Errorf("endpoint %q is not a Sarama Kafka sink endpoint", endpointCfg.GetName())
+		}
+		return ep, nil
 	}
 	sinkEndpoint, err := runtime.MakeDataSinkEndpoint(dataSink, id, env)
 	if err != nil {
@@ -647,7 +650,7 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
 		opt(ec)
 	}
 	stream.SetSinkConsumer(ec)
-	endpoint.consumer = ec
+	endpoint.AddEndpointConsumer(ec)
 	env.RegisterEndpointConsumer(ec)
 	return ec, nil
 }

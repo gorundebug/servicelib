@@ -158,7 +158,7 @@ func MakeGRPCServerStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E a
 		runtime.CollectFunc[E](stream.GetErrorStream().Consume),
 	)
 	stream.SetSinkConsumer(ec)
-	endpoint.consumer = ec
+	endpoint.AddEndpointConsumer(ec)
 	env.RegisterEndpointConsumer(ec)
 	return ec, nil
 }
