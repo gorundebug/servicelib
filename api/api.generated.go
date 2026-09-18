@@ -218,6 +218,7 @@ const (
 	TransformationTypeProcess         TransformationType = 6
 	TransformationTypeSink            TransformationType = 13
 	TransformationTypeSplit           TransformationType = 11
+	TransformationTypeSubStream       TransformationType = 18
 	TransformationTypeUndefined       TransformationType = 0
 	TransformationTypeWhen            TransformationType = 17
 )
@@ -965,6 +966,7 @@ type Stream struct {
 	// - `Error` (15): receives error elements from a Process node's error output
 	// - `Delay` (16): defers downstream delivery by a computed duration
 	// - `When` (17): a typed branch of a Case node
+	// - `SubStream` (18): a service-local callable entry whose source supplies results
 	Type TransformationType `json:"type"`
 
 	// ValueType Name of the output message type for this node (e.g. `OrderEvent`).
@@ -1042,6 +1044,7 @@ type TemporalExecutionType string
 // - `Error` (15): receives error elements from a Process node's error output
 // - `Delay` (16): defers downstream delivery by a computed duration
 // - `When` (17): a typed branch of a Case node
+// - `SubStream` (18): a service-local callable entry whose source supplies results
 type TransformationType int
 
 // Type A named data type used as a message type in the topology graph.

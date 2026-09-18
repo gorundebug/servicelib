@@ -97,3 +97,9 @@ func Split[T any](cfg *config.SplitStreamConfig, stream runtime.TypedStream[T]) 
 func Delay[T any](cfg *config.DelayStreamConfig, stream runtime.TypedStream[T], f operators.DelayFunction[T]) (runtime.TypedConsumedStream[T], error) {
     return operators.MakeDelayStream[T](cfg, stream, f)
 }
+
+// SubStream creates a named service-local entry. Wire the body through normal
+// transformations and bind its result producer with SetSource during startup.
+func SubStream[T, R any](cfg *config.SubStreamConfig, env runtime.RuntimeEnvironment) (runtime.TypedSubStream[T, R], error) {
+	return operators.MakeSubStream[T, R](cfg, env)
+}

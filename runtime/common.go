@@ -310,3 +310,33 @@ func MakeSinkStreamContext[T, R, E any](
 		errorCollect: errorCollect,
 	}
 }
+
+// SubStreamCollector receives results for one SubStream invocation.
+// Out returns true when the caller has enough results, or false to keep waiting.
+type SubStreamCollector[R any] interface {
+	Out(ctx context.Context, value R) bool
+}
+
+// SubStreamCollectorFunc adapts a function to SubStreamCollector.
+type SubStreamCollectorFunc[R any] func(context.Context, R) bool
+
+func (f SubStreamCollectorFunc[R]) Out(ctx context.Context, value R) bool {
+	return f(ctx, value)
+}
+
+// SubStream is a service-local graph callable from business code.
+// Returning true from collector completes this call, not the graph's work.
+// False keeps receiving results until completion or context cancellation.
+// Collector calls are serialized within one invocation. Late results are ignored;
+// business errors remain graph values, not automatic Consume errors.
+type SubStream[T, R any] interface {
+	Consume(ctx context.Context, value T, collector SubStreamCollector[R]) error
+}
+
+// TypedSubStream adds construction-time graph wiring to the callable interface.
+// Source supplies results; the ordinary downstream consumer receives arguments.
+type TypedSubStream[T, R any] interface {
+	TypedStream[T]
+	SubStream[T, R]
+	SetSource(TypedStream[R]) error
+}

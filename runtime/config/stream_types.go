@@ -514,3 +514,34 @@ func (s *WhenStreamConfig) GetProperty(
 	name string) interface{} {
 	return s.Properties[name]
 }
+
+// SubStreamConfig describes an in-process service entry. IdSource is the
+// result producer, as for Input, not a transport endpoint or an entry argument.
+type SubStreamConfig struct {
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline,omitempty" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+}
+
+func (s *SubStreamConfig) GetID() int           { return s.ID }
+func (s *SubStreamConfig) GetName() string      { return s.Name }
+func (s *SubStreamConfig) GetPipeline() string  { return s.Pipeline }
+func (s *SubStreamConfig) GetComponent() string { return s.Component }
+func (s *SubStreamConfig) GetIdService() int    { return s.IdService }
+func (s *SubStreamConfig) GetIdSource() int     { return s.IdSource }
+func (s *SubStreamConfig) GetIdSources() []int  { return nil }
+func (s *SubStreamConfig) GetXPos() float64     { return s.XPos }
+func (s *SubStreamConfig) GetYPos() float64     { return s.YPos }
+func (s *SubStreamConfig) GetType() api.TransformationType {
+	return api.TransformationTypeSubStream
+}
+func (s *SubStreamConfig) GetProperty(name string) interface{} {
+	return s.Properties[name]
+}

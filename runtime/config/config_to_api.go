@@ -127,6 +127,8 @@ func StreamConfigToAPI(sc StreamConfig) api.Stream {
 	}
 
 	switch c := sc.(type) {
+	case *SubStreamConfig:
+		s.ValueType = strOptPtr(c.ValueType)
 	case *InputStreamConfig:
 		s.ValueType = strOptPtr(c.ValueType)
 		s.IdEndpoint = intOptPtr(c.IdEndpoint)

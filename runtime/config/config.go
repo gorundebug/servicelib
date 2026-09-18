@@ -65,6 +65,7 @@ var transformationNameMap = map[api.TransformationType]string{
 	api.TransformationTypeError:           "error",
 	api.TransformationTypeCase:            "case",
 	api.TransformationTypeWhen:            "when",
+	api.TransformationTypeSubStream:       "substream",
 }
 
 func GetTransformationName(t api.TransformationType) string {

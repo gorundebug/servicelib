@@ -373,7 +373,8 @@ components:
         - `Error` (15): receives error elements from a Process node's error output
         - `Delay` (16): defers downstream delivery by a computed duration
         - `When` (17): a typed branch of a Case node
-      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 ]
+        - `SubStream` (18): a service-local callable entry whose source supplies results
+      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 ]
       x-enum-varnames:
         - Undefined
         - Input
@@ -393,6 +394,7 @@ components:
         - Error
         - Delay
         - When
+        - SubStream
 
     JoinType:
       type: integer
