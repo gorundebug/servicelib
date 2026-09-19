@@ -24,6 +24,7 @@ var _ runtime.TypedSubStream[any, any] = (*SubStream[any, any])(nil)
 type SubStream[T, R any] struct {
 	runtime.ConsumedStream[T]
 	resultSource runtime.TypedStream[R]
+	executionEnv runtime.SubStreamExecutionEnvironment
 }
 
 type subStreamResult[T, R any] struct {
@@ -33,7 +34,7 @@ type subStreamResult[T, R any] struct {
 
 func (r *subStreamResult[T, R]) Consume(ctx context.Context, value R) {
 	if call, ok := ctx.Value(r.entry).(*subStreamCall[R]); ok {
-		call.deliver(value)
+		call.deliver(ctx, value)
 	}
 }
 
@@ -44,9 +45,16 @@ type subStreamCall[R any] struct {
 	done      chan struct{}
 	closed    bool
 	completed bool
+	execution runtime.SubStreamExecution
 }
 
-func (c *subStreamCall[R]) deliver(value R) {
+func (c *subStreamCall[R]) deliver(ctx context.Context, value R) {
+	if c.execution != nil {
+		c.execution.Deliver(ctx, func(callerCtx context.Context) bool {
+			return c.collector.Out(callerCtx, value)
+		})
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed || c.ctx.Err() != nil {
@@ -63,6 +71,11 @@ func (c *subStreamCall[R]) deliver(value R) {
 
 // close also waits for an already-running callback before Consume returns.
 func (c *subStreamCall[R]) close() bool {
+	if c.execution != nil {
+		c.execution.Close()
+		c.collector = nil
+		return false // Cooperative completion is owned by execution.Wait.
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
@@ -80,6 +93,7 @@ func MakeSubStream[T, R any](cfg *config.SubStreamConfig, env runtime.RuntimeEnv
 	stream := &SubStream[T, R]{
 		ConsumedStream: runtime.MakeConsumedStream[T](cfg.ID, env, runtime.MakeSerde[T](env)),
 	}
+	stream.executionEnv, _ = env.(runtime.SubStreamExecutionEnvironment)
 	env.RegisterStream(stream)
 	return stream, nil
 }
@@ -104,7 +118,22 @@ func (s *SubStream[T, R]) Consume(ctx context.Context, value T, collector runtim
 	if err := s.Build(); err != nil {
 		return err
 	}
-	call := &subStreamCall[R]{ctx: ctx, collector: collector, done: make(chan struct{})}
+	call := &subStreamCall[R]{ctx: ctx, collector: collector}
+	if s.executionEnv != nil {
+		var err error
+		call.execution, err = s.executionEnv.NewSubStreamExecution(ctx)
+		if err != nil {
+			return err
+		}
+		if call.execution == nil {
+			return fmt.Errorf("SubStream %q received no scheduler execution", s.GetName())
+		}
+	} else {
+		if runtime.IsDurableWorkflowContext(ctx) {
+			return fmt.Errorf("SubStream %q requires a workflow-aware runtime environment", s.GetName())
+		}
+		call.done = make(chan struct{})
+	}
 	defer call.close()
 	callCtx := context.WithValue(ctx, s, call)
 	if s.TracingEnabled(callCtx) {
@@ -114,6 +143,9 @@ func (s *SubStream[T, R]) Consume(ctx context.Context, value T, collector runtim
 	}
 	// Link semantics alone choose synchronous execution, a pool or parallelism.
 	s.Emit(callCtx, value)
+	if call.execution != nil {
+		return call.execution.Wait()
+	}
 	select {
 	case <-call.done:
 		return nil

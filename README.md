@@ -340,3 +340,26 @@ BSD-3-Clause. See [LICENSE](LICENSE).
 | 🌐 | [gorundebug.com](https://www.gorundebug.com) |
 | ✉️ | [serlex777@gmail.com](mailto:serlex777@gmail.com) |
 | ✈️ | [t.me/+31qMliw-DeI3M2M6](https://t.me/+31qMliw-DeI3M2M6) |
+# Service-local SubStream
+
+`SubStream[T, R]` exposes a reusable graph in one service to business code.
+The generated service has a typed accessor named after the entry, for example
+`service.Lookup()`. Inject a narrow accessor interface through a custom maker;
+no transport endpoint, string registry or function dependency declaration is needed.
+
+```go
+err := service.Lookup().Consume(ctx, value,
+    runtime.SubStreamCollectorFunc[Result](func(ctx context.Context, result Result) bool {
+        // Store or process the result for this invocation.
+        return true // Enough results; false continues collecting.
+    }))
+```
+
+`valueType` describes the argument; the existing `source` property identifies
+the result-producing stream. The graph is shared, but each call has isolated
+completion state. Preserve the supplied context, set a deadline when completion
+is uncertain, and do not block the worker pool needed by the substream.
+Completion drops late results; it does not forcibly stop running branches.
+Business errors are ordinary graph values, not automatic `Consume` errors.
+
+See [SubStream: wiring, collectors, cancellation and Temporal](docs/substreams.md).

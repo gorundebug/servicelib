@@ -149,6 +149,138 @@ func (env *WorkflowEnvironment) RunParallelWithContext(ctx context.Context, fn f
 	})
 }
 
+// NewSubStreamExecution keeps completion local to the Workflow isolate. Its
+// state is rebuilt during replay; neither pointers nor callbacks enter history.
+func (env *WorkflowEnvironment) NewSubStreamExecution(ctx context.Context) (runtime.SubStreamExecution, error) {
+	workflowCtx, ok := ctx.Value(workflowExecutionContextKey{}).(workflow.Context)
+	if !ok || workflowCtx == nil {
+		return nil, fmt.Errorf("SubStream requires a current Temporal Workflow execution context")
+	}
+	execution := &workflowSubStreamExecution{env: env, caller: ctx, workflowCtx: workflowCtx}
+	if err := execution.currentError(); err != nil {
+		return nil, err
+	}
+	return execution, nil
+}
+
+// Only Workflow coroutines access this state. active is a cooperative lock:
+// a yielding collector never holds a native mutex across Workflow operations.
+type workflowSubStreamExecution struct {
+	env         *WorkflowEnvironment
+	caller      context.Context
+	workflowCtx workflow.Context
+	active      bool
+	closed      bool
+	completed   bool
+	err         error
+}
+
+func (s *workflowSubStreamExecution) currentError() error {
+	if s.env.failure != nil {
+		return s.env.failure
+	}
+	if err := s.workflowCtx.Err(); err != nil {
+		return err
+	}
+	if err := s.caller.Err(); err != nil {
+		return err
+	}
+	if deadline, ok := s.caller.Deadline(); ok && !workflow.Now(s.workflowCtx).Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+func (s *workflowSubStreamExecution) await(ctx workflow.Context, ready func() bool) error {
+	if s.env.failure != nil {
+		return s.env.failure
+	}
+	if ready() {
+		return nil
+	}
+	if err := s.currentError(); err != nil {
+		return err
+	}
+	condition := func() bool { return ready() || s.currentError() != nil }
+	var err error
+	if deadline, ok := s.caller.Deadline(); ok {
+		var signalled bool
+		signalled, err = workflow.AwaitWithTimeout(ctx, deadline.Sub(workflow.Now(ctx)), condition)
+		if err == nil && !signalled {
+			err = context.DeadlineExceeded
+		}
+	} else {
+		err = workflow.Await(ctx, condition)
+	}
+	if s.env.failure != nil {
+		return s.env.failure
+	}
+	if ready() {
+		return nil
+	}
+	if current := s.currentError(); current != nil {
+		return current
+	}
+	return err
+}
+
+func (s *workflowSubStreamExecution) Deliver(ctx context.Context, callback func(context.Context) bool) {
+	if s.closed {
+		return
+	}
+	current := workflowExecutionContext(ctx, s.workflowCtx)
+	err := s.currentError()
+	if err == nil {
+		err = s.await(current, func() bool { return s.closed || !s.active })
+	}
+	if s.closed {
+		return
+	}
+	if err == nil {
+		err = s.currentError()
+	}
+	if err != nil {
+		s.err, s.closed = err, true
+		return
+	}
+	s.active = true
+	defer func() { s.active = false }()
+	// Restore outer SubStream bindings without restoring its suspended
+	// coroutine: nested Activities, child Workflows and waits must use current.
+	if callback(withWorkflowExecutionContext(s.caller, current)) {
+		s.completed, s.closed = true, true
+	}
+}
+
+func (s *workflowSubStreamExecution) Wait() error {
+	err := s.await(s.workflowCtx, func() bool { return s.closed })
+	// Cancellation can arrive while a collector is yielding. Drain it before
+	// returning and preserve successful completion if it won that race.
+	s.Close()
+	if s.env.failure != nil {
+		return s.env.failure
+	}
+	if s.completed {
+		return nil
+	}
+	if s.err != nil {
+		return s.err
+	}
+	return err
+}
+
+func (s *workflowSubStreamExecution) Close() {
+	s.closed = true
+	if !s.active {
+		return
+	}
+	ctx, cancel := workflow.NewDisconnectedContext(s.workflowCtx)
+	defer cancel()
+	if err := workflow.Await(ctx, func() bool { return !s.active }); err != nil {
+		panic(fmt.Errorf("wait for SubStream collector completion: %w", err))
+	}
+}
+
 func (env *WorkflowEnvironment) GetTaskPool(name string) pool.TaskPool {
 	if existing := env.taskPools[name]; existing != nil {
 		return existing
@@ -531,6 +663,8 @@ func (p workflowPriorityPool) AddTaskWithContext(
 }
 
 var _ runtime.RuntimeEnvironment = (*WorkflowEnvironment)(nil)
+var _ runtime.SubStreamExecutionEnvironment = (*WorkflowEnvironment)(nil)
+var _ runtime.SubStreamExecution = (*workflowSubStreamExecution)(nil)
 var _ pool.TaskPool = (*workflowPool)(nil)
 var _ pool.ContextTaskPool = (*workflowPool)(nil)
 var _ pool.PriorityTaskPool = workflowPriorityPool{}

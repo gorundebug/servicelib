@@ -340,3 +340,21 @@ type TypedSubStream[T, R any] interface {
 	SubStream[T, R]
 	SetSource(TypedStream[R]) error
 }
+
+// SubStreamExecution is a scheduler-owned invocation, used by cooperative
+// environments instead of native Go synchronization. Deliver serializes
+// callbacks and supplies the caller's values with the current execution scope.
+// A true callback result completes the invocation. Close rejects late results
+// and waits for an active callback; Wait observes completion, cancellation and
+// scheduler failures. All methods run in that environment's scheduler.
+type SubStreamExecution interface {
+	Deliver(ctx context.Context, callback func(context.Context) bool)
+	Wait() error
+	Close()
+}
+
+// SubStreamExecutionEnvironment is an optional runtime adapter, not a business
+// handler API. Ordinary Go environments need not implement it.
+type SubStreamExecutionEnvironment interface {
+	NewSubStreamExecution(ctx context.Context) (SubStreamExecution, error)
+}
