@@ -410,11 +410,18 @@ components:
     HTTPMethodType:
       type: string
       description: HTTP verb for an HTTP endpoint.
-      enum: [ '', 'GET', 'POST' ]
+      enum: [ '', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT' ]
       x-enum-varnames:
         - Undefined
         - GET
         - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - HEAD
+        - OPTIONS
+        - TRACE
+        - CONNECT
 
     GrpcMethodType:
       type: integer

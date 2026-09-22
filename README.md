@@ -274,12 +274,11 @@ The first question: *"How is this different from Temporal or Dapr?"*
 Generated stubs are designed to be implemented by AI:
 
 ```go
-// MakeGetInventoryItemData is instantiated once at startup.
+// One GetInventoryItemData instance is shared by all referencing streams in the service.
 // Fields are not protected by any synchronization.
 func MakeGetInventoryItemData(
     ctx context.Context,
     env environment.ServiceEnvironment,
-    cfg *runtimecfg.ProcessStreamConfig,
 ) (*GetInventoryItemData, error) {
     return &GetInventoryItemData{}, nil
 }

@@ -111,8 +111,15 @@ const (
 
 // Defines values for HTTPMethodType.
 const (
+	HTTPMethodTypeCONNECT   HTTPMethodType = "CONNECT"
+	HTTPMethodTypeDELETE    HTTPMethodType = "DELETE"
 	HTTPMethodTypeGET       HTTPMethodType = "GET"
+	HTTPMethodTypeHEAD      HTTPMethodType = "HEAD"
+	HTTPMethodTypeOPTIONS   HTTPMethodType = "OPTIONS"
+	HTTPMethodTypePATCH     HTTPMethodType = "PATCH"
 	HTTPMethodTypePOST      HTTPMethodType = "POST"
+	HTTPMethodTypePUT       HTTPMethodType = "PUT"
+	HTTPMethodTypeTRACE     HTTPMethodType = "TRACE"
 	HTTPMethodTypeUndefined HTTPMethodType = ""
 )
 
