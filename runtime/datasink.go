@@ -132,7 +132,7 @@ type DataSinkEndpoint struct {
 func MakeDataSinkEndpoint(dataSink DataSink, id int, environment RuntimeEnvironment) (*DataSinkEndpoint, error) {
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	ep := &DataSinkEndpoint{
-		metricsDisabled:   environment.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
+		metricsDisabled:   metrics.IsNoop(environment.Metrics()),
 		dataSink:          dataSink,
 		id:                id,
 		name:              endpointName,
@@ -232,12 +232,16 @@ func (ep *DataSinkEndpoint) GetDataConnector() DataConnector {
 
 func (ep *DataSinkEndpoint) OnBeginRequestFailed(ctx context.Context, err error) {
 	ep.environment.Log().Error(ctx, "BeginRequest failed", log.Str("endpoint", ep.GetName()), log.Err(err))
-	ep.beginRequestFailedCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.beginRequestFailedCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSinkEndpoint) OnLateResult(ctx context.Context, streamID string) {
 	ep.environment.Log().Warn(ctx, "late result for sink endpoint", log.Str("endpoint", ep.GetName()), log.Str("stream_id", streamID))
-	ep.lateResultCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.lateResultCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSinkEndpoint) OnRequestStart(_ context.Context) time.Time {

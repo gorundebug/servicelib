@@ -120,10 +120,16 @@ type grpcSender[ReqT any] struct {
 func (s *grpcSender[ReqT]) Send(_ context.Context, req ReqT) error {
 	err := s.sendFn(req)
 	if err != nil {
-		tracing.SpanError(s.span, err)
-		tracing.SpanEvent(s.span, "send.error", tracing.StringAttr("error", err.Error()))
+		if s.span != nil {
+			tracing.SpanError(s.span, err)
+		}
+		if s.span != nil {
+			s.span.AddEvent("send.error", tracing.StringAttr("error", err.Error()))
+		}
 	} else {
-		tracing.SpanEvent(s.span, "send")
+		if s.span != nil {
+			s.span.AddEvent("send")
+		}
 	}
 	return err
 }

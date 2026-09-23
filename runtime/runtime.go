@@ -557,16 +557,20 @@ func MakeCaller[T any](source TypedStream[T], consumer TypedStreamConsumer[T]) (
 	fromName := source.GetName()
 	toName := consumer.GetName()
 	grouping := groupingForStream(cfg.GetStreamConfigByID(consumer.GetID()))
-	scope := env.Metrics().Scope("stream", metrics.Labels{
-		"service":   env.ServiceConfig().Name,
-		"from":      fromName,
-		"to":        toName,
-		"pipeline":  grouping.pipeline,
-		"component": grouping.component,
-	})
-	messagesCounter, err := scope.Counter("messages_total", "Total number of messages processed by stream link", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stream_messages_total counter: %w", err)
+	var messagesCounter metrics.Int64Counter
+	if !metrics.IsNoop(env.Metrics()) {
+		scope := env.Metrics().Scope("stream", metrics.Labels{
+			"service":   env.ServiceConfig().Name,
+			"from":      fromName,
+			"to":        toName,
+			"pipeline":  grouping.pipeline,
+			"component": grouping.component,
+		})
+		var err error
+		messagesCounter, err = scope.Counter("messages_total", "Total number of messages processed by stream link", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create stream_messages_total counter: %w", err)
+		}
 	}
 
 	var tr tracing.Tracer
@@ -698,7 +702,7 @@ type directCaller[T any] struct {
 
 func (c *directCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
 	if !c.samplingEnabled(ctx) {
-		return ctx, noopSpan{}
+		return ctx, nil
 	}
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
@@ -714,7 +718,9 @@ func (c *directCaller[T]) Consume(ctx context.Context, value T) {
 		c.messagesCounter.Inc(ctx)
 	}
 	ctx, span := c.startSpan(ctx)
-	defer span.End()
+	if span != nil {
+		defer span.End()
+	}
 	c.consumer.Consume(ctx, value)
 }
 
@@ -729,7 +735,7 @@ type taskPoolCaller[T any] struct {
 
 func (c *taskPoolCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
 	if !c.samplingEnabled(ctx) {
-		return ctx, noopSpan{}
+		return ctx, nil
 	}
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
@@ -748,7 +754,9 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 	}
 	ctx, span := c.startSpan(ctx)
 	consume := func(taskCtx context.Context) {
-		defer span.End()
+		if span != nil {
+			defer span.End()
+		}
 		c.consumer.Consume(taskCtx, value)
 	}
 	var err error
@@ -758,8 +766,12 @@ func (c *taskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		err = c.pool.AddTask(ctx, func() { consume(ctx) })
 	}
 	if err != nil {
-		tracing.SpanError(span, err)
-		span.End()
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.End()
+		}
 		c.source.GetEnvironment().Log().Warn(ctx, "task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
 	}
 }
@@ -776,7 +788,7 @@ type priorityTaskPoolCaller[T any] struct {
 
 func (c *priorityTaskPoolCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
 	if !c.samplingEnabled(ctx) {
-		return ctx, noopSpan{}
+		return ctx, nil
 	}
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
@@ -799,7 +811,9 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		priority = p
 	}
 	consume := func(taskCtx context.Context) {
-		defer span.End()
+		if span != nil {
+			defer span.End()
+		}
 		c.consumer.Consume(taskCtx, value)
 	}
 	var err error
@@ -809,8 +823,12 @@ func (c *priorityTaskPoolCaller[T]) Consume(ctx context.Context, value T) {
 		err = c.pool.AddTask(ctx, priority, func() { consume(ctx) })
 	}
 	if err != nil {
-		tracing.SpanError(span, err)
-		span.End()
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.End()
+		}
 		c.source.GetEnvironment().Log().Warn(ctx, "priority task pool rejected task", log.Str("pool", c.pool.GetName()), log.Err(err))
 	}
 }
@@ -826,7 +844,7 @@ type parallelCaller[T any] struct {
 
 func (c *parallelCaller[T]) startSpan(ctx context.Context) (context.Context, tracing.Span) {
 	if !c.samplingEnabled(ctx) {
-		return ctx, noopSpan{}
+		return ctx, nil
 	}
 	return c.tracer.Start(ctx, "stream.call",
 		tracing.StringAttr("from", c.fromName),
@@ -844,7 +862,9 @@ func (c *parallelCaller[T]) Consume(ctx context.Context, value T) {
 	}
 	ctx, span := c.startSpan(ctx)
 	consume := func(parallelCtx context.Context) {
-		defer span.End()
+		if span != nil {
+			defer span.End()
+		}
 		c.consumer.Consume(parallelCtx, value)
 	}
 	if contextual, ok := c.environment.(interface {

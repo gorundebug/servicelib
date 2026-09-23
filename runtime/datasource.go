@@ -148,7 +148,7 @@ type DataSourceEndpoint struct {
 func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEnvironment) (*DataSourceEndpoint, error) {
 	endpointName := environment.RuntimeConfig().GetEndpointConfigByID(id).GetName()
 	ep := &DataSourceEndpoint{
-		metricsDisabled:   environment.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
+		metricsDisabled:   metrics.IsNoop(environment.Metrics()),
 		dataSource:        dataSource,
 		id:                id,
 		name:              endpointName,
@@ -239,22 +239,30 @@ func (ep *DataSourceEndpoint) GetDataConnector() DataConnector {
 
 func (ep *DataSourceEndpoint) OnMissingStreamID(ctx context.Context) {
 	ep.environment.Log().Error(ctx, "consumeResult called without streamID", log.Str("endpoint", ep.GetName()))
-	ep.missingStreamIDCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.missingStreamIDCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) OnLateResult(ctx context.Context, sessionID string) {
 	ep.environment.Log().Warn(ctx, "consumeResult: session not found in pending", log.Str("endpoint", ep.GetName()), log.Str("session_id", sessionID))
-	ep.lateResultCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.lateResultCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) OnUnknownMessageID(ctx context.Context, sessionID string, messageID string) {
 	ep.environment.Log().Warn(ctx, "consumeResult: unknown message ID", log.Str("endpoint", ep.GetName()), log.Str("message_id", messageID), log.Str("session_id", sessionID))
-	ep.unknownMessageIDCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.unknownMessageIDCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) OnDuplicateMessageID(ctx context.Context, sessionID string, messageID string) {
 	ep.environment.Log().Warn(ctx, "consumeResult: duplicate message ID", log.Str("endpoint", ep.GetName()), log.Str("message_id", messageID), log.Str("session_id", sessionID))
-	ep.duplicateMessageIDCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.duplicateMessageIDCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) oldestPendingAge() float64 {
@@ -308,12 +316,16 @@ func (ep *DataSourceEndpoint) OnInvalidHTTPMethod(ctx context.Context, method st
 		path = cfg.Path
 	}
 	ep.environment.Log().Warn(ctx, "invalid HTTP method", log.Str("method", method), log.Str("endpoint", ep.GetName()), log.Str("path", path))
-	ep.invalidHTTPMethodCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.invalidHTTPMethodCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) OnBeginRequestFailed(ctx context.Context, err error) {
 	ep.environment.Log().Error(ctx, "BeginRequest failed", log.Str("endpoint", ep.GetName()), log.Err(err))
-	ep.beginRequestFailedCounter.Inc(ctx)
+	if !ep.metricsDisabled {
+		ep.beginRequestFailedCounter.Inc(ctx)
+	}
 }
 
 func (ep *DataSourceEndpoint) OnRequestStart(_ context.Context) time.Time {

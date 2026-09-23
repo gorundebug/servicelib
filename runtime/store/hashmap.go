@@ -40,6 +40,7 @@ type HashMapJoinStorage[K comparable] struct {
     config         JoinStorageConfig
     gaugeCount     metrics.Int64Gauge
     evictionsTotal metrics.Int64Counter
+    metricsEnabled bool
     environment    environment.ServiceEnvironment
     highWaterMark  int
     stopped        bool
@@ -52,6 +53,7 @@ func MakeHashMapJoinStorage[K comparable](env environment.ServiceEnvironment, cf
         storage1:    make(map[K]*Item),
         environment: env,
         config:      cfg,
+        metricsEnabled: !metrics.IsNoop(env.Metrics()),
     }
     scope := env.Metrics().Scope("hashmap_join_storage", metrics.Labels{
         "service": env.ServiceConfig().Name,
@@ -93,10 +95,12 @@ func (s *HashMapJoinStorage[K]) rotate(ctx context.Context) {
             }
         }
         evicted := int64(len(s.storage2) - rescued)
-        s.gaugeCount.Sub(evicted)
+        if s.metricsEnabled {
+            s.gaugeCount.Sub(evicted)
+        }
         s.storage2 = s.storage1
         s.storage1 = newStorage
-        if evicted > 0 {
+        if s.metricsEnabled && evicted > 0 {
             s.evictionsTotal.Add(ctx, evicted)
         }
     }
@@ -150,7 +154,7 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
                 newItem.deadline = time.Now().Add(ttl)
             }
             s.storage1[key] = newItem
-            if item == nil {
+            if s.metricsEnabled && item == nil {
                 s.gaugeCount.Inc()
             }
             if ttl > 0 {
@@ -167,10 +171,14 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
                     s.lock.Lock()
                     if s.storage1[key] == newItem {
                         delete(s.storage1, key)
-                        s.gaugeCount.Dec()
+                        if s.metricsEnabled {
+                            s.gaugeCount.Dec()
+                        }
                     } else if s.storage2 != nil && s.storage2[key] == newItem {
                         delete(s.storage2, key)
-                        s.gaugeCount.Dec()
+                        if s.metricsEnabled {
+                            s.gaugeCount.Dec()
+                        }
                     }
                     s.lock.Unlock()
                     s.rotateLock.RUnlock()
@@ -205,7 +213,9 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
                     } else {
                         delete(s.storage1, key)
                     }
-                    s.gaugeCount.Dec()
+                    if s.metricsEnabled {
+                        s.gaugeCount.Dec()
+                    }
                 } else if renewTTL { //Depend on logic: should we extend deadline after change or not
                     s.lock.Lock()
                     defer s.lock.Unlock()

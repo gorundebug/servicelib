@@ -15,12 +15,20 @@ type NoopMetricsEngine struct{}
 func NewNoopMetricsEngine() MetricsEngine { return NoopMetricsEngine{} }
 
 func (NoopMetricsEngine) HTTPMetricsHandler() http.Handler                             { return http.NotFoundHandler() }
-func (NoopMetricsEngine) GRPCStatsHandler() stats.Handler                              { return noopStatsHandler{} }
-func (NoopMetricsEngine) GRPCClientHandler() stats.Handler                             { return noopStatsHandler{} }
+func (NoopMetricsEngine) GRPCStatsHandler() stats.Handler                              { return nil }
+func (NoopMetricsEngine) GRPCClientHandler() stats.Handler                             { return nil }
 func (NoopMetricsEngine) HTTPClientTransport(base http.RoundTripper) http.RoundTripper { return base }
 func (NoopMetricsEngine) HTTPServerHandler(next http.Handler, _ string) http.Handler   { return next }
 func (NoopMetricsEngine) Metrics() Metrics                                             { return noopMetrics{} }
 func (NoopMetricsEngine) Shutdown(context.Context) error                               { return nil }
+
+// IsNoop reports whether metrics use the built-in no-op implementation.
+// A type assertion also works for custom Metrics implementations whose dynamic
+// types cannot be compared through an interface value.
+func IsNoop(value Metrics) bool {
+	_, ok := value.(noopMetrics)
+	return ok
+}
 
 type noopMetrics struct{}
 type noopScope struct{}
@@ -56,12 +64,3 @@ func (noopCounterVec) With(Labels) Int64Counter        { return noopCounter{} }
 func (noopGaugeVec) With(Labels) Int64Gauge            { return noopGauge{} }
 func (noopGaugeVec) Delete(Labels)                     {}
 func (noopHistogramVec) With(Labels) Float64Histogram  { return noopHistogram{} }
-
-type noopStatsHandler struct{}
-
-func (noopStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context { return ctx }
-func (noopStatsHandler) HandleRPC(context.Context, stats.RPCStats)                       {}
-func (noopStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
-	return ctx
-}
-func (noopStatsHandler) HandleConn(context.Context, stats.ConnStats) {}

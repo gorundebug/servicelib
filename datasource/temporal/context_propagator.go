@@ -36,6 +36,17 @@ var temporalCarrierKeys = [...]string{
 	temporalHeaderDeadlineUnixNano,
 }
 
+var temporalNonTracingWorkflowCarrierKeys = [...]string{
+	temporalHeaderStreamID,
+	temporalHeaderPriority,
+}
+
+var temporalNonTracingCarrierKeys = [...]string{
+	temporalHeaderStreamID,
+	temporalHeaderPriority,
+	temporalHeaderDeadlineUnixNano,
+}
+
 type temporalCarrierContextKey struct{}
 
 // temporalContextPropagator carries the ordinary ServiceLib MessageContext
@@ -49,9 +60,9 @@ func (p temporalContextPropagator) Inject(ctx context.Context, writer workflow.H
 	carrier := make(map[string]string)
 	if p.tracing != nil {
 		p.tracing.Inject(ctx, carrier)
-	}
-	if tracing.SamplingEnabled(ctx) {
-		carrier["x-trace"] = "1"
+		if tracing.SamplingEnabled(ctx) {
+			carrier["x-trace"] = "1"
+		}
 	}
 	if streamID, ok := runtime.StreamIdFromContext(ctx); ok {
 		carrier[temporalHeaderStreamID] = streamID.GetID()
@@ -66,7 +77,7 @@ func (p temporalContextPropagator) Inject(ctx context.Context, writer workflow.H
 }
 
 func (p temporalContextPropagator) Extract(ctx context.Context, reader workflow.HeaderReader) (context.Context, error) {
-	carrier, err := readTemporalCarrier(reader)
+	carrier, err := readTemporalCarrier(reader, p.tracing != nil)
 	if err != nil {
 		return ctx, err
 	}
@@ -75,11 +86,11 @@ func (p temporalContextPropagator) Extract(ctx context.Context, reader workflow.
 
 func (p temporalContextPropagator) InjectFromWorkflow(ctx workflow.Context, writer workflow.HeaderWriter) error {
 	carrier, _ := ctx.Value(temporalCarrierContextKey{}).(map[string]string)
-	return writeTemporalCarrier(writer, carrier)
+	return writeTemporalCarrierWithTracing(writer, carrier, p.tracing != nil)
 }
 
 func (p temporalContextPropagator) ExtractToWorkflow(ctx workflow.Context, reader workflow.HeaderReader) (workflow.Context, error) {
-	carrier, err := readTemporalCarrier(reader)
+	carrier, err := readTemporalCarrier(reader, p.tracing != nil)
 	if err != nil {
 		return ctx, err
 	}
@@ -90,7 +101,7 @@ func (p temporalContextPropagator) ExtractToWorkflow(ctx workflow.Context, reade
 }
 
 func (p temporalContextPropagator) extractContext(ctx context.Context, carrier map[string]string) context.Context {
-	ctx = p.extractWorkflowContext(ctx, carrier)
+	ctx = p.extractWorkflowContextWithTracing(ctx, carrier, p.tracing != nil)
 	if rawDeadline := carrier[temporalHeaderDeadlineUnixNano]; rawDeadline != "" {
 		if nanos, err := strconv.ParseInt(rawDeadline, 10, 64); err == nil {
 			deadline := time.Unix(0, nanos)
@@ -108,10 +119,16 @@ func (p temporalContextPropagator) extractContext(ctx context.Context, carrier m
 // deadline remains in the serializable envelope and is applied by the Activity
 // adapter after the durable boundary.
 func (p temporalContextPropagator) extractWorkflowContext(ctx context.Context, carrier map[string]string) context.Context {
-	if p.tracing != nil && len(carrier) > 0 {
+	return p.extractWorkflowContextWithTracing(ctx, carrier, p.tracing != nil)
+}
+
+func (p temporalContextPropagator) extractWorkflowContextWithTracing(
+	ctx context.Context, carrier map[string]string, tracingEnabled bool,
+) context.Context {
+	if tracingEnabled && p.tracing != nil && len(carrier) > 0 {
 		ctx = p.tracing.Extract(ctx, carrier)
 	}
-	if tracing.SamplingRequestedByCarrier(carrier) {
+	if tracingEnabled && tracing.SamplingRequestedByCarrier(carrier) {
 		ctx = tracing.EnableSampling(ctx)
 	}
 	if streamID := carrier[temporalHeaderStreamID]; streamID != "" {
@@ -126,8 +143,16 @@ func (p temporalContextPropagator) extractWorkflowContext(ctx context.Context, c
 }
 
 func writeTemporalCarrier(writer workflow.HeaderWriter, carrier map[string]string) error {
+	return writeTemporalCarrierWithTracing(writer, carrier, true)
+}
+
+func writeTemporalCarrierWithTracing(writer workflow.HeaderWriter, carrier map[string]string, tracingEnabled bool) error {
 	dataConverter := converter.GetDefaultDataConverter()
-	for _, key := range temporalCarrierKeys {
+	keys := temporalCarrierKeys[:]
+	if !tracingEnabled {
+		keys = temporalNonTracingCarrierKeys[:]
+	}
+	for _, key := range keys {
 		value := carrier[key]
 		if value == "" {
 			continue
@@ -141,10 +166,14 @@ func writeTemporalCarrier(writer workflow.HeaderWriter, carrier map[string]strin
 	return nil
 }
 
-func readTemporalCarrier(reader workflow.HeaderReader) (map[string]string, error) {
+func readTemporalCarrier(reader workflow.HeaderReader, tracingEnabled bool) (map[string]string, error) {
 	dataConverter := converter.GetDefaultDataConverter()
 	carrier := make(map[string]string)
-	for _, key := range temporalCarrierKeys {
+	keys := temporalCarrierKeys[:]
+	if !tracingEnabled {
+		keys = temporalNonTracingCarrierKeys[:]
+	}
+	for _, key := range keys {
 		payload, present := reader.Get(key)
 		if !present {
 			continue

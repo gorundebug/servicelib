@@ -39,9 +39,11 @@ func (ec *grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.endpoint.OnBeginRequestFailed(ctx, err)
 		return
@@ -49,58 +51,72 @@ func (ec *grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	// Keep handlerCtx for returning messages to the parent graph and give only
 	// this server-streaming request a fresh stream ID.
 	requestCtx := runtime.WithStreamId(handlerCtx, runtime.NewStreamID())
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 	sender := &requestSender[ReqT]{}
 	if err := ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, value, sender, nopResultContext{}); err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "consume_message")
+	if span != nil {
+		span.AddEvent("consume_message")
+	}
 
 	sid, _ := runtime.StreamIdFromContext(requestCtx)
 	requestCtx = metadata.AppendToOutgoingContext(requestCtx, "x-stream-id", sid.GetID())
 
 	grpcStream, err := ec.clientFn(requestCtx, sender.req)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "grpc_call.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("grpc_call.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "grpc_call")
+	if span != nil {
+		span.AddEvent("grpc_call")
+	}
 
 	msgCount := 0
 	for {
 		res, err := grpcStream.Recv()
 		if errors.Is(err, io.EOF) {
 			if span != nil {
-				tracing.SpanEvent(span, "eof", tracing.Int64Attr("messages_received", int64(msgCount)))
+				span.AddEvent("eof", tracing.Int64Attr("messages_received", int64(msgCount)))
 			}
 			break
 		}
 		if err != nil {
-			tracing.SpanError(span, err)
 			if span != nil {
-				tracing.SpanEvent(span, "recv.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(span, err)
+			}
+			if span != nil {
+				span.AddEvent("recv.error", tracing.StringAttr("error", err.Error()))
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 			return
 		}
 		if err := ec.handler.HandleResponse(handlerCtx, ec.sc, handlerState, res); err != nil {
-			tracing.SpanError(span, err)
 			if span != nil {
-				tracing.SpanEvent(span, "handle_response.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(span, err)
+			}
+			if span != nil {
+				span.AddEvent("handle_response.error", tracing.StringAttr("error", err.Error()))
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)

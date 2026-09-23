@@ -56,7 +56,9 @@ func makeClientStreamingResult[HandlerState, ReqT, ResR, T, R any]() *clientStre
 
 func (r *clientStreamingResult[HandlerState, ReqT, ResR, T, R]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done_called")
+		if r.span != nil {
+			r.span.AddEvent("done_called")
+		}
 		close(r.doneCh)
 	})
 }
@@ -106,7 +108,9 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output", ec.spanAttributes[:]...)
 		}
 		requestCtx := runtime.WithStreamId(handlerCtx, runtime.NewStreamID())
-		tracing.SpanEvent(outputSpan, "begin_request")
+		if outputSpan != nil {
+			outputSpan.AddEvent("begin_request")
+		}
 		startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 		sid, _ := runtime.StreamIdFromContext(requestCtx)
@@ -117,9 +121,11 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 			ec.pending.Pop(streamID)
 			result.err = err
 			close(result.ready)
-			tracing.SpanError(outputSpan, err)
 			if outputSpan != nil {
-				tracing.SpanEvent(outputSpan, "grpc_call.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(outputSpan, err)
+			}
+			if outputSpan != nil {
+				outputSpan.AddEvent("grpc_call.error", tracing.StringAttr("error", err.Error()))
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
@@ -128,7 +134,9 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 			}
 			return
 		}
-		tracing.SpanEvent(outputSpan, "grpc_call")
+		if outputSpan != nil {
+			outputSpan.AddEvent("grpc_call")
+		}
 
 		doneCh := make(chan struct{})
 		result.handlerCtx = handlerCtx
@@ -146,9 +154,11 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 				result.mu.Lock()
 				defer result.mu.Unlock()
 				ec.pending.Pop(streamID)
-				tracing.SpanError(outputSpan, requestCtx.Err())
 				if outputSpan != nil {
-					tracing.SpanEvent(outputSpan, "context_cancelled", tracing.StringAttr("error", requestCtx.Err().Error()))
+					tracing.SpanError(outputSpan, requestCtx.Err())
+				}
+				if outputSpan != nil {
+					outputSpan.AddEvent("context_cancelled", tracing.StringAttr("error", requestCtx.Err().Error()))
 				}
 				ec.handler.EndRequest(handlerCtx, ec.sc, requestCtx.Err(), handlerState)
 				ec.endpoint.OnRequestEnd(requestCtx, startTime, requestCtx.Err())
@@ -165,9 +175,11 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 			ec.pending.Pop(streamID)
 
 			if err != nil {
-				tracing.SpanError(outputSpan, err)
 				if outputSpan != nil {
-					tracing.SpanEvent(outputSpan, "close_and_recv.error", tracing.StringAttr("error", err.Error()))
+					tracing.SpanError(outputSpan, err)
+				}
+				if outputSpan != nil {
+					outputSpan.AddEvent("close_and_recv.error", tracing.StringAttr("error", err.Error()))
 				}
 				ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 				ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
@@ -176,11 +188,15 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 				}
 				return
 			}
-			tracing.SpanEvent(outputSpan, "close_and_recv")
+			if outputSpan != nil {
+				outputSpan.AddEvent("close_and_recv")
+			}
 			if err := ec.handler.HandleResponse(handlerCtx, ec.sc, handlerState, res); err != nil {
-				tracing.SpanError(outputSpan, err)
 				if outputSpan != nil {
-					tracing.SpanEvent(outputSpan, "handle_response.error", tracing.StringAttr("error", err.Error()))
+					tracing.SpanError(outputSpan, err)
+				}
+				if outputSpan != nil {
+					outputSpan.AddEvent("handle_response.error", tracing.StringAttr("error", err.Error()))
 				}
 				ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 				ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
@@ -189,7 +205,9 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 				}
 				return
 			}
-			tracing.SpanEvent(outputSpan, "handle_response")
+			if outputSpan != nil {
+				outputSpan.AddEvent("handle_response")
+			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, nil)
 			if outputSpan != nil {
@@ -214,13 +232,17 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	}
 
 	if err := ec.handler.ConsumeMessage(result.handlerCtx, ec.sc, result.handlerState, value, result.sender, result); err != nil {
-		tracing.SpanError(result.span, err)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(result.span, err)
+		}
+		if result.span != nil {
+			result.span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		result.Done()
 	} else {
-		tracing.SpanEvent(result.span, "consume_message")
+		if result.span != nil {
+			result.span.AddEvent("consume_message")
+		}
 	}
 }
 

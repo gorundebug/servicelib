@@ -90,32 +90,49 @@ func (s *DelayStream[T]) SetConsumer(consumer runtime.TypedStreamConsumer[T]) er
 }
 
 func (s *DelayStream[T]) Consume(ctx context.Context, value T) {
-	ctx, span := s.StartSpan(ctx, "stream.delay")
+	var span tracing.Span
+	if s.TracingEnabled(ctx) {
+		ctx, span = s.StartSpan(ctx, "stream.delay")
+	}
 	duration := s.f.call(ctx, value)
 	if duration > 0 {
 		resume := func() {
-			defer span.End()
+			if span != nil {
+				defer span.End()
+			}
 			if err := ctx.Err(); err != nil {
-				tracing.SpanEvent(span, "delay.skipped", tracing.StringAttr("reason", err.Error()))
+				if span != nil {
+					span.AddEvent("delay.skipped", tracing.StringAttr("reason", err.Error()))
+				}
 				return
 			}
 			s.downstreamCollector.Out(ctx, value)
 		}
 		if handled, err := runtime.RunDurableCallDelay(ctx, duration, resume); handled {
 			if err != nil {
-				tracing.SpanError(span, err)
+				if span != nil {
+					tracing.SpanError(span, err)
+				}
 				s.f.callError(ctx, value, err, s.downstreamCollector)
-				span.End()
+				if span != nil {
+					span.End()
+				}
 			}
 			return
 		}
 		if err := s.GetRuntimeEnvironment().Delay(ctx, duration, resume); err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 			s.f.callError(ctx, value, err, s.downstreamCollector)
-			span.End()
+			if span != nil {
+				span.End()
+			}
 		}
 		return
 	}
-	defer span.End()
+	if span != nil {
+		defer span.End()
+	}
 	s.downstreamCollector.Out(ctx, value)
 }

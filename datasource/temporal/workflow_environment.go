@@ -47,6 +47,13 @@ type WorkflowEnvironment struct {
 
 type workflowExecutionContextKey struct{}
 
+// WorkflowTelemetryPolicy is part of the serialized Workflow input. It must
+// not be recomputed from process environment during a replay.
+type WorkflowTelemetryPolicy struct {
+	NoopMetrics bool `json:"noopMetrics,omitempty"`
+	NoopTracing bool `json:"noopTracing,omitempty"`
+}
+
 func withWorkflowExecutionContext(ctx context.Context, workflowCtx workflow.Context) context.Context {
 	ctx = context.WithValue(ctx, workflowExecutionContextKey{}, workflowCtx)
 	if state, ok := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); ok {
@@ -69,15 +76,30 @@ func NewWorkflowEnvironment(
 	ctx workflow.Context,
 	runtimeConfig *config.RuntimeConfig,
 	serviceID int,
+	telemetry ...WorkflowTelemetryPolicy,
 ) (*WorkflowEnvironment, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("Temporal Workflow context is nil")
 	}
+	policy := WorkflowTelemetryPolicy{}
+	if len(telemetry) != 0 {
+		policy = telemetry[0]
+	}
+	var workflowMetrics metrics.Metrics
+	if policy.NoopMetrics {
+		workflowMetrics = metrics.NewNoopMetricsEngine().Metrics()
+	} else {
+		workflowMetrics = newWorkflowMetrics(ctx)
+	}
+	var workflowTracing tracing.Tracing
+	if !policy.NoopTracing {
+		workflowTracing = newWorkflowTracing(ctx)
+	}
 	env := &WorkflowEnvironment{
 		workflowCtx: ctx,
-		metrics:     newWorkflowMetrics(ctx),
+		metrics:     workflowMetrics,
 		logger:      newWorkflowLogger(ctx),
-		tracing:     newWorkflowTracing(ctx),
+		tracing:     workflowTracing,
 		failureCh:   workflow.NewBufferedChannel(ctx, 1),
 		taskPools:   make(map[string]*workflowPool),
 		priority:    make(map[string]*workflowPool),
@@ -307,8 +329,9 @@ func (env *WorkflowEnvironment) makePool(name string, priority bool) *workflowPo
 	return &workflowPool{
 		ctx: env.workflowCtx, name: name,
 		executors: max(1, cfg.ExecutorsCount), priority: priority,
-		metrics:       makeWorkflowPoolMetrics(env.metrics, env.ServiceConfig().Name, name, priority),
-		recordFailure: env.recordFailure,
+		metricsEnabled: !metrics.IsNoop(env.metrics),
+		metrics:        makeWorkflowPoolMetrics(env.metrics, env.ServiceConfig().Name, name, priority),
+		recordFailure:  env.recordFailure,
 	}
 }
 
@@ -503,18 +526,19 @@ type workflowPoolMetrics struct {
 }
 
 type workflowPool struct {
-	ctx           workflow.Context
-	name          string
-	executors     int
-	priority      bool
-	metrics       workflowPoolMetrics
-	queue         []workflowTask
-	sequence      uint64
-	pending       int
-	workers       int
-	started       bool
-	stopped       bool
-	recordFailure func(any)
+	ctx            workflow.Context
+	name           string
+	executors      int
+	priority       bool
+	metricsEnabled bool
+	metrics        workflowPoolMetrics
+	queue          []workflowTask
+	sequence       uint64
+	pending        int
+	workers        int
+	started        bool
+	stopped        bool
+	recordFailure  func(any)
 }
 
 func (p *workflowPool) GetName() string        { return p.name }
@@ -529,8 +553,10 @@ func (p *workflowPool) Start(context.Context) error {
 	}
 	p.started = true
 	p.workers = p.executors
-	p.metrics.executorsTarget.Set(int64(p.executors))
-	p.metrics.executorsAllocated.Set(int64(p.executors))
+	if p.metricsEnabled {
+		p.metrics.executorsTarget.Set(int64(p.executors))
+		p.metrics.executorsAllocated.Set(int64(p.executors))
+	}
 	for range p.executors {
 		workflow.Go(p.ctx, p.run)
 	}
@@ -540,7 +566,9 @@ func (p *workflowPool) Start(context.Context) error {
 func (p *workflowPool) run(ctx workflow.Context) {
 	defer func() {
 		p.workers--
-		p.metrics.executorsAllocated.Dec()
+		if p.metricsEnabled {
+			p.metrics.executorsAllocated.Dec()
+		}
 	}()
 	for {
 		if err := workflow.Await(ctx, func() bool {
@@ -553,11 +581,18 @@ func (p *workflowPool) run(ctx workflow.Context) {
 		}
 		task := p.queue[0]
 		p.queue = p.queue[1:]
-		p.metrics.queueLength.Dec()
-		p.metrics.executorsBusy.Inc()
-		started := workflow.Now(ctx)
+		if p.metricsEnabled {
+			p.metrics.queueLength.Dec()
+			p.metrics.executorsBusy.Inc()
+		}
+		var started time.Time
+		if p.metricsEnabled {
+			started = workflow.Now(ctx)
+		}
 		failure := runWorkflowTask(task.fn, withWorkflowExecutionContext(task.ctx, ctx))
-		p.metrics.executorsBusy.Dec()
+		if p.metricsEnabled {
+			p.metrics.executorsBusy.Dec()
+		}
 		p.pending--
 		if failure != nil {
 			if p.recordFailure == nil {
@@ -566,8 +601,10 @@ func (p *workflowPool) run(ctx workflow.Context) {
 			p.recordFailure(failure)
 			return
 		}
-		p.metrics.tasksTotal.Inc(task.ctx)
-		p.metrics.executionDuration.Observe(task.ctx, workflow.Now(ctx).Sub(started).Seconds())
+		if p.metricsEnabled {
+			p.metrics.tasksTotal.Inc(task.ctx)
+			p.metrics.executionDuration.Observe(task.ctx, workflow.Now(ctx).Sub(started).Seconds())
+		}
 	}
 }
 
@@ -596,7 +633,9 @@ func (p *workflowPool) abort() {
 	}
 	p.pending -= len(p.queue)
 	p.queue = nil
-	p.metrics.queueLength.Set(0)
+	if p.metricsEnabled {
+		p.metrics.queueLength.Set(0)
+	}
 	p.stopped = true
 }
 
@@ -625,11 +664,15 @@ func (p *workflowPool) add(
 	fn func(context.Context),
 ) error {
 	if err := ctx.Err(); err != nil {
-		p.metrics.taskRejected.Inc(ctx)
+		if p.metricsEnabled {
+			p.metrics.taskRejected.Inc(ctx)
+		}
 		return err
 	}
 	if !p.started || p.stopped {
-		p.metrics.taskRejected.Inc(ctx)
+		if p.metricsEnabled {
+			p.metrics.taskRejected.Inc(ctx)
+		}
 		return pool.ErrPoolStopped
 	}
 	task := workflowTask{ctx: ctx, priority: priority, sequence: p.sequence, fn: fn}
@@ -644,7 +687,9 @@ func (p *workflowPool) add(
 		})
 	}
 	p.pending++
-	p.metrics.queueLength.Inc()
+	if p.metricsEnabled {
+		p.metrics.queueLength.Inc()
+	}
 	return nil
 }
 

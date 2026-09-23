@@ -59,7 +59,9 @@ func makeBidiStreamingResult[HandlerState, ReqT, ResR, T, R any]() *bidiStreamin
 
 func (r *bidiStreamingResult[HandlerState, ReqT, ResR, T, R]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done_called")
+		if r.span != nil {
+			r.span.AddEvent("done_called")
+		}
 		close(r.doneCh)
 	})
 }
@@ -108,7 +110,9 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 			handlerCtx, outputSpan = ec.tracer.Start(handlerCtx, "grpc.output", ec.spanAttributes[:]...)
 		}
 		requestCtx := runtime.WithStreamId(handlerCtx, runtime.NewStreamID())
-		tracing.SpanEvent(outputSpan, "begin_request")
+		if outputSpan != nil {
+			outputSpan.AddEvent("begin_request")
+		}
 		startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 		sid, _ := runtime.StreamIdFromContext(requestCtx)
@@ -119,9 +123,11 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 			ec.pending.Pop(streamID)
 			result.err = err
 			close(result.ready)
-			tracing.SpanError(outputSpan, err)
 			if outputSpan != nil {
-				tracing.SpanEvent(outputSpan, "grpc_call.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(outputSpan, err)
+			}
+			if outputSpan != nil {
+				outputSpan.AddEvent("grpc_call.error", tracing.StringAttr("error", err.Error()))
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
@@ -130,7 +136,9 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 			}
 			return
 		}
-		tracing.SpanEvent(outputSpan, "grpc_call")
+		if outputSpan != nil {
+			outputSpan.AddEvent("grpc_call")
+		}
 
 		doneCh := make(chan struct{})
 		result.handlerCtx = handlerCtx
@@ -157,22 +165,26 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 				res, err := grpcStream.Recv()
 				if errors.Is(err, io.EOF) {
 					if outputSpan != nil {
-						tracing.SpanEvent(outputSpan, "eof", tracing.Int64Attr("messages_received", int64(msgCount)))
+						outputSpan.AddEvent("eof", tracing.Int64Attr("messages_received", int64(msgCount)))
 					}
 					break
 				}
 				if err != nil {
-					tracing.SpanError(outputSpan, err)
 					if outputSpan != nil {
-						tracing.SpanEvent(outputSpan, "recv.error", tracing.StringAttr("error", err.Error()))
+						tracing.SpanError(outputSpan, err)
+					}
+					if outputSpan != nil {
+						outputSpan.AddEvent("recv.error", tracing.StringAttr("error", err.Error()))
 					}
 					recvErr = err
 					break
 				}
 				if err := ec.handler.HandleResponse(handlerCtx, ec.sc, handlerState, res); err != nil {
-					tracing.SpanError(outputSpan, err)
 					if outputSpan != nil {
-						tracing.SpanEvent(outputSpan, "handle_response.error", tracing.StringAttr("error", err.Error()))
+						tracing.SpanError(outputSpan, err)
+					}
+					if outputSpan != nil {
+						outputSpan.AddEvent("handle_response.error", tracing.StringAttr("error", err.Error()))
 					}
 					recvErr = err
 					break
@@ -183,7 +195,9 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 			defer result.mu.Unlock()
 			ec.pending.Pop(streamID)
 			if recvErr == nil {
-				tracing.SpanEvent(outputSpan, "done_received")
+				if outputSpan != nil {
+					outputSpan.AddEvent("done_received")
+				}
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, recvErr, handlerState)
 			ec.endpoint.OnRequestEnd(handlerCtx, startTime, recvErr)
@@ -209,13 +223,17 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 	}
 
 	if err := ec.handler.ConsumeMessage(result.handlerCtx, ec.sc, result.handlerState, value, result.sender, result); err != nil {
-		tracing.SpanError(result.span, err)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(result.span, err)
+		}
+		if result.span != nil {
+			result.span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		result.Done()
 	} else {
-		tracing.SpanEvent(result.span, "consume_message")
+		if result.span != nil {
+			result.span.AddEvent("consume_message")
+		}
 	}
 }
 

@@ -79,7 +79,9 @@ func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) SetResultCallback(messag
 
 func (r *httpResult[HandlerState, ReqT, ResR, T, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done_called")
+		if r.span != nil {
+			r.span.AddEvent("done_called")
+		}
 		close(r.doneCh)
 	})
 }
@@ -194,6 +196,7 @@ type netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct 
 	handler        EndpointHandler[HandlerState, ReqT, ResR, T, R, E]
 	pending        *store.RotatingMap[string, *httpResult[HandlerState, ReqT, ResR, T, R, E]]
 	tracer         tracing.Tracer
+	tracingEnabled bool
 	spanAttributes [4]tracing.Attribute
 }
 
@@ -302,13 +305,15 @@ func (ds *netHTTPDataSource) Start(ctx context.Context) error {
 	}
 	if ds.tracingEngine != nil {
 		handler = ds.tracingEngine.HTTPServerHandler(handler, runtime.ToSnakeCase(ds.GetName()))
-		inner := handler
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Trace") != "" {
-				r = r.WithContext(tracing.EnableSampling(r.Context()))
-			}
-			inner.ServeHTTP(w, r)
-		})
+		if ds.tracingEngine.Tracing() != nil {
+			inner := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Trace") != "" {
+					r = r.WithContext(tracing.EnableSampling(r.Context()))
+				}
+				inner.ServeHTTP(w, r)
+			})
+		}
 	}
 	addr := ds.addr
 	if addr == "" {
@@ -409,9 +414,11 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 			reqCtx = runtime.WithStreamId(reqCtx, sid)
 		}
 	}
-	reqCtx = runtime.ApplyDataSourceEndpointTracing(
-		reqCtx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
-	)
+	if ec.tracingEnabled {
+		reqCtx = runtime.ApplyDataSourceEndpointTracing(
+			reqCtx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+		)
+	}
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(reqCtx) {
 		attributes := [6]tracing.Attribute{
@@ -427,13 +434,17 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(reqCtx, ec.sc, data)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		return
 	}
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
 	var streamID string
@@ -456,7 +467,9 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 	}
 	if ec.hasResult {
 		if err = ec.pending.Set(streamID, result); err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState, data)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			return
@@ -471,15 +484,19 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 			ec.pending.Pop(streamID)
 			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState, data)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "consume_message")
+	if span != nil {
+		span.AddEvent("consume_message")
+	}
 
 	if !ec.hasResult {
 		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState, data)
@@ -489,7 +506,9 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 
 	select {
 	case <-doneCh:
-		tracing.SpanEvent(span, "done_received")
+		if span != nil {
+			span.AddEvent("done_received")
+		}
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
@@ -507,14 +526,18 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 		// Done after acquiring the write lock so a completed response wins and
 		// EndRequest cannot append an error body to it.
 		if completedResultWins(doneCh) {
-			tracing.SpanEvent(span, "done_received")
+			if span != nil {
+				span.AddEvent("done_received")
+			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState, data)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
 			return
 		}
-		tracing.SpanError(span, handlerCtx.Err())
 		if span != nil {
-			tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+			tracing.SpanError(span, handlerCtx.Err())
+		}
+		if span != nil {
+			span.AddEvent("context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState, data)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
@@ -551,7 +574,9 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consu
 
 	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
-		tracing.SpanEvent(result.span, "late_result")
+		if result.span != nil {
+			result.span.AddEvent("late_result")
+		}
 		return
 	}
 
@@ -563,7 +588,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consu
 	if !ok || cb == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+			result.span.AddEvent("unknown_message_id", tracing.StringAttr("message_id", messageID))
 		}
 		return
 	}
@@ -575,12 +600,12 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) consu
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
 			if result.span != nil {
-				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
+				result.span.AddEvent("duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
 	}
 	if result.span != nil {
-		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
+		result.span.AddEvent("result_consumed", tracing.StringAttr("message_id", messageID))
 	}
 }
 
@@ -597,14 +622,17 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		return nil, nil, fmt.Errorf("handler is nil for the http endpoint %q", endpoint.GetName())
 	}
 	var tr tracing.Tracer
-	if t := env.Tracing(); t != nil {
-		tr = t.Tracer(env.ServiceConfig().Name)
+	tracingEngine := env.Tracing()
+	tracingEnabled := tracingEngine != nil
+	if tracingEngine != nil {
+		tr = tracingEngine.Tracer(env.ServiceConfig().Name)
 	}
 	ec := &netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
 		hasResult:                  stream.GetResultStream() != nil,
 		handler:                    handler,
 		tracer:                     tr,
+		tracingEnabled:             tracingEnabled,
 	}
 	if ec.tracer != nil {
 		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())

@@ -146,7 +146,9 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 
 	payload, err := ec.inputSerde.Serialize(value)
 	if err != nil {
-		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
 		return
 	}
 	messageID := ec.handler.GetMessageID(handlerCtx, ec.stream.Stream(), state, value)
@@ -169,13 +171,17 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 	result, submitErr := ec.connector.SubmitEndpoint(handlerCtx, ec.endpoint.GetID(), envelope, ec.waitResult)
 	if submitErr != nil {
 		err = submitErr
-		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
 		return
 	}
 	if ec.waitResult {
 		resultValue, err = ec.resultSerde.Deserialize(result.Payload)
 		if err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 		}
 	}
 }

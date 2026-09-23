@@ -148,7 +148,9 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	handlerCtx, state, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
 		ec.Endpoint().OnBeginRequestFailed(ctx, err)
-		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
 		return result, err
 	}
 	start := ec.Endpoint().OnRequestStart(handlerCtx)
@@ -203,7 +205,9 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 	}
 
 	if err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, state, value); err != nil {
-		tracing.SpanError(span, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+		}
 		return result, err
 	}
 	if !hasResult {

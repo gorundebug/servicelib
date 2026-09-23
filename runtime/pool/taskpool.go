@@ -52,6 +52,7 @@ type TaskPoolImpl struct {
 	gaugeExecutorsBusy      metrics.Int64Gauge
 	tasksTotal              metrics.Int64Counter
 	executionDuration       metrics.Float64Histogram
+	metricsDisabled         bool
 	stopTimeoutCounter      metrics.Int64Counter
 	taskRejectedCounter     metrics.Int64Counter
 	taskCancelledCounter    metrics.Int64Counter
@@ -68,10 +69,11 @@ type TaskPoolImpl struct {
 
 func makeTaskPool(env environment.ServiceEnvironment, poolConfig *config.PoolConfig) (TaskPool, error) {
 	pool := &TaskPoolImpl{
-		name:           poolConfig.Name,
-		environment:    env,
-		stop:           make(chan struct{}),
-		fallbackConfig: *poolConfig,
+		name:            poolConfig.Name,
+		environment:     env,
+		metricsDisabled: metrics.IsNoop(env.Metrics()),
+		stop:            make(chan struct{}),
+		fallbackConfig:  *poolConfig,
 	}
 	scope := env.Metrics().Scope("task_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -134,14 +136,18 @@ func (p *TaskPoolImpl) GetExecutorsCount() int {
 
 func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) error {
 	if err := ctx.Err(); err != nil {
-		p.taskRejectedCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskRejectedCounter.Inc(ctx)
+		}
 		return err
 	}
 	task := &Task{fn: fn}
 	p.lock.Lock()
 	if p.done {
 		p.lock.Unlock()
-		p.taskRejectedCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskRejectedCounter.Inc(ctx)
+		}
 		return ErrPoolStopped
 	}
 	if p.tail != nil {
@@ -173,11 +179,15 @@ func (p *TaskPoolImpl) AddTask(ctx context.Context, fn func()) error {
 		p.head = task
 		p.lock.Unlock()
 		p.cond.Signal()
-		p.taskCancelledCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskCancelledCounter.Inc(ctx)
+		}
 	})
 	p.lock.Unlock()
 	p.cond.Signal()
-	p.gaugeQueueLength.Inc()
+	if !p.metricsDisabled {
+		p.gaugeQueueLength.Inc()
+	}
 	return nil
 }
 
@@ -222,7 +232,9 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 				pRestart = new(bool)
 				executorsCount = executorsCountNew
-				p.gaugeExecutorsTarget.Set(int64(executorsCount))
+				if !p.metricsDisabled {
+					p.gaugeExecutorsTarget.Set(int64(executorsCount))
+				}
 
 				p.lock.Lock()
 				select {
@@ -233,10 +245,14 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 				}
 				for i := 0; i < executorsCount; i++ {
 					p.wg.Add(1)
-					p.gaugeExecutorsAllocated.Inc()
+					if !p.metricsDisabled {
+						p.gaugeExecutorsAllocated.Inc()
+					}
 					go func(restart *bool) {
 						defer p.wg.Done()
-						defer p.gaugeExecutorsAllocated.Dec()
+						if !p.metricsDisabled {
+							defer p.gaugeExecutorsAllocated.Dec()
+						}
 						for {
 							p.lock.Lock()
 							if *restart {
@@ -264,15 +280,26 @@ func (p *TaskPoolImpl) Start(ctx context.Context) error {
 							p.count--
 							p.lock.Unlock()
 							stopFn()
-							p.gaugeQueueLength.Dec()
+							if !p.metricsDisabled {
+								p.gaugeQueueLength.Dec()
+							}
 							func() {
-								p.gaugeExecutorsBusy.Inc()
-								defer p.gaugeExecutorsBusy.Dec()
-								startTime := time.Now()
+								if !p.metricsDisabled {
+									p.gaugeExecutorsBusy.Inc()
+								}
+								if !p.metricsDisabled {
+									defer p.gaugeExecutorsBusy.Dec()
+								}
+								var startTime time.Time
+								if !p.metricsDisabled {
+									startTime = time.Now()
+								}
 								runTask(ctx, p.environment, p.name, task.fn)
 								task.fn = nil
-								p.tasksTotal.Inc(ctx)
-								p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+								if !p.metricsDisabled {
+									p.tasksTotal.Inc(ctx)
+									p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+								}
 							}()
 						}
 					}(pRestart)
@@ -321,7 +348,9 @@ func (p *TaskPoolImpl) Stop(ctx context.Context) {
 		tasksCount := p.count
 		p.lock.Unlock()
 		p.environment.Log().Warn(ctx, "task pool stopped by timeout", log.Str("pool", p.name), log.Err(ctx.Err()), log.Int("tasks_count", tasksCount))
-		p.stopTimeoutCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.stopTimeoutCounter.Inc(ctx)
+		}
 		p.wg.Wait()
 	})
 }

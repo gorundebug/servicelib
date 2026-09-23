@@ -175,8 +175,9 @@ type saramaKafkaDataSink struct {
 
 type saramaKafkaEndpoint struct {
 	*runtime.DataSinkEndpoint
-	topic  string
-	active atomic.Bool
+	topic         string
+	tracingEngine tracing.Tracing
+	active        atomic.Bool
 }
 
 func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
@@ -458,20 +459,24 @@ func (ep *saramaKafkaEndpoint) SendMessage(ctx context.Context, key []byte, valu
 		Key:      keyEncoder,
 		Metadata: metadata,
 	}
-	carrier := map[string]string{}
-	if engine := ep.GetRuntimeEnvironment().Tracing(); engine != nil {
+	if engine := ep.tracingEngine; engine != nil {
+		carrier := map[string]string{}
 		engine.Inject(ctx, carrier)
-	}
-	if streamID, ok := runtime.StreamIdFromContext(ctx); ok && streamID.GetID() != "" {
-		carrier["x-stream-id"] = streamID.GetID()
-	}
-	if tracing.SamplingEnabled(ctx) {
-		carrier["x-trace"] = "1"
-	}
-	for _, key := range []string{"x-stream-id", "x-trace", "traceparent", "tracestate", "baggage"} {
-		if value := carrier[key]; value != "" {
-			message.Headers = append(message.Headers, kafka.RecordHeader{Key: []byte(key), Value: []byte(value)})
+		if streamID, ok := runtime.StreamIdFromContext(ctx); ok && streamID.GetID() != "" {
+			carrier["x-stream-id"] = streamID.GetID()
 		}
+		if tracing.SamplingEnabled(ctx) {
+			carrier["x-trace"] = "1"
+		}
+		for _, key := range []string{"x-stream-id", "x-trace", "traceparent", "tracestate", "baggage"} {
+			if value := carrier[key]; value != "" {
+				message.Headers = append(message.Headers, kafka.RecordHeader{Key: []byte(key), Value: []byte(value)})
+			}
+		}
+	} else if streamID, ok := runtime.StreamIdFromContext(ctx); ok && streamID.GetID() != "" {
+		message.Headers = append(message.Headers, kafka.RecordHeader{
+			Key: []byte("x-stream-id"), Value: []byte(streamID.GetID()),
+		})
 	}
 	ep.getDataSink().SendMessage(ctx, message)
 }
@@ -517,7 +522,9 @@ func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID))
 	}
 	handlerCtx, handlerState := ec.handler.BeginRequest(handlerCtx, stream)
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
 	ep := ec.getEndpoint()
@@ -542,12 +549,16 @@ func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 
 	err := ec.handler.ConsumeMessage(handlerCtx, stream, handlerState, item, msg)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 	} else {
-		tracing.SpanEvent(span, "consume_message")
+		if span != nil {
+			span.AddEvent("consume_message")
+		}
 	}
 	ec.handler.EndRequest(handlerCtx, stream, err, handlerState)
 	ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
@@ -608,6 +619,7 @@ func getSaramaKafkaDataSinkEndpoint(id int, env runtime.RuntimeEnvironment) (*sa
 	kafkaEndpoint := &saramaKafkaEndpoint{
 		DataSinkEndpoint: sinkEndpoint,
 		topic:            endpointCfg.Topic,
+		tracingEngine:    env.Tracing(),
 	}
 	dataSink.AddEndpoint(kafkaEndpoint)
 	return kafkaEndpoint, nil

@@ -28,13 +28,17 @@ type unarySender[R, ResR any] struct {
 func (s *unarySender[R, ResR]) Send(_ context.Context, value ResR) error {
 	select {
 	case s.ch <- value:
-		tracing.SpanEvent(s.span, "send")
+		if s.span != nil {
+			s.span.AddEvent("send")
+		}
 		return nil
 	default:
 		err := fmt.Errorf("result already sent")
-		tracing.SpanError(s.span, err)
 		if s.span != nil {
-			tracing.SpanEvent(s.span, "send.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(s.span, err)
+		}
+		if s.span != nil {
+			s.span.AddEvent("send.error", tracing.StringAttr("error", err.Error()))
 		}
 		return err
 	}
@@ -126,7 +130,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 
 	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
-		tracing.SpanEvent(result.span, "late_result")
+		if result.span != nil {
+			result.span.AddEvent("late_result")
+		}
 		return
 	}
 
@@ -138,7 +144,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 	if !ok || resultCallback == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+			result.span.AddEvent("unknown_message_id", tracing.StringAttr("message_id", messageID))
 		}
 		return
 	}
@@ -150,12 +156,12 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
 			if result.span != nil {
-				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
+				result.span.AddEvent("duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
 	}
 	if result.span != nil {
-		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
+		result.span.AddEvent("result_consumed", tracing.StringAttr("message_id", messageID))
 	}
 }
 
@@ -170,9 +176,11 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 // and the call returns immediately after Eof.
 func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle(ctx context.Context, req ReqT) (ResR, error) {
 	ctx = applyIncomingStreamID(ctx)
-	ctx = runtime.ApplyDataSourceEndpointTracing(
-		ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
-	)
+	if ec.tracingEnabled {
+		ctx = runtime.ApplyDataSourceEndpointTracing(
+			ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+		)
+	}
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "grpc.input", ec.spanAttributes[:]...)
@@ -182,14 +190,18 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	sender := &unarySender[R, ResR]{ch: replyCh, span: span}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		var zeroRes ResR
 		return zeroRes, err
 	}
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 	var streamID string
 	if sid, ok := runtime.StreamIdFromContext(handlerCtx); ok {
@@ -206,7 +218,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	if ec.hasResult {
 		result = makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
 		if err := ec.pending.Set(streamID, result); err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			var zeroRes ResR
@@ -225,26 +239,36 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 			ec.pending.Pop(streamID)
 			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		if err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		var zeroRes ResR
 		return zeroRes, err
 	}
-	tracing.SpanEvent(span, "consume_message")
+	if span != nil {
+		span.AddEvent("consume_message")
+	}
 	ec.handler.Eof(handlerCtx, ec.sc, handlerState)
-	tracing.SpanEvent(span, "eof")
+	if span != nil {
+		span.AddEvent("eof")
+	}
 
 	if !ec.hasResult {
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		if err != nil {
@@ -261,14 +285,18 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 
 	select {
 	case res := <-replyCh:
-		tracing.SpanEvent(span, "result_received")
+		if span != nil {
+			span.AddEvent("result_received")
+		}
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
 		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		return res, err
@@ -279,21 +307,29 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		select {
 		case res := <-replyCh:
-			tracing.SpanEvent(span, "result_received")
+			if span != nil {
+				span.AddEvent("result_received")
+			}
 			err = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 			if err != nil {
-				tracing.SpanError(span, err)
+				if span != nil {
+					tracing.SpanError(span, err)
+				}
 			}
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			return res, err
 		default:
-			tracing.SpanError(span, handlerCtx.Err())
 			if span != nil {
-				tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+				tracing.SpanError(span, handlerCtx.Err())
+			}
+			if span != nil {
+				span.AddEvent("context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
 			}
 			err = ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
 			if err != nil {
-				tracing.SpanError(span, err)
+				if span != nil {
+					tracing.SpanError(span, err)
+				}
 			}
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			var zeroRes ResR
@@ -318,14 +354,17 @@ func MakeGRPCNoStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 		return nil, nil, fmt.Errorf("handler is nil for GRPCNoStreamingEndpointConsumer for the stream %q", stream.GetName())
 	}
 	var tr tracing.Tracer
-	if t := env.Tracing(); t != nil {
-		tr = t.Tracer(env.ServiceConfig().Name)
+	tracingEngine := env.Tracing()
+	tracingEnabled := tracingEngine != nil
+	if tracingEngine != nil {
+		tr = tracingEngine.Tracer(env.ServiceConfig().Name)
 	}
 	ec := &noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]{
 		grpcTypedEndpointConsumer: grpcTypedEndpointConsumer[T, R, E]{
 			DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
 			hasResult:                  stream.GetResultStream() != nil,
 			tracer:                     tr,
+			tracingEnabled:             tracingEnabled,
 		},
 		handler: handler,
 	}

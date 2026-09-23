@@ -57,15 +57,17 @@ func (t *delayTask) runNormal() {
 		}
 	}
 	defer t.p.wg.Done()
-	defer t.p.gaugeWaitQueueLength.Dec()
+	if !t.p.metricsDisabled {
+		defer t.p.gaugeWaitQueueLength.Dec()
+	}
 	var startTime time.Time
 	if !t.p.metricsDisabled {
 		startTime = time.Now()
 	}
 	runTask(t.ctx, t.p.environment, "delay", t.fn)
 	t.fn = nil
-	t.p.tasksTotal.Inc(t.ctx)
 	if !t.p.metricsDisabled {
+		t.p.tasksTotal.Inc(t.ctx)
 		t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
 	}
 }
@@ -77,18 +79,22 @@ func (t *delayTask) onCtxDone() {
 
 func (t *delayTask) runCancelled() {
 	defer t.p.wg.Done()
-	defer t.p.gaugeWaitQueueLength.Dec()
+	if !t.p.metricsDisabled {
+		defer t.p.gaugeWaitQueueLength.Dec()
+	}
 	var startTime time.Time
 	if !t.p.metricsDisabled {
 		startTime = time.Now()
 	}
 	runTask(t.ctx, t.p.environment, "delay", t.fn)
 	t.fn = nil
-	t.p.tasksTotal.Inc(t.ctx)
 	if !t.p.metricsDisabled {
+		t.p.tasksTotal.Inc(t.ctx)
 		t.p.executionDuration.Observe(t.ctx, time.Since(startTime).Seconds())
 	}
-	t.p.taskCancelledCounter.Inc(t.ctx)
+	if !t.p.metricsDisabled {
+		t.p.taskCancelledCounter.Inc(t.ctx)
+	}
 }
 
 // DelayPoolImpl schedules tasks via per-task time.AfterFunc timers.
@@ -118,7 +124,7 @@ type DelayPoolImpl struct {
 func makeDelayPool(env environment.ServiceEnvironment) (DelayPool, error) {
 	pool := &DelayPoolImpl{
 		environment:     env,
-		metricsDisabled: env.Metrics() == (metrics.NoopMetricsEngine{}).Metrics(),
+		metricsDisabled: metrics.IsNoop(env.Metrics()),
 	}
 	scope := env.Metrics().Scope("delay_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -165,7 +171,9 @@ func (p *DelayPoolImpl) Delay(ctx context.Context, deadline time.Duration, fn fu
 	p.wg.Add(1)
 	p.mu.Unlock()
 
-	p.gaugeWaitQueueLength.Inc()
+	if !p.metricsDisabled {
+		p.gaugeWaitQueueLength.Inc()
+	}
 
 	// Fast path: run immediately without timer or context registration.
 	// Also covers the case where ctx deadline has already passed (remaining <= 0).
@@ -228,7 +236,9 @@ func (p *DelayPoolImpl) Stop(ctx context.Context) {
 		case <-done:
 		case <-ctx.Done():
 			p.environment.Log().Warn(ctx, "delay pool stopped by timeout", log.Err(ctx.Err()))
-			p.stopTimeoutCounter.Inc(ctx)
+			if !p.metricsDisabled {
+				p.stopTimeoutCounter.Inc(ctx)
+			}
 			// The deadline reports a slow shutdown; it must not detach accepted
 			// callbacks from the graph whose nodes they can still reference.
 			<-done

@@ -7,6 +7,9 @@ import (
 
 func TestNoopMetricsImplementsFullSurface(t *testing.T) {
 	engine := NewNoopMetricsEngine()
+	if engine.GRPCStatsHandler() != nil || engine.GRPCClientHandler() != nil {
+		t.Fatal("noop metrics must not install gRPC stats handlers")
+	}
 	scope := engine.Metrics().Scope("test", Labels{"label": "value"})
 	counter, err := scope.Counter("counter", "help", nil)
 	if err != nil {

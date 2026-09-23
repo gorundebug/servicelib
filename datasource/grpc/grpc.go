@@ -84,6 +84,7 @@ type grpcTypedEndpointConsumer[T, R, E any] struct {
 	sc             StreamContext[T, R, E]
 	hasResult      bool
 	tracer         tracing.Tracer
+	tracingEnabled bool
 	spanAttributes [4]tracing.Attribute
 }
 
@@ -257,10 +258,16 @@ func (s *streamSender[R, ResR]) Send(_ context.Context, value ResR) error {
 	}
 	err := s.sendFn(value)
 	if err != nil {
-		tracing.SpanError(s.span, err)
-		tracing.SpanEvent(s.span, "send.error", tracing.StringAttr("error", err.Error()))
+		if s.span != nil {
+			tracing.SpanError(s.span, err)
+		}
+		if s.span != nil {
+			s.span.AddEvent("send.error", tracing.StringAttr("error", err.Error()))
+		}
 	} else {
-		tracing.SpanEvent(s.span, "send")
+		if s.span != nil {
+			s.span.AddEvent("send")
+		}
 	}
 	return err
 }

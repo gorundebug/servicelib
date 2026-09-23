@@ -188,6 +188,7 @@ type DirectEndpointWorkflowRequest struct {
 	Envelope      EndpointEnvelope         `json:"envelope"`
 	Endpoints     []WorkflowEndpointConfig `json:"endpoints"`
 	RuntimeConfig []byte                   `json:"runtimeConfig"`
+	Telemetry     WorkflowTelemetryPolicy  `json:"telemetry,omitempty"`
 }
 
 type workflowEndpointConfig = WorkflowEndpointConfig
@@ -200,6 +201,7 @@ type workflowSubmissionContext struct {
 	connector     string
 	endpoints     map[int]workflowEndpointConfig
 	runtimeConfig []byte
+	telemetry     WorkflowTelemetryPolicy
 }
 
 type workflowSubmissionContextKey struct{}
@@ -225,6 +227,7 @@ type Connector struct {
 	workers               []worker.Worker
 	endpointRegistrations map[int]endpointRegistration
 	durableEvents         metrics.Int64CounterVec
+	metricsEnabled        bool
 	started               bool
 	admissionStarted      bool
 }
@@ -255,6 +258,7 @@ func MakeConnector(connectorID int, environment runtime.RuntimeEnvironment) (*Co
 		id: connectorID, name: cfg.Name, environment: environment,
 		endpointRegistrations: make(map[int]endpointRegistration),
 		durableEvents:         durableEvents,
+		metricsEnabled:        !metrics.IsNoop(environment.Metrics()),
 	}
 	environment.AddManagedDataConnector(connector)
 	return connector, nil
@@ -265,7 +269,7 @@ func (c *Connector) GetName() string { return c.name }
 
 func (c *Connector) activityDiagnostics(boundary, target string) runtime.DurableCallDiagnostics {
 	return func(ctx context.Context, event runtime.DurableCallEvent, err error) {
-		if c.durableEvents != nil {
+		if c.metricsEnabled && c.durableEvents != nil {
 			c.durableEvents.With(metrics.Labels{
 				"connector": c.name,
 				"boundary":  boundary,
@@ -438,15 +442,19 @@ func executeWorkflowEndpoint(
 	}
 	carrier, _ := workflowCtx.Value(temporalCarrierContextKey{}).(map[string]string)
 	workflowCarrier := make(map[string]string, len(carrier))
-	for _, key := range temporalCarrierKeys {
-		if key == temporalHeaderDeadlineUnixNano {
-			continue
-		}
+	keys := temporalCarrierKeys[:len(temporalCarrierKeys)-1]
+	if request.Telemetry.NoopTracing {
+		keys = temporalNonTracingWorkflowCarrierKeys[:]
+	}
+	for _, key := range keys {
 		if value := carrier[key]; value != "" {
 			workflowCarrier[key] = value
 		}
 	}
-	ctx := propagator.extractWorkflowContext(context.Background(), workflowCarrier)
+	workflowCtx = workflow.WithValue(workflowCtx, temporalCarrierContextKey{}, workflowCarrier)
+	ctx := propagator.extractWorkflowContextWithTracing(
+		context.Background(), workflowCarrier, !request.Telemetry.NoopTracing,
+	)
 	endpointConfigs := make(map[int]workflowEndpointConfig, len(request.Endpoints))
 	for _, endpoint := range request.Endpoints {
 		endpointConfigs[endpoint.ID] = endpoint
@@ -456,6 +464,7 @@ func executeWorkflowEndpoint(
 		connector:     request.ConnectorName,
 		endpoints:     endpointConfigs,
 		runtimeConfig: request.RuntimeConfig,
+		telemetry:     request.Telemetry,
 	})
 	durable := runtime.NewDurableWorkflowContext(
 		envelope.MessageID,
@@ -489,6 +498,7 @@ func executeWorkflowEndpoint(
 				Envelope:      nextEnvelope,
 				Endpoints:     request.Endpoints,
 				RuntimeConfig: request.RuntimeConfig,
+				Telemetry:     request.Telemetry,
 			},
 		)
 	}
@@ -753,17 +763,22 @@ func resolveWorkerStopTimeout(configuredMillis, serviceShutdownMillis int) (time
 }
 
 func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
-	tracingInterceptor, err := sdkotel.NewTracingInterceptor(sdkotel.TracerOptions{
-		TextMapPropagator: otel.GetTextMapPropagator(),
-	})
-	if err != nil {
-		return client.Options{}, fmt.Errorf("create Temporal tracing interceptor for connector %q: %w", c.name, err)
+	tracingEngine := c.environment.Tracing()
+	var tracingInterceptors []interceptor.ClientInterceptor
+	if tracingEngine != nil {
+		tracingInterceptor, err := sdkotel.NewTracingInterceptor(sdkotel.TracerOptions{
+			TextMapPropagator: otel.GetTextMapPropagator(),
+		})
+		if err != nil {
+			return client.Options{}, fmt.Errorf("create Temporal tracing interceptor for connector %q: %w", c.name, err)
+		}
+		tracingInterceptors = append(tracingInterceptors, tracingInterceptor)
 	}
 	options := client.Options{
 		HostPort: cfg.Address, Namespace: cfg.Namespace, Identity: cfg.Identity,
-		Interceptors: []interceptor.ClientInterceptor{tracingInterceptor},
+		Interceptors: tracingInterceptors,
 		ContextPropagators: []workflow.ContextPropagator{
-			temporalContextPropagator{tracing: c.environment.Tracing()},
+			temporalContextPropagator{tracing: tracingEngine},
 		},
 	}
 	metricsHandler, err := sdkMetricsHandler(c.environment)
@@ -881,6 +896,10 @@ func (c *Connector) ensureSchedule(
 			Envelope:      envelope,
 			Endpoints:     endpoints,
 			RuntimeConfig: runtimeSnapshot,
+			Telemetry: WorkflowTelemetryPolicy{
+				NoopMetrics: metrics.IsNoop(c.environment.Metrics()),
+				NoopTracing: c.environment.Tracing() == nil,
+			},
 		}}
 	}
 	overlap := enums.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL
@@ -1032,6 +1051,7 @@ func submitEndpointFromWorkflow(
 			Envelope:      envelope,
 			Endpoints:     workflowEndpointConfigs(state.endpoints),
 			RuntimeConfig: state.runtimeConfig,
+			Telemetry:     state.telemetry,
 		}
 		if err := workflow.ExecuteChildWorkflow(childCtx, cfg.WorkflowType, request).Get(childCtx, &result); err != nil {
 			return EndpointResult{}, fmt.Errorf("execute child Temporal endpoint Workflow %q: %w", cfg.Name, err)
@@ -1108,6 +1128,10 @@ func (c *Connector) SubmitEndpoint(
 			Envelope:      envelope,
 			Endpoints:     endpoints,
 			RuntimeConfig: runtimeSnapshot,
+			Telemetry: WorkflowTelemetryPolicy{
+				NoopMetrics: metrics.IsNoop(c.environment.Metrics()),
+				NoopTracing: c.environment.Tracing() == nil,
+			},
 		}
 	}
 	workflowID := temporalEndpointWorkflowID(c.name, cfg.Name, envelope.MessageID)

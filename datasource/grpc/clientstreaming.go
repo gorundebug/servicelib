@@ -35,12 +35,16 @@ func (s *clientStreamingSender[R, ResR]) Send(_ context.Context, value ResR) err
 	s.once.Do(func() {
 		err = s.sendAndClose(value)
 		if err != nil {
-			tracing.SpanError(s.span, err)
 			if s.span != nil {
-				tracing.SpanEvent(s.span, "send.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(s.span, err)
+			}
+			if s.span != nil {
+				s.span.AddEvent("send.error", tracing.StringAttr("error", err.Error()))
 			}
 		} else {
-			tracing.SpanEvent(s.span, "send")
+			if s.span != nil {
+				s.span.AddEvent("send")
+			}
 		}
 		s.done()
 	})
@@ -84,7 +88,9 @@ func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) SetResultCallback(
 
 func (r *clientStreamingResult[HandlerState, T, ResR, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done_called")
+		if r.span != nil {
+			r.span.AddEvent("done_called")
+		}
 		close(r.doneCh)
 	})
 }
@@ -129,7 +135,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 
 	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
-		tracing.SpanEvent(result.span, "late_result")
+		if result.span != nil {
+			result.span.AddEvent("late_result")
+		}
 		return
 	}
 
@@ -141,7 +149,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 	if !ok || resultCallback == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+			result.span.AddEvent("unknown_message_id", tracing.StringAttr("message_id", messageID))
 		}
 		return
 	}
@@ -153,20 +161,22 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
 			if result.span != nil {
-				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
+				result.span.AddEvent("duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
 	}
 	if result.span != nil {
-		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
+		result.span.AddEvent("result_consumed", tracing.StringAttr("message_id", messageID))
 	}
 }
 
 func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle(ctx context.Context, server ClientStreamingServer[ReqT, ResR]) error {
 	ctx = applyIncomingStreamID(ctx)
-	ctx = runtime.ApplyDataSourceEndpointTracing(
-		ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
-	)
+	if ec.tracingEnabled {
+		ctx = runtime.ApplyDataSourceEndpointTracing(
+			ctx, ec.Endpoint().GetRuntimeEnvironment(), ec.Endpoint().GetID(),
+		)
+	}
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "grpc.input", ec.spanAttributes[:]...)
@@ -175,13 +185,17 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 	var doneCh chan struct{}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		return err
 	}
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
 	var streamID string
@@ -206,7 +220,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		result = makeClientStreamingResult[HandlerState, T, ResR, R, E](handlerState, doneCh, sender, span)
 		sender.done = result.Done
 		if err := ec.pending.Set(streamID, result); err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			return err
@@ -223,7 +239,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		req, recvErr := server.Recv()
 		if errors.Is(recvErr, io.EOF) {
 			if span != nil {
-				tracing.SpanEvent(span, "eof", tracing.Int64Attr("messages_received", int64(msgCount)))
+				span.AddEvent("eof", tracing.Int64Attr("messages_received", int64(msgCount)))
 			}
 			ec.handler.Eof(handlerCtx, ec.sc, handlerState)
 			break
@@ -235,13 +251,17 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 				ec.pending.Pop(streamID)
 				ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 			}
-			tracing.SpanError(span, recvErr)
 			if span != nil {
-				tracing.SpanEvent(span, "recv.error", tracing.StringAttr("error", recvErr.Error()))
+				tracing.SpanError(span, recvErr)
+			}
+			if span != nil {
+				span.AddEvent("recv.error", tracing.StringAttr("error", recvErr.Error()))
 			}
 			endErr := ec.handler.EndRequest(handlerCtx, ec.sc, recvErr, handlerState)
 			if endErr != nil {
-				tracing.SpanError(span, endErr)
+				if span != nil {
+					tracing.SpanError(span, endErr)
+				}
 			}
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 			return endErr
@@ -253,13 +273,17 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 				ec.pending.Pop(streamID)
 				ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 			}
-			tracing.SpanError(span, err)
 			if span != nil {
-				tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+				tracing.SpanError(span, err)
+			}
+			if span != nil {
+				span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 			}
 			endErr := ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			if endErr != nil {
-				tracing.SpanError(span, endErr)
+				if span != nil {
+					tracing.SpanError(span, endErr)
+				}
 			}
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 			return endErr
@@ -272,7 +296,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		sendErr := sender.Send(handlerCtx, zero)
 		endErr := ec.handler.EndRequest(handlerCtx, ec.sc, sendErr, handlerState)
 		if endErr != nil {
-			tracing.SpanError(span, endErr)
+			if span != nil {
+				tracing.SpanError(span, endErr)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 		return endErr
@@ -280,14 +306,18 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 
 	select {
 	case <-doneCh:
-		tracing.SpanEvent(span, "done_received")
+		if span != nil {
+			span.AddEvent("done_received")
+		}
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
 		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		endErr := ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if endErr != nil {
-			tracing.SpanError(span, endErr)
+			if span != nil {
+				tracing.SpanError(span, endErr)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 		return endErr
@@ -299,17 +329,23 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		var endErr error
 		select {
 		case <-doneCh:
-			tracing.SpanEvent(span, "done_received")
+			if span != nil {
+				span.AddEvent("done_received")
+			}
 			endErr = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		default:
-			tracing.SpanError(span, handlerCtx.Err())
 			if span != nil {
-				tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+				tracing.SpanError(span, handlerCtx.Err())
+			}
+			if span != nil {
+				span.AddEvent("context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
 			}
 			endErr = ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
 		}
 		if endErr != nil {
-			tracing.SpanError(span, endErr)
+			if span != nil {
+				tracing.SpanError(span, endErr)
+			}
 		}
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 		return endErr
@@ -332,14 +368,17 @@ func MakeGRPCClientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E a
 		return nil, nil, fmt.Errorf("handler is nil for GRPCClientStreamingEndpointConsumer for the stream %q", stream.GetName())
 	}
 	var tr tracing.Tracer
-	if t := env.Tracing(); t != nil {
-		tr = t.Tracer(env.ServiceConfig().Name)
+	tracingEngine := env.Tracing()
+	tracingEnabled := tracingEngine != nil
+	if tracingEngine != nil {
+		tr = tracingEngine.Tracer(env.ServiceConfig().Name)
 	}
 	ec := &clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]{
 		grpcTypedEndpointConsumer: grpcTypedEndpointConsumer[T, R, E]{
 			DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
 			hasResult:                  stream.GetResultStream() != nil,
 			tracer:                     tr,
+			tracingEnabled:             tracingEnabled,
 		},
 		handler: handler,
 	}

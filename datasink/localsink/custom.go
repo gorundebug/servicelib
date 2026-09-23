@@ -146,17 +146,23 @@ func (ep *typedCustomEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID))
 	}
 	handlerCtx, handlerState := ep.handler.BeginRequest(handlerCtx, stream)
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ep.Endpoint().OnRequestStart(handlerCtx)
 	rs := &collector[R]{consumer: stream.GetErrorStream()}
 	err := ep.handler.ConsumeMessage(handlerCtx, stream, handlerState, value, rs)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 	} else {
-		tracing.SpanEvent(span, "consume_message")
+		if span != nil {
+			span.AddEvent("consume_message")
+		}
 	}
 	ep.handler.EndRequest(handlerCtx, stream, err, handlerState)
 	ep.Endpoint().OnRequestEnd(handlerCtx, startTime, err)

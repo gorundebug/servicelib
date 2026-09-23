@@ -54,6 +54,7 @@ type PriorityTaskPoolImpl struct {
 	gaugeExecutorsBusy      metrics.Int64Gauge
 	tasksTotal              metrics.Int64Counter
 	executionDuration       metrics.Float64Histogram
+	metricsDisabled         bool
 	stopTimeoutCounter      metrics.Int64Counter
 	taskRejectedCounter     metrics.Int64Counter
 	taskExpiredCounter      metrics.Int64Counter
@@ -74,11 +75,12 @@ func makePriorityTaskPool(env environment.ServiceEnvironment, poolConfig *config
 	}
 	pq := make(TaskPriorityQueue, 0, capacity)
 	pool := &PriorityTaskPoolImpl{
-		name:           poolConfig.Name,
-		pq:             &pq,
-		environment:    env,
-		stop:           make(chan struct{}),
-		fallbackConfig: *poolConfig,
+		name:            poolConfig.Name,
+		pq:              &pq,
+		environment:     env,
+		metricsDisabled: metrics.IsNoop(env.Metrics()),
+		stop:            make(chan struct{}),
+		fallbackConfig:  *poolConfig,
 	}
 	scope := env.Metrics().Scope("priority_task_pool", metrics.Labels{
 		"service": env.ServiceConfig().Name,
@@ -173,7 +175,9 @@ func (p *PriorityTaskPoolImpl) GetExecutorsCount() int {
 
 func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn func()) error {
 	if err := ctx.Err(); err != nil {
-		p.taskRejectedCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskRejectedCounter.Inc(ctx)
+		}
 		return err
 	}
 	task := &PriorityTask{
@@ -184,7 +188,9 @@ func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn fun
 	p.lock.Lock()
 	if p.done {
 		p.lock.Unlock()
-		p.taskRejectedCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskRejectedCounter.Inc(ctx)
+		}
 		return ErrPoolStopped
 	}
 	heap.Push(p.pq, task)
@@ -198,11 +204,15 @@ func (p *PriorityTaskPoolImpl) AddTask(ctx context.Context, priority int, fn fun
 		heap.Fix(p.pq, task.priorityIndex)
 		p.lock.Unlock()
 		p.cond.Signal()
-		p.taskExpiredCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.taskExpiredCounter.Inc(ctx)
+		}
 	})
 	p.lock.Unlock()
 	p.cond.Signal()
-	p.gaugeQueueLength.Inc()
+	if !p.metricsDisabled {
+		p.gaugeQueueLength.Inc()
+	}
 	return nil
 }
 
@@ -248,7 +258,9 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 				}
 				pRestart = new(bool)
 				executorsCount = executorsCountNew
-				p.gaugeExecutorsTarget.Set(int64(executorsCount))
+				if !p.metricsDisabled {
+					p.gaugeExecutorsTarget.Set(int64(executorsCount))
+				}
 
 				p.lock.Lock()
 
@@ -261,11 +273,15 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 
 				for i := 0; i < executorsCount; i++ {
 					p.wg.Add(1)
-					p.gaugeExecutorsAllocated.Inc()
+					if !p.metricsDisabled {
+						p.gaugeExecutorsAllocated.Inc()
+					}
 
 					go func(restart *bool) {
 						defer p.wg.Done()
-						defer p.gaugeExecutorsAllocated.Dec()
+						if !p.metricsDisabled {
+							defer p.gaugeExecutorsAllocated.Dec()
+						}
 						for {
 							p.lock.Lock()
 							if *restart {
@@ -284,15 +300,26 @@ func (p *PriorityTaskPoolImpl) Start(ctx context.Context) error {
 							stopFn := task.stopFn
 							p.lock.Unlock()
 							stopFn()
-							p.gaugeQueueLength.Dec()
+							if !p.metricsDisabled {
+								p.gaugeQueueLength.Dec()
+							}
 							func() {
-								p.gaugeExecutorsBusy.Inc()
-								defer p.gaugeExecutorsBusy.Dec()
-								startTime := time.Now()
+								if !p.metricsDisabled {
+									p.gaugeExecutorsBusy.Inc()
+								}
+								if !p.metricsDisabled {
+									defer p.gaugeExecutorsBusy.Dec()
+								}
+								var startTime time.Time
+								if !p.metricsDisabled {
+									startTime = time.Now()
+								}
 								runTask(ctx, p.environment, p.name, task.fn)
 								task.fn = nil
-								p.tasksTotal.Inc(ctx)
-								p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+								if !p.metricsDisabled {
+									p.tasksTotal.Inc(ctx)
+									p.executionDuration.Observe(ctx, time.Since(startTime).Seconds())
+								}
 							}()
 						}
 					}(pRestart)
@@ -340,7 +367,9 @@ func (p *PriorityTaskPoolImpl) Stop(ctx context.Context) {
 		tasksCount := p.pq.Len()
 		p.lock.Unlock()
 		p.environment.Log().Warn(ctx, "priority task pool stopped by timeout", log.Str("pool", p.name), log.Err(ctx.Err()), log.Int("tasks_count", tasksCount))
-		p.stopTimeoutCounter.Inc(ctx)
+		if !p.metricsDisabled {
+			p.stopTimeoutCounter.Inc(ctx)
+		}
 		p.wg.Wait()
 	})
 }

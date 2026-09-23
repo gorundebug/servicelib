@@ -148,9 +148,11 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.endpoint.OnBeginRequestFailed(ctx, err)
 		return
@@ -158,27 +160,35 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	// Keep handlerCtx for returning the response to the parent graph and give
 	// only this network request a fresh stream ID.
 	requestCtx := runtime.WithStreamId(handlerCtx, runtime.NewStreamID())
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 	requester := &Requester{}
 	if err := ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, value, requester); err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "consume_message")
+	if span != nil {
+		span.AddEvent("consume_message")
+	}
 
 	if requester.req == nil {
 		err := fmt.Errorf("no HTTP request set by handler for sink endpoint %q",
 			ec.endpoint.GetName())
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "no_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("no_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
@@ -190,16 +200,18 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 
 	httpResp, err := ec.client.Do(requester.req)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "http_call.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("http_call.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
 	if span != nil {
-		tracing.SpanEvent(span, "http_call", tracing.Int64Attr("status_code", int64(httpResp.StatusCode)))
+		span.AddEvent("http_call", tracing.Int64Attr("status_code", int64(httpResp.StatusCode)))
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -209,15 +221,19 @@ func (ec *netHTTPSinkEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) C
 	}(httpResp.Body)
 
 	if err := ec.handler.HandleResponse(handlerCtx, ec.sc, handlerState, Response{httpResp}); err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "handle_response.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("handle_response.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.endpoint.OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "handle_response")
+	if span != nil {
+		span.AddEvent("handle_response")
+	}
 
 	ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 	ec.endpoint.OnRequestEnd(handlerCtx, startTime, nil)

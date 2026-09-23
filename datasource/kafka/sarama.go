@@ -69,7 +69,19 @@ type ConsumerMessage struct {
 	Offset      int64
 }
 
-func contextFromKafkaHeaders(ctx context.Context, env runtime.RuntimeEnvironment, headers []*kafka.RecordHeader) context.Context {
+func contextFromKafkaHeaders(ctx context.Context, engine tracing.Tracing, headers []*kafka.RecordHeader) context.Context {
+	if engine == nil {
+		var streamID string
+		for _, header := range headers {
+			if header != nil && strings.EqualFold(string(header.Key), "x-stream-id") {
+				streamID = string(header.Value)
+			}
+		}
+		if streamID != "" {
+			return runtime.WithStreamId(ctx, streamID)
+		}
+		return ctx
+	}
 	carrier := make(map[string]string, len(headers))
 	for _, header := range headers {
 		if header == nil {
@@ -84,9 +96,7 @@ func contextFromKafkaHeaders(ctx context.Context, env runtime.RuntimeEnvironment
 	if streamID := carrier["x-stream-id"]; streamID != "" {
 		ctx = runtime.WithStreamId(ctx, streamID)
 	}
-	if engine := env.Tracing(); engine != nil {
-		ctx = engine.Extract(ctx, carrier)
-	}
+	ctx = engine.Extract(ctx, carrier)
 	if tracing.SamplingRequestedByCarrier(carrier) {
 		ctx = tracing.EnableSampling(ctx)
 	}
@@ -142,7 +152,9 @@ func (r *kafkaResult[HandlerState, T, R, E]) SetResultCallback(messageID string,
 
 func (r *kafkaResult[HandlerState, T, R, E]) Done() {
 	r.once.Do(func() {
-		tracing.SpanEvent(r.span, "done_called")
+		if r.span != nil {
+			r.span.AddEvent("done_called")
+		}
 		close(r.doneCh)
 	})
 }
@@ -263,6 +275,7 @@ type saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E any] struct {
 	concCond       *sync.Cond
 	active         int
 	stopped        bool
+	tracingEngine tracing.Tracing
 	tracer         tracing.Tracer
 	spanAttributes [4]tracing.Attribute
 }
@@ -576,10 +589,12 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	defer ec.releaseConcurrency()
 
 	environment := ec.Endpoint().GetRuntimeEnvironment()
-	ctx := contextFromKafkaHeaders(session.Context(), environment, message.Headers)
-	ctx = runtime.ApplyDataSourceEndpointTracing(
-		ctx, environment, ec.Endpoint().GetID(),
-	)
+	ctx := contextFromKafkaHeaders(session.Context(), ec.tracingEngine, message.Headers)
+	if ec.tracingEngine != nil {
+		ctx = runtime.ApplyDataSourceEndpointTracing(
+			ctx, environment, ec.Endpoint().GetID(),
+		)
+	}
 	var span tracing.Span
 	if ec.tracer != nil && tracing.SamplingEnabled(ctx) {
 		ctx, span = ec.tracer.Start(ctx, "kafka.input", ec.spanAttributes[:]...)
@@ -587,14 +602,18 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	}
 	handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 	if err != nil {
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "begin_request.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("begin_request.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.Endpoint().OnBeginRequestFailed(ctx, err)
 		return
 	}
-	tracing.SpanEvent(span, "begin_request")
+	if span != nil {
+		span.AddEvent("begin_request")
+	}
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
 	var streamID string
@@ -615,7 +634,9 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 	}
 	if ec.hasResult {
 		if err = ec.pending.Set(streamID, result); err != nil {
-			tracing.SpanError(span, err)
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 			return
@@ -647,15 +668,19 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 			ec.pending.Pop(streamID)
 			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
-		tracing.SpanError(span, err)
 		if span != nil {
-			tracing.SpanEvent(span, "consume_message.error", tracing.StringAttr("error", err.Error()))
+			tracing.SpanError(span, err)
+		}
+		if span != nil {
+			span.AddEvent("consume_message.error", tracing.StringAttr("error", err.Error()))
 		}
 		ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		return
 	}
-	tracing.SpanEvent(span, "consume_message")
+	if span != nil {
+		span.AddEvent("consume_message")
+	}
 
 	if !ec.hasResult {
 		ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
@@ -665,7 +690,9 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 
 	select {
 	case <-result.doneCh:
-		tracing.SpanEvent(span, "done_received")
+		if span != nil {
+			span.AddEvent("done_received")
+		}
 		result.mu.Lock()
 		defer result.mu.Unlock()
 		ec.pending.Pop(streamID)
@@ -685,13 +712,17 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointReque
 		// simultaneous deadline/cancellation notification.
 		select {
 		case <-result.doneCh:
-			tracing.SpanEvent(span, "done_received")
+			if span != nil {
+				span.AddEvent("done_received")
+			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, nil)
 		default:
-			tracing.SpanError(span, handlerCtx.Err())
 			if span != nil {
-				tracing.SpanEvent(span, "context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
+				tracing.SpanError(span, handlerCtx.Err())
+			}
+			if span != nil {
+				span.AddEvent("context_cancelled", tracing.StringAttr("error", handlerCtx.Err().Error()))
 			}
 			ec.handler.EndRequest(handlerCtx, ec.sc, handlerCtx.Err(), handlerState)
 			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, handlerCtx.Err())
@@ -716,7 +747,9 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) consumeResult
 
 	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
-		tracing.SpanEvent(result.span, "late_result")
+		if result.span != nil {
+			result.span.AddEvent("late_result")
+		}
 		return
 	}
 
@@ -728,7 +761,7 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) consumeResult
 	if !ok || cb == nil {
 		ec.Endpoint().OnUnknownMessageID(ctx, sid.GetID(), messageID)
 		if result.span != nil {
-			tracing.SpanEvent(result.span, "unknown_message_id", tracing.StringAttr("message_id", messageID))
+			result.span.AddEvent("unknown_message_id", tracing.StringAttr("message_id", messageID))
 		}
 		return
 	}
@@ -740,12 +773,12 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) consumeResult
 		if duplicate {
 			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), messageID)
 			if result.span != nil {
-				tracing.SpanEvent(result.span, "duplicate_message_id", tracing.StringAttr("message_id", messageID))
+				result.span.AddEvent("duplicate_message_id", tracing.StringAttr("message_id", messageID))
 			}
 		}
 	}
 	if result.span != nil {
-		tracing.SpanEvent(result.span, "result_consumed", tracing.StringAttr("message_id", messageID))
+		result.span.AddEvent("result_consumed", tracing.StringAttr("message_id", messageID))
 	}
 }
 
@@ -807,14 +840,16 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R, E any](
 	if handler == nil {
 		return nil, fmt.Errorf("handler is nil for kafka endpoint consumer for the stream %q", stream.GetName())
 	}
+	engine := env.Tracing()
 	var tr tracing.Tracer
-	if t := env.Tracing(); t != nil {
-		tr = t.Tracer(env.ServiceConfig().Name)
+	if engine != nil {
+		tr = engine.Tracer(env.ServiceConfig().Name)
 	}
 	endpointConsumer := &saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](endpoint, stream),
 		hasResult:                  stream.GetResultStream() != nil,
 		handler:                    handler,
+		tracingEngine:              engine,
 		tracer:                     tr,
 	}
 	if endpointConsumer.tracer != nil {
