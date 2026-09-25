@@ -78,6 +78,12 @@ func (s *HashMapJoinStorage[K]) rotate(ctx context.Context) {
     s.rotateLock.Lock()
     defer s.rotateLock.Unlock()
 
+    // Timer.Stop does not remove an AfterFunc callback that is already queued.
+    // A callback arriving after Stop must not restart maintenance.
+    if s.stopped {
+        return
+    }
+
     total := len(s.storage1) + len(s.storage2)
     shouldRotate := s.highWaterMark == 0 || total*rotatingMapShrinkFactor < s.highWaterMark
     if total > s.highWaterMark {
@@ -153,16 +159,40 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
             if ttl > 0 {
                 newItem.deadline = time.Now().Add(ttl)
             }
+            // Retire the old generation from both lookup maps. Otherwise an
+            // in-flight callback from storage2 can republish it after the
+            // replacement in storage1 has already completed. Its accepted
+            // expiry callback remains alive and uses identity-checked cleanup.
+            if _, exists := s.storage2[key]; exists {
+                delete(s.storage2, key)
+                if s.metricsEnabled {
+                    s.gaugeCount.Dec()
+                }
+            }
             s.storage1[key] = newItem
             if s.metricsEnabled && item == nil {
                 s.gaugeCount.Inc()
             }
             if ttl > 0 {
-                afterFunc := func() {
+                _, usesContextDeadline := ctx.Deadline()
+                var afterFunc func()
+                afterFunc = func() {
                     newItem.lock.Lock()
                     if newItem.processed {
                         newItem.lock.Unlock()
                         return
+                    }
+                    // Renewal updates deadline under this item lock. A timer
+                    // already queued for the old deadline must wait for the
+                    // renewed one rather than deliver premature expiration.
+                    // Context cancellation/deadline is absolute, not renewable.
+                    if !usesContextDeadline {
+                        if remaining := time.Until(newItem.deadline); remaining > 0 {
+                            timer := time.AfterFunc(remaining, afterFunc)
+                            newItem.stopAfterFunc = timer.Stop
+                            newItem.lock.Unlock()
+                            return
+                        }
                     }
                     newItem.processed = true
                     newItem.lock.Unlock()
@@ -208,19 +238,31 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
                     }
                     s.lock.Lock()
                     defer s.lock.Unlock()
+                    removed := false
                     if inStorage2 {
-                        delete(s.storage2, key)
-                    } else {
+                        if s.storage2[key] == item {
+                            delete(s.storage2, key)
+                            removed = true
+                        }
+                    } else if s.storage1[key] == item {
                         delete(s.storage1, key)
+                        removed = true
                     }
-                    if s.metricsEnabled {
+                    if removed && s.metricsEnabled {
                         s.gaugeCount.Dec()
                     }
                 } else if renewTTL { //Depend on logic: should we extend deadline after change or not
                     s.lock.Lock()
                     defer s.lock.Unlock()
                     if inStorage2 {
+                        if s.storage2[key] != item || (s.storage1[key] != nil && s.storage1[key] != item) {
+                            return true
+                        }
                         delete(s.storage2, key)
+                    } else if s.storage1[key] != item {
+                        // A callback may outlive its logical deadline. Never
+                        // replace the newer group admitted while it ran.
+                        return true
                     }
                     item.deadline = time.Now().Add(ttl)
                     s.storage1[key] = item
@@ -237,10 +279,11 @@ func (s *HashMapJoinStorage[K]) JoinValue(ctx context.Context, key K, index int,
 func (s *HashMapJoinStorage[K]) Start(ctx context.Context) error {
     var called bool
     s.startOnce.Do(func() {
-        s.rotateLock.RLock()
-        isStopped := s.stopped
-        s.rotateLock.RUnlock()
-        if isStopped {
+        // Publish the timer under the same lock used by rotate and Stop.
+        // For a short TTL AfterFunc may otherwise run before assignment.
+        s.rotateLock.Lock()
+        defer s.rotateLock.Unlock()
+        if s.stopped {
             return
         }
         called = true

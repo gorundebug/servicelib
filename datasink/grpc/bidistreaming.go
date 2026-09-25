@@ -13,12 +13,12 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/store"
-	"google.golang.org/grpc/metadata"
 )
 
 // BidiStreamingGRPCStream is the minimal interface satisfied by a gRPC
@@ -42,6 +42,7 @@ type bidiStreamingResult[HandlerState, ReqT, ResR, T, R any] struct {
 	span         tracing.Span
 	doneCh       chan struct{}
 	mu           sync.RWMutex
+	closing      atomic.Bool
 
 	// ready is closed once creation of this entry finishes (successfully or
 	// not). A caller that finds an existing-but-not-yet-ready entry (a
@@ -99,7 +100,8 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 	if !loaded {
 		handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 		if err != nil {
-			ec.pending.Pop(streamID)
+			defer ec.pending.Pop(streamID)
+			result.closing.Store(true)
 			result.err = err
 			close(result.ready)
 			ec.endpoint.OnBeginRequestFailed(ctx, err)
@@ -116,11 +118,12 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 		sid, _ := runtime.StreamIdFromContext(requestCtx)
-		requestCtx = metadata.AppendToOutgoingContext(requestCtx, "x-stream-id", sid.GetID())
+		requestCtx = withOutgoingStreamID(requestCtx, sid.GetID())
 
 		grpcStream, err := ec.clientFn(requestCtx)
 		if err != nil {
-			ec.pending.Pop(streamID)
+			defer ec.pending.Pop(streamID)
+			result.closing.Store(true)
 			result.err = err
 			close(result.ready)
 			if outputSpan != nil {
@@ -148,17 +151,23 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		result.doneCh = doneCh
 		close(result.ready)
 
+		// Also release the close waiter when the peer finishes first. This is
+		// lifecycle cleanup, not a synthetic call to the user's Done method.
+		receiveFinished := make(chan struct{})
 		// Close the send side when Done() is called or the context is cancelled.
 		go func() {
 			select {
 			case <-doneCh:
 			case <-requestCtx.Done():
+			case <-receiveFinished:
 			}
 			_ = grpcStream.CloseSend()
 		}()
 
 		// Receive responses until the server closes the stream.
 		go func() {
+			defer close(receiveFinished)
+			defer ec.pending.Pop(streamID)
 			var recvErr error
 			msgCount := 0
 			for {
@@ -191,9 +200,9 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 				}
 				msgCount++
 			}
+			result.closing.Store(true)
 			result.mu.Lock()
 			defer result.mu.Unlock()
-			ec.pending.Pop(streamID)
 			if recvErr == nil {
 				if outputSpan != nil {
 					outputSpan.AddEvent("done_received")
@@ -207,6 +216,10 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		}()
 	} else {
 		<-result.ready
+		if result.closing.Load() {
+			ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC bidi-streaming session %q is still completing", streamID))
+			return
+		}
 		if result.err != nil {
 			// Creation failed on another goroutine; it has already reported
 			// and cleaned up, so this message is simply dropped.
@@ -214,8 +227,18 @@ func (ec *grpcBidiStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Cons
 		}
 	}
 
+	// Bidi responses may overlap messages, but terminal handlers may not reopen
+	// the same ID. Check before locking to make EndRequest reentrancy safe.
+	if result.closing.Load() {
+		ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC bidi-streaming session %q is still completing", streamID))
+		return
+	}
 	result.mu.RLock()
 	defer result.mu.RUnlock()
+	if result.closing.Load() {
+		ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC bidi-streaming session %q is still completing", streamID))
+		return
+	}
 
 	if res, ld := ec.pending.Get(streamID); !ld || res != result {
 		ec.endpoint.OnLateResult(ctx, streamID)

@@ -240,9 +240,7 @@ func TestJoinValue_NoTTL_CallbackFalse_ItemPersists(t *testing.T) {
 
 // TestJoinValue_NoTTL_GaugeIncrementedOnFirstInsert verifies that the gauge is
 // incremented only when a key is first inserted, not on subsequent calls.
-// NOTE: with TTL=0 the deadline is the zero time, so the existing-item lookup
-// (time.Now().Before(zero)) is always false; subsequent calls overwrite the
-// item in storage without incrementing the gauge again.
+// A zero deadline means no expiry: later values share the same live item.
 func TestJoinValue_NoTTL_GaugeIncrementedOnFirstInsert(t *testing.T) {
 	s, gauge := makeStorage(t, 0, false)
 
@@ -252,12 +250,17 @@ func TestJoinValue_NoTTL_GaugeIncrementedOnFirstInsert(t *testing.T) {
 		t.Fatalf("expected gauge=1 after first insert, got %d", gauge.Value())
 	}
 
-	// Second call: key exists but deadline=zero causes the item to be replaced
-	// without incrementing the gauge.
+	// Second call must preserve the existing value, not just the gauge.
 	s.JoinValue(context.Background(), "k1", 0, "b", func(values [][]interface{}) bool { return false })
 	if gauge.Value() != 1 {
 		t.Fatalf("expected gauge still=1 after second call, got %d", gauge.Value())
 	}
+	s.JoinValue(context.Background(), "k1", 1, "c", func(values [][]interface{}) bool {
+		if len(values) != 2 || len(values[0]) != 2 || values[0][0] != "a" || values[0][1] != "b" || len(values[1]) != 1 || values[1][0] != "c" {
+			t.Errorf("zero TTL lost or reordered accepted values: %v", values)
+		}
+		return true
+	})
 }
 
 // TestJoinValue_NoTTL_MultipleKeys_GaugeTracksAll verifies the gauge counts
@@ -621,55 +624,36 @@ func TestJoinValue_ContextDeadline_UsedInsteadOfConfigTTL(t *testing.T) {
 	}
 }
 
-// TestJoinValue_Storage1ReadPath_CoverLine85 covers the case where an existing
-// item with a future deadline is found in the read lock (lines 85-87). We
-// pre-insert an item whose 1 ns deadline will have just expired by the time
-// JoinValue's inner check runs, allowing the loop to complete naturally.
-func TestJoinValue_Storage1ReadPath_CoverLine85(t *testing.T) {
-	s, _ := makeStorage(t, time.Nanosecond, false)
+// An unexpired item must retain its accumulated values until its callback
+// completes it. No concurrent map mutation or expiry timing is needed here.
+func TestJoinValueRetainsUnexpiredStoredItem(t *testing.T) {
+	s, gauge := makeStorage(t, time.Hour, false)
 	defer s.Stop(context.Background())
 
-	// Pre-insert an item with a 1 ms deadline so the read lock finds it with a
-	// future deadline (line 85-87) for many iterations before it expires.
-	futureDeadline := time.Now().Add(time.Millisecond)
 	s.rotateLock.RLock()
 	s.lock.Lock()
 	s.storage1["k_r85"] = &Item{
-		values:   make([][]interface{}, 1),
-		deadline: futureDeadline,
+		values:   [][]interface{}{{"seed"}},
+		deadline: time.Now().Add(time.Hour),
 	}
 	s.gaugeCount.Inc()
 	s.lock.Unlock()
 	s.rotateLock.RUnlock()
 
-	// The goroutine below removes the item after the deadline so JoinValue can
-	// exit the spin loop by creating a fresh 1 ns item.
-	done := make(chan struct{})
-	go func() {
-		time.Sleep(2 * time.Millisecond) // let the item expire
-		// JoinValue holds rotateLock.RLock() for the duration of the loop,
-		// so rotate() cannot swap storage1. We only need lock.Lock() here.
-		s.lock.Lock()
-		if item, ok := s.storage1["k_r85"]; ok {
-			item.lock.Lock()
-			item.processed = true
-			item.lock.Unlock()
-			delete(s.storage1, "k_r85")
-			s.gaugeCount.Dec()
-		}
-		s.lock.Unlock()
-		close(done)
-	}()
-
 	called := false
 	s.JoinValue(context.Background(), "k_r85", 0, "v", func(values [][]interface{}) bool {
 		called = true
+		if len(values) != 1 || len(values[0]) != 2 || values[0][0] != "seed" || values[0][1] != "v" {
+			t.Errorf("unexpired values were replaced or reordered: %v", values)
+		}
 		return true
 	})
 
-	<-done
 	if !called {
 		t.Fatal("callback not called")
+	}
+	if got := gauge.Value(); got != 0 {
+		t.Fatalf("completed item count = %d, want 0", got)
 	}
 }
 

@@ -189,7 +189,8 @@ func (ep *genericSinkEndpoint[T]) ConsumeMessage(ctx context.Context, _ runtime.
 	return nil
 }
 
-func (ep *genericSinkEndpoint[T]) EndRequest(_ context.Context, _ runtime.Stream, _ error, _ struct{}) {}
+func (ep *genericSinkEndpoint[T]) EndRequest(_ context.Context, _ runtime.Stream, _ error, _ struct{}) {
+}
 
 func makeSink[T any](stream runtime.TypedSinkStream[T, error], col *ResultCollector[T]) error {
 	ep := &genericSinkEndpoint[T]{collector: col}
@@ -278,9 +279,11 @@ func (h *grpcSourceResultHandler) EndRequest(_ context.Context, _ datasourcegrpc
 // grpcSinkHandler sends the pipeline value as a gRPC request.
 // Used for all 4 sink streaming modes.
 type grpcSinkHandler struct {
-	mu        sync.Mutex
-	responses []*Message
-	doneCh    chan struct{}
+	mu           sync.Mutex
+	responses    []*Message
+	doneCh       chan struct{}
+	responseHook func(*Message) error
+	endHook      func(error)
 }
 
 func newGrpcSinkHandler() *grpcSinkHandler {
@@ -299,6 +302,16 @@ func (h *grpcSinkHandler) ConsumeMessage(ctx context.Context, _ datasinkgrpc.Str
 
 func (h *grpcSinkHandler) HandleResponse(_ context.Context, _ datasinkgrpc.StreamContext[*Message, *Message, error], _ struct{}, response *Message) error {
 	h.mu.Lock()
+	hook := h.responseHook
+	h.mu.Unlock()
+	// Never serialize test hooks with the fixture mutex: ordering must come
+	// from the runtime, not from this response recorder.
+	if hook != nil {
+		if err := hook(response); err != nil {
+			return err
+		}
+	}
+	h.mu.Lock()
 	h.responses = append(h.responses, response)
 	h.mu.Unlock()
 	select {
@@ -308,7 +321,20 @@ func (h *grpcSinkHandler) HandleResponse(_ context.Context, _ datasinkgrpc.Strea
 	return nil
 }
 
-func (h *grpcSinkHandler) EndRequest(_ context.Context, _ datasinkgrpc.StreamContext[*Message, *Message, error], _ error, _ struct{}) {
+func (h *grpcSinkHandler) EndRequest(_ context.Context, _ datasinkgrpc.StreamContext[*Message, *Message, error], err error, _ struct{}) {
+	h.mu.Lock()
+	hook := h.endHook
+	h.mu.Unlock()
+	if hook != nil {
+		hook(err)
+	}
+}
+
+func (h *grpcSinkHandler) SetLifecycleHooks(response func(*Message) error, end func(error)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.responseHook = response
+	h.endHook = end
 }
 
 func (h *grpcSinkHandler) Responses() []*Message {
@@ -632,10 +658,10 @@ func (m *MockServerStreamingServer) Sent() []*Message {
 
 // MockClientStreamingServer provides Recv() messages to a client-streaming source handler.
 type MockClientStreamingServer struct {
-	mu      sync.Mutex
-	msgs    []*Message
-	idx     int
-	closed  *Message
+	mu     sync.Mutex
+	msgs   []*Message
+	idx    int
+	closed *Message
 }
 
 func NewMockClientStreamingServer(msgs []*Message) *MockClientStreamingServer {

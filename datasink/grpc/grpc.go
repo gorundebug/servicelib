@@ -17,9 +17,21 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
+	"google.golang.org/grpc/metadata"
 )
 
 const pendingRotationInterval = 30 * time.Second
+
+// withOutgoingStreamID replaces only the transport request ID. Metadata
+// returned by FromOutgoingContext is a copy, so the caller remains unchanged.
+func withOutgoingStreamID(ctx context.Context, streamID string) context.Context {
+	md, _ := metadata.FromOutgoingContext(ctx)
+	if md == nil {
+		md = metadata.MD{}
+	}
+	md.Set("x-stream-id", streamID)
+	return metadata.NewOutgoingContext(ctx, md)
+}
 
 // Sender allows the handler to send a request to the gRPC stream.
 // For bidi and client streaming Send goes directly to the gRPC stream;
@@ -78,6 +90,11 @@ type StreamContext[T, R, E any] = runtime.SinkStreamContext[T, R, E]
 // EndRequest finalises the stream after all responses have been received (or on
 // error). Its error argument is the first non-nil error encountered; nil on the
 // happy path. Unlike gRPC source handlers, EndRequest does not return an error.
+// Client/bidi streaming reserve the stream ID until terminal handlers finish.
+// Consume on an ID that is completing is rejected via OnBeginRequestFailed;
+// it does not start a new RPC or call EndRequest again. An open bidi RPC still
+// accepts messages concurrently with HandleResponse. The ID can be reused
+// after completion; no completed-session history is retained.
 //
 // Thread safety: BeginRequest, ConsumeMessage, and EndRequest are called
 // sequentially per stream. HandleResponse may be called concurrently with

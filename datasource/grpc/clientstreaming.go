@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorundebug/servicelib/datasource/internal/callbackstore"
 	"github.com/gorundebug/servicelib/runtime"
@@ -59,6 +60,7 @@ type clientStreamingResult[HandlerState, T, ResR, R, E any] struct {
 	span               tracing.Span
 	doneCh             chan struct{}
 	mu                 sync.RWMutex
+	closed             atomic.Bool
 	cbMu               sync.Mutex
 	messageCallbackMap callbackstore.Store[ResultCallback[HandlerState, T, ResR, R, E]]
 }
@@ -103,11 +105,9 @@ type clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any] stru
 }
 
 func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) Start(ctx context.Context) error {
-	if ec.hasResult {
-		ec.pending = store.MakeRotatingMap[string, *clientStreamingResult[HandlerState, T, ResR, R, E]](pendingRotationInterval)
-		if err := ec.pending.Start(ctx); err != nil {
-			return err
-		}
+	ec.pending = store.MakeRotatingMap[string, *clientStreamingResult[HandlerState, T, ResR, R, E]](pendingRotationInterval)
+	if err := ec.pending.Start(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -125,7 +125,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 		return
 	}
 	result, loaded := ec.pending.Get(sid.GetID())
-	if !loaded {
+	if !loaded || !ec.hasResult || result.closed.Load() {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
 		return
 	}
@@ -133,7 +133,7 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) co
 	result.mu.RLock()
 	defer result.mu.RUnlock()
 
-	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
+	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result || result.closed.Load() {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
 		if result.span != nil {
 			result.span.AddEvent("late_result")
@@ -213,21 +213,33 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		sendAndClose: server.SendAndClose,
 		span:         span,
 	}
-	var result *clientStreamingResult[HandlerState, T, ResR, R, E]
-	var resultCtx ResultContext[HandlerState, T, ResR, R, E]
 	if ec.hasResult {
 		doneCh = make(chan struct{})
-		result = makeClientStreamingResult[HandlerState, T, ResR, R, E](handlerState, doneCh, sender, span)
-		sender.done = result.Done
-		if err := ec.pending.Set(streamID, result); err != nil {
-			if span != nil {
-				tracing.SpanError(span, err)
-			}
-			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
-			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
-			return err
+	}
+	result := makeClientStreamingResult[HandlerState, T, ResR, R, E](handlerState, doneCh, sender, span)
+	if err := ec.pending.Set(streamID, result); err != nil {
+		ec.Endpoint().OnBeginRequestFailed(handlerCtx, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+			span.AddEvent("request_rejected", tracing.StringAttr("error", err.Error()))
 		}
+		_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+		return err
+	}
+	// Reserve the ID through EndRequest, even without a result stream.
+	// Closing result delivery separately prevents reentrant late callbacks.
+	defer func() {
+		result.closed.Store(true)
+		ec.pending.Pop(streamID)
+		if ec.hasResult {
+			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
+		}
+	}()
+	var resultCtx ResultContext[HandlerState, T, ResR, R, E]
+	if ec.hasResult {
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
+		sender.done = result.Done
 		resultCtx = result
 	} else {
 		sender.done = func() {}
@@ -246,10 +258,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		}
 		if recvErr != nil {
 			if ec.hasResult {
+				result.closed.Store(true)
 				result.mu.Lock()
 				defer result.mu.Unlock()
-				ec.pending.Pop(streamID)
-				ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 			}
 			if span != nil {
 				tracing.SpanError(span, recvErr)
@@ -268,10 +279,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		}
 		if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, resultCtx, sender); err != nil {
 			if ec.hasResult {
+				result.closed.Store(true)
 				result.mu.Lock()
 				defer result.mu.Unlock()
-				ec.pending.Pop(streamID)
-				ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 			}
 			if span != nil {
 				tracing.SpanError(span, err)
@@ -309,10 +319,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		if span != nil {
 			span.AddEvent("done_received")
 		}
+		result.closed.Store(true)
 		result.mu.Lock()
 		defer result.mu.Unlock()
-		ec.pending.Pop(streamID)
-		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		endErr := ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if endErr != nil {
 			if span != nil {
@@ -322,10 +331,9 @@ func (ec *clientStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) ha
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, endErr)
 		return endErr
 	case <-handlerCtx.Done():
+		result.closed.Store(true)
 		result.mu.Lock()
 		defer result.mu.Unlock()
-		ec.pending.Pop(streamID)
-		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		var endErr error
 		select {
 		case <-doneCh:

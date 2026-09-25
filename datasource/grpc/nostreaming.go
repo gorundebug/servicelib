@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorundebug/servicelib/datasource/internal/callbackstore"
 	"github.com/gorundebug/servicelib/runtime"
@@ -51,6 +52,7 @@ type noStreamingResult[HandlerState, T, ResR, R, E any] struct {
 	sender             *unarySender[R, ResR]
 	span               tracing.Span
 	mu                 sync.RWMutex
+	closed             atomic.Bool
 	cbMu               sync.Mutex
 	messageCallbackMap callbackstore.Store[ResultCallback[HandlerState, T, ResR, R, E]]
 }
@@ -98,11 +100,9 @@ type noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
 }
 
 func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) Start(ctx context.Context) error {
-	if ec.hasResult {
-		ec.pending = store.MakeRotatingMap[string, *noStreamingResult[HandlerState, T, ResR, R, E]](pendingRotationInterval)
-		if err := ec.pending.Start(ctx); err != nil {
-			return err
-		}
+	ec.pending = store.MakeRotatingMap[string, *noStreamingResult[HandlerState, T, ResR, R, E]](pendingRotationInterval)
+	if err := ec.pending.Start(ctx); err != nil {
+		return err
 	}
 	return nil
 }
@@ -120,7 +120,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 		return
 	}
 	result, loaded := ec.pending.Get(sid.GetID())
-	if !loaded {
+	if !loaded || !ec.hasResult || result.closed.Load() {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
 		return
 	}
@@ -128,7 +128,7 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) consum
 	result.mu.RLock()
 	defer result.mu.RUnlock()
 
-	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result {
+	if res, ld := ec.pending.Get(sid.GetID()); !ld || res != result || result.closed.Load() {
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
 		if result.span != nil {
 			result.span.AddEvent("late_result")
@@ -213,19 +213,29 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 	if span != nil {
 		tracing.SpanAttrs(span, tracing.StringAttr("stream_id", streamID), tracing.BoolAttr("has_result", ec.hasResult))
 	}
-	var result *noStreamingResult[HandlerState, T, ResR, R, E]
+	result := makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
+	if err := ec.pending.Set(streamID, result); err != nil {
+		ec.Endpoint().OnBeginRequestFailed(handlerCtx, err)
+		if span != nil {
+			tracing.SpanError(span, err)
+			span.AddEvent("request_rejected", tracing.StringAttr("error", err.Error()))
+		}
+		_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
+		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
+		var zeroRes ResR
+		return zeroRes, err
+	}
+	// Reserve the ID through EndRequest, even without a result stream.
+	// Closing result delivery separately prevents reentrant late callbacks.
+	defer func() {
+		result.closed.Store(true)
+		ec.pending.Pop(streamID)
+		if ec.hasResult {
+			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
+		}
+	}()
 	var resultCtx ResultContext[HandlerState, T, ResR, R, E]
 	if ec.hasResult {
-		result = makeNoStreamingResult[HandlerState, T, ResR, R, E](handlerState, sender, span)
-		if err := ec.pending.Set(streamID, result); err != nil {
-			if span != nil {
-				tracing.SpanError(span, err)
-			}
-			_ = ec.handler.EndRequest(handlerCtx, ec.sc, err, handlerState)
-			ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
-			var zeroRes ResR
-			return zeroRes, err
-		}
 		ec.Endpoint().OnPendingAdd(handlerCtx, streamID)
 		resultCtx = result
 	} else {
@@ -234,10 +244,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 
 	if handlerCtx, err = ec.handler.ConsumeMessage(handlerCtx, ec.sc, handlerState, req, resultCtx, sender); err != nil {
 		if ec.hasResult {
+			result.closed.Store(true)
 			result.mu.Lock()
 			defer result.mu.Unlock()
-			ec.pending.Pop(streamID)
-			ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		}
 		if span != nil {
 			tracing.SpanError(span, err)
@@ -288,10 +297,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 		if span != nil {
 			span.AddEvent("result_received")
 		}
+		result.closed.Store(true)
 		result.mu.Lock()
 		defer result.mu.Unlock()
-		ec.pending.Pop(streamID)
-		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		err = ec.handler.EndRequest(handlerCtx, ec.sc, nil, handlerState)
 		if err != nil {
 			if span != nil {
@@ -301,10 +309,9 @@ func (ec *noStreamingEndpointConsumer[HandlerState, ReqT, ResR, T, R, E]) handle
 		ec.Endpoint().OnRequestEnd(handlerCtx, startTime, err)
 		return res, err
 	case <-handlerCtx.Done():
+		result.closed.Store(true)
 		result.mu.Lock()
 		defer result.mu.Unlock()
-		ec.pending.Pop(streamID)
-		ec.Endpoint().OnPendingRemove(handlerCtx, streamID)
 		select {
 		case res := <-replyCh:
 			if span != nil {

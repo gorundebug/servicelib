@@ -16,7 +16,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
-	"google.golang.org/grpc/metadata"
 )
 
 // ServerStreamingGRPCStream is the minimal interface satisfied by a gRPC
@@ -73,7 +72,7 @@ func (ec *grpcServerStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 	}
 
 	sid, _ := runtime.StreamIdFromContext(requestCtx)
-	requestCtx = metadata.AppendToOutgoingContext(requestCtx, "x-stream-id", sid.GetID())
+	requestCtx = withOutgoingStreamID(requestCtx, sid.GetID())
 
 	grpcStream, err := ec.clientFn(requestCtx, sender.req)
 	if err != nil {

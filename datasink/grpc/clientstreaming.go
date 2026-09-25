@@ -11,12 +11,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"github.com/gorundebug/servicelib/runtime/store"
-	"google.golang.org/grpc/metadata"
 )
 
 // ClientStreamingGRPCStream is the minimal interface satisfied by a gRPC
@@ -39,6 +39,7 @@ type clientStreamingResult[HandlerState, ReqT, ResR, T, R any] struct {
 	span         tracing.Span
 	doneCh       chan struct{}
 	mu           sync.RWMutex
+	closing      atomic.Bool
 
 	// ready is closed once creation of this entry finishes (successfully or
 	// not). A caller that finds an existing-but-not-yet-ready entry (a
@@ -97,7 +98,8 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 
 		handlerCtx, handlerState, err := ec.handler.BeginRequest(ctx, ec.sc)
 		if err != nil {
-			ec.pending.Pop(streamID)
+			defer ec.pending.Pop(streamID)
+			result.closing.Store(true)
 			result.err = err
 			close(result.ready)
 			ec.endpoint.OnBeginRequestFailed(ctx, err)
@@ -114,11 +116,12 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		startTime := ec.endpoint.OnRequestStart(requestCtx)
 
 		sid, _ := runtime.StreamIdFromContext(requestCtx)
-		requestCtx = metadata.AppendToOutgoingContext(requestCtx, "x-stream-id", sid.GetID())
+		requestCtx = withOutgoingStreamID(requestCtx, sid.GetID())
 
 		grpcStream, err := ec.clientFn(requestCtx)
 		if err != nil {
-			ec.pending.Pop(streamID)
+			defer ec.pending.Pop(streamID)
+			result.closing.Store(true)
 			result.err = err
 			close(result.ready)
 			if outputSpan != nil {
@@ -148,12 +151,14 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 
 		// Wait for Done() or context cancellation, then close and receive the response.
 		go func() {
+			// Reserve the ID through response delivery, EndRequest and metrics.
+			defer ec.pending.Pop(streamID)
 			select {
 			case <-doneCh:
 			case <-requestCtx.Done():
+				result.closing.Store(true)
 				result.mu.Lock()
 				defer result.mu.Unlock()
-				ec.pending.Pop(streamID)
 				if outputSpan != nil {
 					tracing.SpanError(outputSpan, requestCtx.Err())
 				}
@@ -168,11 +173,11 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 				return
 			}
 
+			result.closing.Store(true)
 			res, err := grpcStream.CloseAndRecv()
 
 			result.mu.Lock()
 			defer result.mu.Unlock()
-			ec.pending.Pop(streamID)
 
 			if err != nil {
 				if outputSpan != nil {
@@ -216,6 +221,10 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		}()
 	} else {
 		<-result.ready
+		if result.closing.Load() {
+			ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC client-streaming session %q is still completing", streamID))
+			return
+		}
 		if result.err != nil {
 			// Creation failed on another goroutine; it has already reported
 			// and cleaned up, so this message is simply dropped.
@@ -223,8 +232,17 @@ func (ec *grpcClientStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Co
 		}
 	}
 
+	// Check before locking as a callback may reenter Consume on the same ID.
+	if result.closing.Load() {
+		ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC client-streaming session %q is still completing", streamID))
+		return
+	}
 	result.mu.RLock()
 	defer result.mu.RUnlock()
+	if result.closing.Load() {
+		ec.endpoint.OnBeginRequestFailed(ctx, fmt.Errorf("gRPC client-streaming session %q is still completing", streamID))
+		return
+	}
 
 	if res, ld := ec.pending.Get(streamID); !ld || res != result {
 		ec.endpoint.OnLateResult(ctx, streamID)

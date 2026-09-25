@@ -14,7 +14,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
-	"google.golang.org/grpc/metadata"
 )
 
 type grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E any] struct {
@@ -65,7 +64,7 @@ func (ec *grpcNoStreamingSinkConsumer[HandlerState, ReqT, ResR, T, R, E]) Consum
 	}
 
 	sid, _ := runtime.StreamIdFromContext(requestCtx)
-	requestCtx = metadata.AppendToOutgoingContext(requestCtx, "x-stream-id", sid.GetID())
+	requestCtx = withOutgoingStreamID(requestCtx, sid.GetID())
 
 	res, err := ec.clientFn(requestCtx, sender.req)
 	if err != nil {
