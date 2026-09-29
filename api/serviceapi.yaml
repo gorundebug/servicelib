@@ -94,7 +94,7 @@ paths:
                       type: 1
                       goImplementation: net/http
                       cppUserverImplementation: userver/http
-                      cppBoostImplementation: boost/beast-http
+                      cppCoroImplementation: boost/beast-http
                       pythonImplementation: aiohttp
                       typeScriptImplementation: node/http
                   endpoints:
@@ -208,15 +208,15 @@ components:
     ProgrammingLanguage:
       type: integer
       description: Target programming language for code generation.
-      enum: [ 0, 1, 2, 3, 4, 5, 6 ]
+      enum: [ 0, 1, 2, 3, 4, 6, 7 ]
       x-enum-varnames:
         - Undefined
         - GoLang
         - CppUserver
         - Python
         - Rust
-        - CppBoost
         - TypeScript
+        - CppCoro
 
     ProjectSettings:
       type: object
@@ -752,7 +752,7 @@ components:
         - `net/http`: Go standard library HTTP
         - `function`: in-process custom connector (no network)
         - `IBM/Sarama`: Sarama Kafka client
-        - `google/grpc`: official gRPC-Go library
+        - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
         - `userver/http`: userver HTTP
         - `userver/grpc`: userver gRPC
         - `userver/kafka`: userver Kafka
@@ -855,9 +855,9 @@ components:
         cppUserverImplementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
           description: Implementation used when generating a C++/userver service.
-        cppBoostImplementation:
+        cppCoroImplementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a C++/Boost.Asio service.
+          description: Implementation used when generating a C++ coroutine service with a shared HTTP/gRPC event loop.
         pythonImplementation:
           $ref: '#/components/schemas/DataConnectorImplementation'
           description: Implementation used when generating a Python service.

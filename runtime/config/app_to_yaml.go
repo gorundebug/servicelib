@@ -294,8 +294,8 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.CppUserverImplementation != nil {
 				dcObj["cppUserverImplementation"] = string(*dc.CppUserverImplementation)
 			}
-			if dc.CppBoostImplementation != nil {
-				dcObj["cppBoostImplementation"] = string(*dc.CppBoostImplementation)
+			if dc.CppCoroImplementation != nil {
+				dcObj["cppCoroImplementation"] = string(*dc.CppCoroImplementation)
 			}
 			if dc.PythonImplementation != nil {
 				dcObj["pythonImplementation"] = string(*dc.PythonImplementation)

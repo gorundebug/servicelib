@@ -180,7 +180,7 @@ const (
 
 // Defines values for ProgrammingLanguage.
 const (
-	ProgrammingLanguageCppBoost   ProgrammingLanguage = 5
+	ProgrammingLanguageCppCoro    ProgrammingLanguage = 7
 	ProgrammingLanguageCppUserver ProgrammingLanguage = 2
 	ProgrammingLanguageGoLang     ProgrammingLanguage = 1
 	ProgrammingLanguagePython     ProgrammingLanguage = 3
@@ -274,11 +274,11 @@ type DataConnector struct {
 	// ConnectionsCount Number of independent transport connections used by a gRPC sink connector.
 	ConnectionsCount *int `json:"connectionsCount,omitempty"`
 
-	// CppBoostImplementation The specific library used to implement a data connector.
+	// CppCoroImplementation The specific library used to implement a data connector.
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -294,13 +294,13 @@ type DataConnector struct {
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
 	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	CppBoostImplementation *DataConnectorImplementation `json:"cppBoostImplementation,omitempty"`
+	CppCoroImplementation *DataConnectorImplementation `json:"cppCoroImplementation,omitempty"`
 
 	// CppUserverImplementation The specific library used to implement a data connector.
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -325,7 +325,7 @@ type DataConnector struct {
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -356,7 +356,7 @@ type DataConnector struct {
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -395,7 +395,7 @@ type DataConnector struct {
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -417,7 +417,7 @@ type DataConnector struct {
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -469,7 +469,7 @@ type DataConnector struct {
 	// - `net/http`: Go standard library HTTP
 	// - `function`: in-process custom connector (no network)
 	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC-Go library
+	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 	// - `userver/http`: userver HTTP
 	// - `userver/grpc`: userver gRPC
 	// - `userver/kafka`: userver Kafka
@@ -511,7 +511,7 @@ type DataConnector struct {
 // - `net/http`: Go standard library HTTP
 // - `function`: in-process custom connector (no network)
 // - `IBM/Sarama`: Sarama Kafka client
-// - `google/grpc`: official gRPC-Go library
+// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
 // - `userver/http`: userver HTTP
 // - `userver/grpc`: userver gRPC
 // - `userver/kafka`: userver Kafka

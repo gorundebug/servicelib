@@ -9,8 +9,8 @@ func TestCppProgrammingLanguagesHaveStableDistinctValues(t *testing.T) {
 	if ProgrammingLanguageCppUserver != ProgrammingLanguage(2) {
 		t.Fatalf("CppUserver = %d, want stable value 2", ProgrammingLanguageCppUserver)
 	}
-	if ProgrammingLanguageCppBoost != ProgrammingLanguage(5) {
-		t.Fatalf("CppBoost = %d, want value 5", ProgrammingLanguageCppBoost)
+	if ProgrammingLanguageCppCoro != ProgrammingLanguage(7) {
+		t.Fatalf("CppCoro = %d, want value 7", ProgrammingLanguageCppCoro)
 	}
 }
 
@@ -22,10 +22,10 @@ func TestTypeScriptProgrammingLanguageHasStableValue(t *testing.T) {
 
 func TestCppConnectorImplementationsSerializeIndependently(t *testing.T) {
 	userver := DataConnectorImplementationUserverHTTP
-	boost := DataConnectorImplementationBoostBeastHTTP
+	coro := DataConnectorImplementationGoogleGRPC
 	encoded, err := json.Marshal(DataConnector{
 		CppUserverImplementation: &userver,
-		CppBoostImplementation:   &boost,
+		CppCoroImplementation:    &coro,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,11 +38,14 @@ func TestCppConnectorImplementationsSerializeIndependently(t *testing.T) {
 	if _, ok := fields["cppUserverImplementation"]; !ok {
 		t.Fatal("cppUserverImplementation is absent")
 	}
-	if _, ok := fields["cppBoostImplementation"]; !ok {
-		t.Fatal("cppBoostImplementation is absent")
+	if _, ok := fields["cppBoostImplementation"]; ok {
+		t.Fatal("retired cppBoostImplementation must not be serialized")
 	}
 	if _, ok := fields["cppImplementation"]; ok {
 		t.Fatal("legacy cppImplementation must not be serialized")
+	}
+	if got := string(fields["cppCoroImplementation"]); got != `"google/grpc"` {
+		t.Fatalf("cppCoroImplementation = %s, want google/grpc", got)
 	}
 }
 
