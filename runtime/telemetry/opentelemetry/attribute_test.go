@@ -4,8 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 var convertedAttribute attribute.KeyValue

@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gorundebug/servicelib/runtime/config"
 )
 
 func TestStatusPageRefreshesLiveCounters(t *testing.T) {

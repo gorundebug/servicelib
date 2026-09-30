@@ -13,12 +13,13 @@ package pool
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/gorundebug/servicelib/runtime/environment"
 	envlog "github.com/gorundebug/servicelib/runtime/environment/log"
 	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/gorundebug/servicelib/runtime/testmetrics"
-	"github.com/stretchr/testify/require"
 )
 
 // mockServiceEnv is a minimal ServiceEnvironment that only supplies Metrics and

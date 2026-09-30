@@ -13,10 +13,11 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gorundebug/servicelib/api"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
+
+	"github.com/gorundebug/servicelib/api"
 )
 
 var (

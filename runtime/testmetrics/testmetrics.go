@@ -30,8 +30,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"google.golang.org/grpc/stats"
+
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 // ── TestInt64Counter ──────────────────────────────────────────────────────────

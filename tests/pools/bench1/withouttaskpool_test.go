@@ -8,11 +8,12 @@
 package bench1
 
 import (
-	"github.com/gorundebug/servicelib/tests/mockservice"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/gorundebug/servicelib/tests/mockservice"
 )
 
 func TestMain(m *testing.M) {

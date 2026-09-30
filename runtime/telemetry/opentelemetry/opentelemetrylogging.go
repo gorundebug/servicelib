@@ -12,12 +12,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gorundebug/servicelib/runtime/environment"
-	envlog "github.com/gorundebug/servicelib/runtime/environment/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+
+	"github.com/gorundebug/servicelib/runtime/environment"
+	envlog "github.com/gorundebug/servicelib/runtime/environment/log"
 )
 
 // ── otelLogger ────────────────────────────────────────────────────────────────

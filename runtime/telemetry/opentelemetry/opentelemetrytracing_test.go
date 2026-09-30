@@ -13,13 +13,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gorundebug/servicelib/runtime/contextvalue"
-	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+
+	"github.com/gorundebug/servicelib/runtime/contextvalue"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 func TestTracingCarrierRoundTrip(t *testing.T) {

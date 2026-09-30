@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gorundebug/servicelib/runtime"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 func TestOutgoingRPCMetadataContainsOnlyFreshRequestID(t *testing.T) {

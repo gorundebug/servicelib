@@ -16,8 +16,9 @@ import (
 	"net/http"
 	"reflect"
 	"time"
-
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
@@ -29,7 +30,6 @@ import (
 	"github.com/gorundebug/servicelib/runtime/serde"
 	"github.com/gorundebug/servicelib/runtime/store"
 	"github.com/gorundebug/servicelib/runtime/testmetrics"
-	"github.com/stretchr/testify/require"
 )
 
 // ── minimal config ───────────────────────────────────────────────���────────────

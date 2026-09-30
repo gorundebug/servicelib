@@ -16,9 +16,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorundebug/servicelib/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gorundebug/servicelib/api"
 )
 
 // appToYamlOnlyKeys are string literals used as map keys in app_to_yaml.go

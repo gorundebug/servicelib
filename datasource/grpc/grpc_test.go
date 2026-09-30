@@ -11,8 +11,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gorundebug/servicelib/runtime"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 func TestApplyIncomingStreamID(t *testing.T) {

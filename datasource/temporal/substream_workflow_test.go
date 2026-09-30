@@ -7,9 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorundebug/servicelib/operators"
-	"github.com/gorundebug/servicelib/runtime"
-	"github.com/gorundebug/servicelib/runtime/config"
 	"github.com/stretchr/testify/require"
 	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -22,6 +19,10 @@ import (
 	"go.temporal.io/sdk/workflow"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/gorundebug/servicelib/operators"
+	"github.com/gorundebug/servicelib/runtime"
+	"github.com/gorundebug/servicelib/runtime/config"
 )
 
 type workflowSubStreamTestConfig struct {

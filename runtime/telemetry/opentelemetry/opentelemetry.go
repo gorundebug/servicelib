@@ -17,8 +17,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -31,6 +29,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc/stats"
+
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 func metricName(opts metrics.Opts) string {

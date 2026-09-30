@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorundebug/servicelib/runtime"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 type closeOrderRPC struct{ entered chan struct{} }

@@ -16,8 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorundebug/servicelib/tests/mockservice"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gorundebug/servicelib/tests/mockservice"
 )
 
 var testEnv *mockservice.TestEnv

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorundebug/servicelib/runtime"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 // The peer may finish an RPC before the caller invokes Done. A completed RPC

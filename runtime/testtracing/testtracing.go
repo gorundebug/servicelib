@@ -25,8 +25,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"google.golang.org/grpc/stats"
+
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 // RecordedSpan holds the data captured when a span ends.

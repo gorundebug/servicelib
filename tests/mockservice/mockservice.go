@@ -18,7 +18,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
 	"net/http"
 
 	"github.com/gorundebug/servicelib/datasink"

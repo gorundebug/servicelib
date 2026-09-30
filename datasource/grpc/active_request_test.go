@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorundebug/servicelib/runtime"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/gorundebug/servicelib/runtime"
 )
 
 type activeRequestEndpoint struct {

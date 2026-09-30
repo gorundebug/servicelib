@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/gorundebug/servicelib/api"
-
 	cfg "github.com/gorundebug/servicelib/runtime/config"
 )
 

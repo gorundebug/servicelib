@@ -10,8 +10,9 @@ package runtime
 import (
 	"testing"
 
-	"github.com/gorundebug/servicelib/api"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gorundebug/servicelib/api"
 )
 
 func TestDataConnectorProtocol(t *testing.T) {

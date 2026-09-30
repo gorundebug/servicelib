@@ -3,9 +3,10 @@ package config
 import (
 	"testing"
 
-	"github.com/gorundebug/servicelib/api"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/gorundebug/servicelib/api"
 )
 
 func TestComponentDefinitionSurvivesRuntimeAPIAndYAML(t *testing.T) {

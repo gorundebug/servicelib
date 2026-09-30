@@ -14,9 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorundebug/servicelib/runtime/contextvalue"
-	"github.com/gorundebug/servicelib/runtime/environment"
-	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -31,6 +28,10 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+
+	"github.com/gorundebug/servicelib/runtime/contextvalue"
+	"github.com/gorundebug/servicelib/runtime/environment"
+	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
 // ── attribute helpers ─────────────────────────────────────────────────────────

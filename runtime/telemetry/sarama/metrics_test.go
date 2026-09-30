@@ -3,8 +3,9 @@ package sarama
 import (
 	"testing"
 
-	envmetrics "github.com/gorundebug/servicelib/runtime/environment/metrics"
 	"github.com/stretchr/testify/require"
+
+	envmetrics "github.com/gorundebug/servicelib/runtime/environment/metrics"
 )
 
 type fakeRegistry map[string]interface{}
