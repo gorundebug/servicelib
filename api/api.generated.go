@@ -274,74 +274,8 @@ type DataConnector struct {
 	// ConnectionsCount Number of independent transport connections used by a gRPC sink connector.
 	ConnectionsCount *int `json:"connectionsCount,omitempty"`
 
-	// CppCoroImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	CppCoroImplementation *DataConnectorImplementation `json:"cppCoroImplementation,omitempty"`
-
-	// CppUserverImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	CppUserverImplementation *DataConnectorImplementation `json:"cppUserverImplementation,omitempty"`
-
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
 	DialTimeout *float32 `json:"dialTimeout,omitempty"`
-
-	// GoImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	GoImplementation *DataConnectorImplementation `json:"goImplementation,omitempty"`
 
 	// Host Hostname or IP address. Applies to HTTP and gRPC connectors.
 	Host *string `json:"host,omitempty"`
@@ -374,6 +308,12 @@ type DataConnector struct {
 	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
+	// Implementations Transport implementation selections keyed by template target identifier.
+	// Target and implementation names are open identifiers declared by template packs.
+	// Optional: omitted targets use the defaults declared by their selected template packs.
+	// Explicit selections override those defaults. No language-specific selector fields exist.
+	Implementations *map[string]string `json:"implementations,omitempty"`
+
 	// Module Contract module containing generated gRPC protobuf types for this connector.
 	// Used to resolve the correct generated bindings for each target language.
 	// Applies to gRPC connectors.
@@ -390,50 +330,6 @@ type DataConnector struct {
 
 	// Port Port number. Applies to HTTP and gRPC connectors.
 	Port *int `json:"port,omitempty"`
-
-	// PythonImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	PythonImplementation *DataConnectorImplementation `json:"pythonImplementation,omitempty"`
-
-	// RustImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	RustImplementation *DataConnectorImplementation `json:"rustImplementation,omitempty"`
 
 	// SaslMechanism Kafka SASL authentication mechanism.
 	SaslMechanism *KafkaSaslMechanism `json:"saslMechanism,omitempty"`
@@ -464,28 +360,6 @@ type DataConnector struct {
 	// - `Cron` (5): process-local cron scheduler
 	// - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
 	Type DataConnectorType `json:"type"`
-
-	// TypeScriptImplementation The specific library used to implement a data connector.
-	// - `net/http`: Go standard library HTTP
-	// - `function`: in-process custom connector (no network)
-	// - `IBM/Sarama`: Sarama Kafka client
-	// - `google/grpc`: official gRPC library; the service backend selects the runtime adapter
-	// - `userver/http`: userver HTTP
-	// - `userver/grpc`: userver gRPC
-	// - `userver/kafka`: userver Kafka
-	// - `boost/beast-http`: Boost.Beast HTTP
-	// - `asio/grpc`: asio-grpc
-	// - `librdkafka`: librdkafka C++ client
-	// - `aiohttp`: Python aiohttp
-	// - `aiokafka`: Python aiokafka
-	// - `rust/axum`: Rust axum HTTP
-	// - `rust/tonic`: Rust tonic gRPC
-	// - `rust/rdkafka`: Rust rdkafka Kafka client
-	// - `node/http`: Node.js core HTTP transport
-	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
-	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
-	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
-	TypeScriptImplementation *DataConnectorImplementation `json:"typeScriptImplementation,omitempty"`
 
 	// UseDedicatedListener When true, this HTTP connector starts its own dedicated listener.
 	// When false, it shares the service's default HTTP server.
@@ -743,6 +617,18 @@ type Module struct {
 
 	// Name Module identifier. Referenced by `Stream.functionModule` and `Endpoint.functionModule`.
 	Name string `json:"name"`
+}
+
+// NativeTypeBinding Authored native definition and import for a template target. The selected template pack interprets these strings; the generator does not translate them.
+type NativeTypeBinding struct {
+	// Definition Native type expression or declaration. An explicitly empty string is distinct from an omitted definition.
+	Definition *string `json:"definition,omitempty"`
+
+	// Import Native module, package or header reference, preserved verbatim.
+	Import *string `json:"import,omitempty"`
+
+	// Package Optional native package name or alias, preserved verbatim.
+	Package *string `json:"package,omitempty"`
 }
 
 // Pool A named worker pool used for async or priority-based stream delivery.
@@ -1056,9 +942,14 @@ type TransformationType int
 
 // Type A named data type used as a message type in the topology graph.
 // Types are referenced by stream nodes via `valueType` and `keyType`.
-// The code generator uses the type definition to produce correct Go type references
-// and import statements in generated stubs.
+// Template packs use the semantic type and its native bindings to render
+// target-specific declarations and references.
 type Type struct {
+	// Bindings Native bindings keyed by an open template target name. Target keys
+	// are not restricted to built-in languages. Each entry contains only
+	// the definition, import and package intended for that target.
+	Bindings *map[string]NativeTypeBinding `json:"bindings,omitempty"`
+
 	// DefinitionFormat Serialization format used for the type definition. Determines how the type
 	// is serialized/deserialized when crossing process or network boundaries.
 	// - `Native` (1): language-native encoding (Go encoding/json, etc.)
@@ -1096,18 +987,6 @@ type Type struct {
 	// Use `custom` for user-defined structs, `struct` for inline struct definitions,
 	// `array` for slices, `map` for maps, and `any` for untyped/interface values.
 	Type DataType `json:"type"`
-
-	// TypeDefinitionLang1 Inline type definition for GoLang (e.g. `interface{}`, `map[string]int`). Used when the type has no external package.
-	TypeDefinitionLang1 *string `json:"typeDefinitionLang1,omitempty"`
-
-	// TypeDefinitionLang2 Inline type definition for C++ (e.g. `std::any`).
-	TypeDefinitionLang2 *string `json:"typeDefinitionLang2,omitempty"`
-
-	// TypeImportLang1 Go import path for the package that defines this type (e.g. `github.com/example/types`).
-	TypeImportLang1 *string `json:"typeImportLang1,omitempty"`
-
-	// TypeImportLang2 C++ include path for the header that defines this type.
-	TypeImportLang2 *string `json:"typeImportLang2,omitempty"`
 
 	// UseAlias When true, the generated Go code uses a type alias instead of a full struct definition.
 	UseAlias *bool `json:"useAlias,omitempty"`

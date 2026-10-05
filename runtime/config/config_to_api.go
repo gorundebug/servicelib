@@ -244,7 +244,8 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 	if d.Type == api.DataConnectorTypeCustom {
 		d.Implementation = &implementation
 	} else {
-		d.GoImplementation = &implementation
+		bindings := map[string]string{"golang": string(implementation)}
+		d.Implementations = &bindings
 	}
 	switch c := dc.(type) {
 	case *HttpDataConnectorConfig:
@@ -418,8 +419,11 @@ func typeConfigToAPI(t *TypeConfig) api.Type {
 		Name: t.Name,
 		Type: t.Type,
 	}
-	at.TypeDefinitionLang1 = strOptPtr(t.TypeDefinition)
-	at.TypeImportLang1 = strOptPtr(t.TypeImport)
+	if t.TypeDefinition != "" || t.TypeImport != "" {
+		at.Bindings = &map[string]api.NativeTypeBinding{"go": {
+			Definition: strOptPtr(t.TypeDefinition), Import: strOptPtr(t.TypeImport), Package: strOptPtr(t.Package),
+		}}
+	}
 	at.ValueType = strOptPtr(t.ValueType)
 	at.KeyType = strOptPtr(t.KeyType)
 	at.Package = strOptPtr(t.Package)

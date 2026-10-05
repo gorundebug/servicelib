@@ -33,10 +33,10 @@ func TestCurrentCppBackendRoundTripPreservesStableIDsAndSelectors(t *testing.T) 
 		}
 	}
 	var connector DataConnector
-	if err := json.Unmarshal([]byte(`{"name":"http","cppUserverImplementation":"userver/http","cppCoroImplementation":"boost/beast-http"}`), &connector); err != nil {
+	if err := json.Unmarshal([]byte(`{"name":"http","implementations":{"cppUserver":"userver/http","cppCoro":"boost/beast-http"}}`), &connector); err != nil {
 		t.Fatal(err)
 	}
-	if connector.CppCoroImplementation == nil || *connector.CppCoroImplementation != DataConnectorImplementationBoostBeastHTTP || connector.CppUserverImplementation == nil {
+	if connector.Implementations == nil || (*connector.Implementations)["cppCoro"] != "boost/beast-http" || (*connector.Implementations)["cppUserver"] != "userver/http" {
 		t.Fatalf("current connector selectors lost: %+v", connector)
 	}
 }

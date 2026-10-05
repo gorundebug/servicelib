@@ -32,6 +32,11 @@ func (connector *DataConnector) UnmarshalJSON(data []byte) error {
 	if _, present := fields["cppBoostImplementation"]; present {
 		return fmt.Errorf("cppBoostImplementation: %s", RetiredCppBoostMessage)
 	}
+	for _, field := range []string{"goImplementation", "cppUserverImplementation", "cppCoroImplementation", "pythonImplementation", "rustImplementation", "typeScriptImplementation"} {
+		if _, present := fields[field]; present {
+			return fmt.Errorf("%s has been removed; use implementations or omit the selection to use the template pack default", field)
+		}
+	}
 	type currentConnector DataConnector
 	value := currentConnector(*connector)
 	if err := json.Unmarshal(data, &value); err != nil {

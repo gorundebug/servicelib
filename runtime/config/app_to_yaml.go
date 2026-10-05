@@ -261,17 +261,22 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if t.KeyType != nil {
 				tNode["keyType"] = *t.KeyType
 			}
-			if t.TypeDefinitionLang1 != nil {
-				tNode["typeDefinitionLang1"] = *t.TypeDefinitionLang1
-			}
-			if t.TypeDefinitionLang2 != nil {
-				tNode["typeDefinitionLang2"] = *t.TypeDefinitionLang2
-			}
-			if t.TypeImportLang1 != nil {
-				tNode["typeImportLang1"] = *t.TypeImportLang1
-			}
-			if t.TypeImportLang2 != nil {
-				tNode["typeImportLang2"] = *t.TypeImportLang2
+			if t.Bindings != nil {
+				bindings := make(map[string]interface{}, len(*t.Bindings))
+				for target, binding := range *t.Bindings {
+					fields := make(map[string]interface{})
+					if binding.Definition != nil {
+						fields["definition"] = *binding.Definition
+					}
+					if binding.Import != nil {
+						fields["import"] = *binding.Import
+					}
+					if binding.Package != nil {
+						fields["package"] = *binding.Package
+					}
+					bindings[target] = fields
+				}
+				tNode["bindings"] = bindings
 			}
 			typesNode[ToCamelCaseFirstLower(t.Name)] = tNode
 		}
@@ -289,23 +294,12 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 			if dc.Implementation != nil {
 				dcObj["implementation"] = string(*dc.Implementation)
 			}
-			if dc.GoImplementation != nil {
-				dcObj["goImplementation"] = string(*dc.GoImplementation)
-			}
-			if dc.CppUserverImplementation != nil {
-				dcObj["cppUserverImplementation"] = string(*dc.CppUserverImplementation)
-			}
-			if dc.CppCoroImplementation != nil {
-				dcObj["cppCoroImplementation"] = string(*dc.CppCoroImplementation)
-			}
-			if dc.PythonImplementation != nil {
-				dcObj["pythonImplementation"] = string(*dc.PythonImplementation)
-			}
-			if dc.RustImplementation != nil {
-				dcObj["rustImplementation"] = string(*dc.RustImplementation)
-			}
-			if dc.TypeScriptImplementation != nil {
-				dcObj["typeScriptImplementation"] = string(*dc.TypeScriptImplementation)
+			if dc.Implementations != nil {
+				bindings := make(map[string]string, len(*dc.Implementations))
+				for target, implementation := range *dc.Implementations {
+					bindings[target] = implementation
+				}
+				dcObj["implementations"] = bindings
 			}
 			if dc.Host != nil {
 				dcObj["host"] = *dc.Host

@@ -394,7 +394,7 @@ func addTypeEntry(name string, dt api.DataType, pkgPath string, isPtr bool,
 			}
 		case api.DataTypeCustom:
 			ifaceDef := "interface"
-			entry.TypeDefinitionLang1 = &ifaceDef
+			entry.Bindings = &map[string]api.NativeTypeBinding{"go": {Definition: &ifaceDef}}
 		}
 	}
 	typeMap[name] = entry

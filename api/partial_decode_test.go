@@ -10,12 +10,12 @@ func TestRetiredBackendGuardPreservesPartialJSONDecode(t *testing.T) {
 	if err := json.Unmarshal([]byte("null"), &language); err != nil || language != ProgrammingLanguageCppCoro {
 		t.Fatalf("null changed language: %v, %v", language, err)
 	}
-	implementation := DataConnectorImplementationGoogleGRPC
-	connector := DataConnector{Id: 42, Name: "Original", CppCoroImplementation: &implementation}
+	implementations := map[string]string{"cppCoro": "google/grpc"}
+	connector := DataConnector{Id: 42, Name: "Original", Implementations: &implementations}
 	if err := json.Unmarshal([]byte(`{"name":"Updated"}`), &connector); err != nil {
 		t.Fatal(err)
 	}
-	if connector.Id != 42 || connector.Name != "Updated" || connector.CppCoroImplementation == nil || *connector.CppCoroImplementation != implementation {
+	if connector.Id != 42 || connector.Name != "Updated" || connector.Implementations == nil || (*connector.Implementations)["cppCoro"] != "google/grpc" {
 		t.Fatalf("partial decode changed omitted fields: %+v", connector)
 	}
 	if err := json.Unmarshal([]byte("null"), &connector); err != nil || connector.Id != 42 || connector.Name != "Updated" {

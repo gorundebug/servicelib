@@ -92,11 +92,6 @@ paths:
                     - id: 1
                       name: HttpServer
                       type: 1
-                      goImplementation: net/http
-                      cppUserverImplementation: userver/http
-                      cppCoroImplementation: boost/beast-http
-                      pythonImplementation: aiohttp
-                      typeScriptImplementation: node/http
                   endpoints:
                     - id: 1
                       name: IngestEndpoint
@@ -849,24 +844,15 @@ components:
           description: |
             Fixed implementation used by language-independent connectors such
             as `Custom`.
-        goImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a Go service.
-        cppUserverImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a C++/userver service.
-        cppCoroImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a C++ coroutine service with a shared HTTP/gRPC event loop.
-        pythonImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a Python service.
-        rustImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a Rust service.
-        typeScriptImplementation:
-          $ref: '#/components/schemas/DataConnectorImplementation'
-          description: Implementation used when generating a TypeScript service.
+        implementations:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Transport implementation selections keyed by template target identifier.
+            Target and implementation names are open identifiers declared by template packs.
+            Optional: omitted targets use the defaults declared by their selected template packs.
+            Explicit selections override those defaults. No language-specific selector fields exist.
         host:
           type: string
           description: Hostname or IP address. Applies to HTTP and gRPC connectors.
@@ -1193,13 +1179,28 @@ components:
         - struct
         - custom
 
+    NativeTypeBinding:
+      type: object
+      additionalProperties: false
+      description: Authored native definition and import for a template target. The selected template pack interprets these strings; the generator does not translate them.
+      properties:
+        definition:
+          type: string
+          description: Native type expression or declaration. An explicitly empty string is distinct from an omitted definition.
+        import:
+          type: string
+          description: Native module, package or header reference, preserved verbatim.
+        package:
+          type: string
+          description: Optional native package name or alias, preserved verbatim.
+
     Type:
       type: object
       description: |
         A named data type used as a message type in the topology graph.
         Types are referenced by stream nodes via `valueType` and `keyType`.
-        The code generator uses the type definition to produce correct Go type references
-        and import statements in generated stubs.
+        Template packs use the semantic type and its native bindings to render
+        target-specific declarations and references.
       additionalProperties: false
       properties:
         name:
@@ -1228,20 +1229,14 @@ components:
         useAlias:
           type: boolean
           description: When true, the generated Go code uses a type alias instead of a full struct definition.
-        typeDefinitionLang1:
-          type: string
-          description: Inline type definition for GoLang (e.g. `interface{}`, `map[string]int`). Used when the type has no external package.
-          example: "interface{}"
-        typeDefinitionLang2:
-          type: string
-          description: Inline type definition for C++ (e.g. `std::any`).
-          example: "std::any"
-        typeImportLang1:
-          type: string
-          description: Go import path for the package that defines this type (e.g. `github.com/example/types`).
-        typeImportLang2:
-          type: string
-          description: C++ include path for the header that defines this type.
+        bindings:
+          type: object
+          description: |
+            Native bindings keyed by an open template target name. Target keys
+            are not restricted to built-in languages. Each entry contains only
+            the definition, import and package intended for that target.
+          additionalProperties:
+            $ref: '#/components/schemas/NativeTypeBinding'
         package:
           type: string
           description: Go package name alias used in generated import statements when it differs from the last path component.

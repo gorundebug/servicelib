@@ -20,49 +20,52 @@ func TestTypeScriptProgrammingLanguageHasStableValue(t *testing.T) {
 	}
 }
 
-func TestCppConnectorImplementationsSerializeIndependently(t *testing.T) {
-	userver := DataConnectorImplementationUserverHTTP
-	coro := DataConnectorImplementationGoogleGRPC
-	encoded, err := json.Marshal(DataConnector{
-		CppUserverImplementation: &userver,
-		CppCoroImplementation:    &coro,
-	})
+func TestConnectorImplementationsSerializeAsOneOpenMapping(t *testing.T) {
+	bindings := map[string]string{"cppUserver": "userver/http", "cppCoro": "google/grpc", "typescript": "node/http", "external": "vendor/http"}
+	encoded, err := json.Marshal(DataConnector{Implementations: &bindings})
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(encoded, &fields); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := fields["cppUserverImplementation"]; !ok {
-		t.Fatal("cppUserverImplementation is absent")
+	var restored map[string]string
+	if err := json.Unmarshal(fields["implementations"], &restored); err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := fields["cppBoostImplementation"]; ok {
-		t.Fatal("retired cppBoostImplementation must not be serialized")
+	if len(restored) != len(bindings) {
+		t.Fatalf("lost connector bindings: %s", encoded)
 	}
-	if _, ok := fields["cppImplementation"]; ok {
-		t.Fatal("legacy cppImplementation must not be serialized")
+	for target, want := range bindings {
+		if restored[target] != want {
+			t.Fatalf("binding %s = %q, want %q", target, restored[target], want)
+		}
 	}
-	if got := string(fields["cppCoroImplementation"]); got != `"google/grpc"` {
-		t.Fatalf("cppCoroImplementation = %s, want google/grpc", got)
+	for _, field := range []string{"goImplementation", "cppUserverImplementation", "cppCoroImplementation", "pythonImplementation", "rustImplementation", "typeScriptImplementation", "cppBoostImplementation", "cppImplementation"} {
+		if _, exists := fields[field]; exists {
+			t.Fatalf("retired selector %s serialized", field)
+		}
 	}
 }
 
-func TestTypeScriptConnectorImplementationSerializesIndependently(t *testing.T) {
-	implementation := DataConnectorImplementationNodeHTTP
-	encoded, err := json.Marshal(DataConnector{
-		TypeScriptImplementation: &implementation,
-	})
-	if err != nil {
+func TestRemovedConnectorSelectorsAreRejectedWithoutMutation(t *testing.T) {
+	for _, field := range []string{"goImplementation", "cppUserverImplementation", "cppCoroImplementation", "pythonImplementation", "rustImplementation", "typeScriptImplementation"} {
+		for _, value := range []string{`null`, `"unused"`} {
+			connector := DataConnector{Name: "preserved"}
+			if err := json.Unmarshal([]byte(`{"`+field+`":`+value+`}`), &connector); err == nil {
+				t.Fatalf("removed selector accepted: %s", field)
+			}
+			if connector.Name != "preserved" {
+				t.Fatalf("failed decode mutated connector: %+v", connector)
+			}
+		}
+	}
+	var connector DataConnector
+	if err := json.Unmarshal([]byte(`{"name":"uses pack defaults","type":1}`), &connector); err != nil {
 		t.Fatal(err)
 	}
-
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(encoded, &fields); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := fields["typeScriptImplementation"]; !ok {
-		t.Fatal("typeScriptImplementation is absent")
+	if connector.Implementations != nil {
+		t.Fatalf("API decode must not invent target selections: %+v", connector)
 	}
 }

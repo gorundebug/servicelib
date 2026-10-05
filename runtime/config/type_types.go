@@ -10,7 +10,7 @@ package config
 import "github.com/gorundebug/servicelib/api"
 
 // TypeConfig holds the metadata for a named data type referenced by stream nodes.
-// TypeDefinition and TypeImport are the Go-specific fields from TypeDefinitionLang1/TypeImportLang1.
+// TypeDefinition and TypeImport are the Go runtime's selected native binding.
 type TypeConfig struct {
 	Name             string                   `yaml:"name" mapstructure:"name"`
 	Type             api.DataType             `yaml:"type" mapstructure:"type"`
