@@ -86,22 +86,22 @@ func labelsKey(labels metrics.Labels) string {
 // ── Int64Counter ──────────────────────────────────────────────────────────────
 
 type int64Counter struct {
-	c     otelmetric.Int64Counter
-	attrs []attribute.KeyValue
+	c       otelmetric.Int64Counter
+	options []otelmetric.AddOption // Immutable options shared by all measurements.
 }
 
 func (c *int64Counter) Inc(ctx context.Context) {
 	if !metrics.RecordingEnabled(ctx) {
 		return
 	}
-	c.c.Add(ctx, 1, otelmetric.WithAttributes(c.attrs...))
+	c.c.Add(ctx, 1, c.options...)
 }
 
 func (c *int64Counter) Add(ctx context.Context, v int64) {
 	if !metrics.RecordingEnabled(ctx) {
 		return
 	}
-	c.c.Add(ctx, v, otelmetric.WithAttributes(c.attrs...))
+	c.c.Add(ctx, v, c.options...)
 }
 
 type int64CounterVec struct {
@@ -109,21 +109,21 @@ type int64CounterVec struct {
 }
 
 func (cv *int64CounterVec) With(labels metrics.Labels) metrics.Int64Counter {
-	return &int64Counter{c: cv.c, attrs: attrsFromLabels(labels)}
+	return &int64Counter{c: cv.c, options: []otelmetric.AddOption{otelmetric.WithAttributes(attrsFromLabels(labels)...)}}
 }
 
 // ── Float64Counter ────────────────────────────────────────────────────────────
 
 type float64Counter struct {
-	c     otelmetric.Float64Counter
-	attrs []attribute.KeyValue
+	c       otelmetric.Float64Counter
+	options []otelmetric.AddOption
 }
 
 func (c *float64Counter) Add(ctx context.Context, v float64) {
 	if !metrics.RecordingEnabled(ctx) {
 		return
 	}
-	c.c.Add(ctx, v, otelmetric.WithAttributes(c.attrs...))
+	c.c.Add(ctx, v, c.options...)
 }
 
 type float64CounterVec struct {
@@ -131,7 +131,7 @@ type float64CounterVec struct {
 }
 
 func (cv *float64CounterVec) With(labels metrics.Labels) metrics.Float64Counter {
-	return &float64Counter{c: cv.c, attrs: attrsFromLabels(labels)}
+	return &float64Counter{c: cv.c, options: []otelmetric.AddOption{otelmetric.WithAttributes(attrsFromLabels(labels)...)}}
 }
 
 // ── Noop types (returned on error or when cardinality limit is exceeded) ──────
@@ -395,15 +395,15 @@ func (gv *int64GaugeVec) Delete(labels metrics.Labels) {
 // ── Float64Histogram ──────────────────────────────────────────────────────────
 
 type float64Histogram struct {
-	h     otelmetric.Float64Histogram
-	attrs []attribute.KeyValue
+	h       otelmetric.Float64Histogram
+	options []otelmetric.RecordOption
 }
 
 func (h *float64Histogram) Observe(ctx context.Context, v float64) {
 	if !metrics.RecordingEnabled(ctx) {
 		return
 	}
-	h.h.Record(ctx, v, otelmetric.WithAttributes(h.attrs...))
+	h.h.Record(ctx, v, h.options...)
 }
 
 type float64HistogramVec struct {
@@ -411,21 +411,21 @@ type float64HistogramVec struct {
 }
 
 func (hv *float64HistogramVec) With(labels metrics.Labels) metrics.Float64Histogram {
-	return &float64Histogram{h: hv.h, attrs: attrsFromLabels(labels)}
+	return &float64Histogram{h: hv.h, options: []otelmetric.RecordOption{otelmetric.WithAttributes(attrsFromLabels(labels)...)}}
 }
 
 // ── Int64Histogram ────────────────────────────────────────────────────────────
 
 type int64Histogram struct {
-	h     otelmetric.Int64Histogram
-	attrs []attribute.KeyValue
+	h       otelmetric.Int64Histogram
+	options []otelmetric.RecordOption
 }
 
 func (h *int64Histogram) Observe(ctx context.Context, v int64) {
 	if !metrics.RecordingEnabled(ctx) {
 		return
 	}
-	h.h.Record(ctx, v, otelmetric.WithAttributes(h.attrs...))
+	h.h.Record(ctx, v, h.options...)
 }
 
 type int64HistogramVec struct {
@@ -433,7 +433,7 @@ type int64HistogramVec struct {
 }
 
 func (hv *int64HistogramVec) With(labels metrics.Labels) metrics.Int64Histogram {
-	return &int64Histogram{h: hv.h, attrs: attrsFromLabels(labels)}
+	return &int64Histogram{h: hv.h, options: []otelmetric.RecordOption{otelmetric.WithAttributes(attrsFromLabels(labels)...)}}
 }
 
 // ── Metrics factory ───────────────────────────────────────────────────────────
@@ -449,7 +449,7 @@ func (m *Metrics) Int64Counter(opts metrics.CounterOpts) (metrics.Int64Counter, 
 	if err != nil {
 		return nil, err
 	}
-	return &int64Counter{c: c, attrs: attrsFromLabels(opts.ConstLabels)}, nil
+	return &int64Counter{c: c, options: []otelmetric.AddOption{otelmetric.WithAttributes(attrsFromLabels(opts.ConstLabels)...)}}, nil
 }
 
 func (m *Metrics) Int64CounterVec(opts metrics.CounterOpts) (metrics.Int64CounterVec, error) {
@@ -465,7 +465,7 @@ func (m *Metrics) Float64Counter(opts metrics.CounterOpts) (metrics.Float64Count
 	if err != nil {
 		return nil, err
 	}
-	return &float64Counter{c: c, attrs: attrsFromLabels(opts.ConstLabels)}, nil
+	return &float64Counter{c: c, options: []otelmetric.AddOption{otelmetric.WithAttributes(attrsFromLabels(opts.ConstLabels)...)}}, nil
 }
 
 func (m *Metrics) Float64CounterVec(opts metrics.CounterOpts) (metrics.Float64CounterVec, error) {
@@ -600,7 +600,7 @@ func (m *Metrics) Float64Histogram(opts metrics.HistogramOpts) (metrics.Float64H
 	if err != nil {
 		return nil, err
 	}
-	return &float64Histogram{h: h, attrs: attrsFromLabels(opts.ConstLabels)}, nil
+	return &float64Histogram{h: h, options: []otelmetric.RecordOption{otelmetric.WithAttributes(attrsFromLabels(opts.ConstLabels)...)}}, nil
 }
 
 func (m *Metrics) Float64HistogramVec(opts metrics.HistogramOpts) (metrics.Float64HistogramVec, error) {
@@ -622,7 +622,7 @@ func (m *Metrics) Int64Histogram(opts metrics.HistogramOpts) (metrics.Int64Histo
 	if err != nil {
 		return nil, err
 	}
-	return &int64Histogram{h: h, attrs: attrsFromLabels(opts.ConstLabels)}, nil
+	return &int64Histogram{h: h, options: []otelmetric.RecordOption{otelmetric.WithAttributes(attrsFromLabels(opts.ConstLabels)...)}}, nil
 }
 
 func (m *Metrics) Int64HistogramVec(opts metrics.HistogramOpts) (metrics.Int64HistogramVec, error) {

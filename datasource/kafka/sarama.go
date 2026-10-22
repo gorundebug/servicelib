@@ -259,6 +259,7 @@ type saramaKafkaDataSource struct {
 type saramaKafkaEndpoint struct {
 	*runtime.DataSourceEndpoint
 	consumer      saramaKafkaEndpointConsumer
+	lifecycle     ConsumerLifecycle
 	consumerGroup kafka.ConsumerGroup
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -275,7 +276,7 @@ type saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E any] struct {
 	concCond       *sync.Cond
 	active         int
 	stopped        bool
-	tracingEngine tracing.Tracing
+	tracingEngine  tracing.Tracing
 	tracer         tracing.Tracer
 	spanAttributes [4]tracing.Attribute
 }
@@ -285,6 +286,9 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) Out(ctx conte
 }
 
 func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
+	if err := cfg.ValidateSecurity(); err != nil {
+		return nil, err
+	}
 	kafkaConfig := kafka.NewConfig()
 
 	if cfg.Version == "" {
@@ -405,19 +409,37 @@ func (ds *saramaKafkaDataSource) Stop(ctx context.Context) {
 	}
 }
 
-func (ep *saramaKafkaEndpoint) Setup(_ kafka.ConsumerGroupSession) error {
+func (ep *saramaKafkaEndpoint) Setup(session kafka.ConsumerGroupSession) error {
+	if ep.lifecycle != nil {
+		return ep.lifecycle.SetupConsumer(session)
+	}
 	return nil
 }
 
-func (ep *saramaKafkaEndpoint) Cleanup(_ kafka.ConsumerGroupSession) error {
+func (ep *saramaKafkaEndpoint) Cleanup(session kafka.ConsumerGroupSession) error {
+	if ep.lifecycle != nil {
+		return ep.lifecycle.CleanupConsumer(session)
+	}
 	return nil
 }
 
 func (ep *saramaKafkaEndpoint) ConsumeClaim(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		ep.consumer.EndpointRequest(session, claim, message)
+	for {
+		if ep.lifecycle != nil {
+			if err := ep.lifecycle.ConsumerError(); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-session.Context().Done():
+			return session.Context().Err()
+		case message, ok := <-claim.Messages():
+			if !ok {
+				return nil
+			}
+			ep.consumer.EndpointRequest(session, claim, message)
+		}
 	}
-	return nil
 }
 
 func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdmin) error {
@@ -453,10 +475,6 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		}
 	}
 
-	if err := ep.consumer.Start(ctx); err != nil {
-		return err
-	}
-
 	dsCfg, ok := ep.GetDataSource().GetConfig().(*config.KafkaDataConnectorConfig)
 	if !ok || dsCfg.Implementation != api.DataConnectorImplementationIBMsarama {
 		return fmt.Errorf("invalid data connector configuration for endpoint %q", ep.GetName())
@@ -466,6 +484,9 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		return err
 	}
 	kafkaConfig.Consumer.Offsets.Initial = kafka.OffsetOldest
+	if err := configureConsumerLifecycle(kafkaConfig, ep.lifecycle); err != nil {
+		return err
+	}
 
 	if cfg.ConsumerGroup == "" {
 		return fmt.Errorf("consumer group does not set for kafka source endpoint %q", ep.GetName())
@@ -477,24 +498,30 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context, admin kafka.ClusterAdm
 		return err
 	}
 
+	if err := ep.consumer.Start(ctx); err != nil {
+		return err
+	}
 	ep.consumerGroup, err = kafka.NewConsumerGroup(
 		strings.Split(dsCfg.Brokers, ","),
 		cfg.ConsumerGroup,
 		kafkaConfig,
 	)
 	if err != nil {
+		ep.consumer.Stop(ctx)
 		return fmt.Errorf("new consumer group failed for kafka source endpoint %q: %v",
 			ep.GetName(), err)
 	}
 
 	var cancelCtx context.Context
 	cancelCtx, ep.cancel = context.WithCancel(ctx)
+	stopTerminal := bindConsumerStop(ep.lifecycle, ep.cancel)
 	ep.started = true
 	ep.wg.Add(1)
 	go func() {
 		defer ep.wg.Done()
+		defer stopTerminal()
 		topics := []string{cfg.Topic}
-		for {
+		for cancelCtx.Err() == nil {
 			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
 				ep.GetRuntimeEnvironment().Log().Error(cancelCtx,
 					"consumer group consume error",
@@ -866,6 +893,7 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R, E any](
 		stream.SetResultConsumer(&resultConsumerProxy[R]{consumer: endpointConsumer})
 	}
 	endpoint.consumer = endpointConsumer
+	endpoint.lifecycle, _ = any(handler).(ConsumerLifecycle)
 	env.RegisterEndpointConsumer(endpointConsumer)
 	return endpointConsumer, nil
 }

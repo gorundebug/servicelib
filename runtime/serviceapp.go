@@ -99,6 +99,13 @@ func (app *ServiceApp) ServiceDependencies() environment.ServiceDependencies {
 	return nil
 }
 
+// ResolvedDependencies returns the provider selected during runtime initialization.
+// Use it in maker setup; ServiceDependencies remains the fallback override hook.
+// The returned provider is owned by the caller and is not replaced after startup.
+func (app *ServiceApp) ResolvedDependencies() environment.ServiceDependencies {
+	return app.dep
+}
+
 func (app *ServiceApp) ReloadConfig() {
 }
 
@@ -266,7 +273,6 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 
 	var err error
 
-	app.dep = dep
 	app.loader = loader
 	app.environment = env
 	app.config.Store(runtimeConfig)
@@ -280,6 +286,7 @@ func (app *ServiceApp) initRuntime(ctx context.Context,
 	if dep == nil {
 		dep = env.ServiceDependencies()
 	}
+	app.dep = dep
 
 	if dep != nil {
 		app.logsEngine, err = dep.LogsEngine(ctx, env)
@@ -596,34 +603,34 @@ func (app *ServiceApp) Release() {
 func (app *ServiceApp) Stop(ctx context.Context) {
 	serviceConfig := app.ServiceConfig()
 
-	wg := sync.WaitGroup{}
+	sourceWG := sync.WaitGroup{}
 
-	wg.Add(1)
+	sourceWG.Add(1)
 	go func() {
-		defer wg.Done()
+		defer sourceWG.Done()
 		app.loader.Stop(ctx)
 	}()
 
 	for _, v := range app.components {
-		wg.Add(1)
+		sourceWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer sourceWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
 	for _, v := range app.dataSources {
-		wg.Add(1)
+		sourceWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer sourceWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
 	if app.httpServer != nil {
-		wg.Add(1)
+		sourceWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer sourceWG.Done()
 			go func() {
 				if err := app.httpServer.Shutdown(ctx); err != nil {
 					app.environment.Log().Warn(ctx, "server shutdown", log.Err(err))
@@ -637,14 +644,14 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		}()
 	}
 
-	done := make(chan struct{})
+	sourceDone := make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(done)
+		sourceWG.Wait()
+		close(sourceDone)
 	}()
 
 	select {
-	case <-done:
+	case <-sourceDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
@@ -653,21 +660,21 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	// source. In particular, a Cron job can be waiting for a Temporal result.
 	// Drain ordinary sources first while those shared clients/workers are still
 	// available; stopping both groups concurrently can strand the accepted job.
-	wg = sync.WaitGroup{}
+	admissionWG := sync.WaitGroup{}
 	for _, connector := range app.managedDataConnectors {
-		wg.Add(1)
+		admissionWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer admissionWG.Done()
 			connector.StopAdmission(ctx)
 		}()
 	}
-	done = make(chan struct{})
+	admissionDone := make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(done)
+		admissionWG.Wait()
+		close(admissionDone)
 	}()
 	select {
-	case <-done:
+	case <-admissionDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "managed connector admission shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
@@ -676,44 +683,44 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	// Temporal worker executions) has drained. Task/delay pools are still graph
 	// producers: drain them before observing the ParallelCall counter, because
 	// an accepted pool task may create a parallel child near the end of shutdown.
-	wg = sync.WaitGroup{}
-	wg.Add(1)
+	poolWG := sync.WaitGroup{}
+	poolWG.Add(1)
 	go func() {
-		defer wg.Done()
+		defer poolWG.Done()
 		app.delayPool.Stop(ctx)
 	}()
 
 	for _, v := range app.taskPools {
-		wg.Add(1)
+		poolWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer poolWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
 	for _, v := range app.priorityTaskPools {
-		wg.Add(1)
+		poolWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer poolWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
 	for _, v := range app.storages {
-		wg.Add(1)
+		poolWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer poolWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
-	done = make(chan struct{})
+	poolDone := make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(done)
+		poolWG.Wait()
+		close(poolDone)
 	}()
 	select {
-	case <-done:
+	case <-poolDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "runtime pool and storage shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
@@ -729,44 +736,44 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 		app.environment.Log().Warn(ctx, "ServiceApp graph drain timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
-	wg = sync.WaitGroup{}
+	sinkWG := sync.WaitGroup{}
 	for _, v := range app.dataSinks {
-		wg.Add(1)
+		sinkWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer sinkWG.Done()
 			v.Stop(ctx)
 		}()
 	}
 
-	done = make(chan struct{})
+	sinkDone := make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(done)
+		sinkWG.Wait()
+		close(sinkDone)
 	}()
 
 	select {
-	case <-done:
+	case <-sinkDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}
 
 	// Durable clients remain open until every sink submission has drained.
 	// Their Activity Workers were stopped with the admission sources above.
-	wg = sync.WaitGroup{}
+	managedWG := sync.WaitGroup{}
 	for _, connector := range app.managedDataConnectors {
-		wg.Add(1)
+		managedWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer managedWG.Done()
 			connector.Stop(ctx)
 		}()
 	}
-	done = make(chan struct{})
+	managedDone := make(chan struct{})
 	go func() {
-		wg.Wait()
-		close(done)
+		managedWG.Wait()
+		close(managedDone)
 	}()
 	select {
-	case <-done:
+	case <-managedDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "managed connector shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
 	}

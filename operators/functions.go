@@ -93,6 +93,8 @@ type DelayFunction[T any] interface {
 }
 
 type When interface {
+	// GetName is the configured identity of this When node, not its downstream consumer.
+	GetName() string
 	GetType() reflect.Type
 	GetWhenConsumer() runtime.Stream
 }

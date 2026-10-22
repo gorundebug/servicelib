@@ -202,7 +202,11 @@ func (ep *customEndpoint[T]) Start(ctx context.Context) error {
 
 func (ep *customEndpoint[T]) Stop(ctx context.Context) {
 	ep.consumer.Stop(ctx)
-	ep.cancel()
+	// Runtime cleanup also visits endpoints that never reached Start (for
+	// example, a graph built only for an explicit control substream).
+	if ep.cancel != nil {
+		ep.cancel()
+	}
 	ep.dataProducer.Stop(ctx)
 	c := make(chan struct{})
 	go func() {

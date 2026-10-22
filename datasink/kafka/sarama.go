@@ -181,6 +181,9 @@ type saramaKafkaEndpoint struct {
 }
 
 func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
+	if err := cfg.ValidateSecurity(); err != nil {
+		return nil, err
+	}
 	kafkaConfig := kafka.NewConfig()
 
 	if cfg.Version == "" {

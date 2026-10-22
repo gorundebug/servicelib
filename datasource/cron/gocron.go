@@ -83,6 +83,9 @@ func (ec *endpointConsumer[T, R, E]) onTrigger(
 	ctx context.Context,
 	trigger runtime.ScheduleTrigger,
 ) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !ec.hasResult {
 		ec.function.OnTrigger(ctx, trigger, ec.out)
 		return nil
@@ -112,13 +115,17 @@ func (ec *endpointConsumer[T, R, E]) onTrigger(
 		}
 	}()
 
-	ec.function.OnTrigger(ctx, trigger, ec.out)
-	// A scheduled input with a result stream has the same contract as the
-	// other datasource endpoints: the activation is complete only when the
-	// correlated terminal result reaches the input stream. In particular this
-	// keeps the cron job active while pooled/parallel graph work is outstanding.
-	<-done
-	return nil
+	wait := newResultWait()
+	defer wait.close()
+	out := runtime.CollectFunc[T](func(emitted context.Context, value T) {
+		if wait.observe(emitted) {
+			ec.out.Out(emitted, value)
+		}
+	})
+	ec.function.OnTrigger(ctx, trigger, out)
+	// Keep normal result correlation, but release the activation when the
+	// endpoint-supplied context expires without producing a terminal result.
+	return wait.await(ctx, done)
 }
 
 func (ec *endpointConsumer[T, R, E]) consumeResult(ctx context.Context, _ R) {
