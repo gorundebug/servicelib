@@ -81,7 +81,7 @@ func (h temporalMetricsHandler) Timer(name string) client.MetricsTimer {
 // deployment explicitly provides a bind address. The exporter is process-wide:
 // Temporal clients and workers share one runtime metric source, independently
 // of how many graph connectors use it.
-func sdkMetricsHandler(environment runtime.RuntimeEnvironment) (client.MetricsHandler, error) {
+func sdkMetricsHandler(ctx context.Context, environment runtime.RuntimeEnvironment) (client.MetricsHandler, error) {
 	address := strings.TrimSpace(os.Getenv(sdkMetricsBindAddressEnvironment))
 	if address == "" {
 		return nil, nil
@@ -119,19 +119,19 @@ func sdkMetricsHandler(environment runtime.RuntimeEnvironment) (client.MetricsHa
 		Handler:           reporter.HTTPHandler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	go func() {
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			environment.Log().Error(
-				context.Background(),
-				"Temporal SDK metrics server failed",
-				log.Str("address", address),
-				log.Err(err),
-			)
-		}
-	}()
+	go serveSDKMetrics(ctx, server, listener, environment.Log(), address)
 
 	sdkMetrics.address = address
 	sdkMetrics.handler = handler
 	sdkMetrics.closer = closer
 	return handler, nil
+}
+
+// The exporter is process-wide, not owned by one connector. The initialization
+// context identifies diagnostic events; its cancellation must not close a
+// listener shared by other Temporal clients and workers.
+func serveSDKMetrics(ctx context.Context, server *http.Server, listener net.Listener, logger log.Logger, address string) {
+	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error(ctx, "Temporal SDK metrics server failed", log.Str("address", address), log.Err(err))
+	}
 }

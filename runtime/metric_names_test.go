@@ -85,7 +85,7 @@ func (e *mockRuntimeEnv) ServiceInit() error                                 { r
 func (e *mockRuntimeEnv) Start(context.Context) error                        { return nil }
 func (e *mockRuntimeEnv) ReloadConfig()                                      {}
 func (e *mockRuntimeEnv) Stop(context.Context)                               {}
-func (e *mockRuntimeEnv) Release()                                           {}
+func (e *mockRuntimeEnv) Release(context.Context)                            {}
 func (e *mockRuntimeEnv) GetRuntime() ServiceExecutionRuntime                { return nil }
 func (e *mockRuntimeEnv) MetricsEngine() metrics.MetricsEngine               { return nil }
 func (e *mockRuntimeEnv) TracingEngine() tracing.TracingEngine               { return nil }

@@ -42,7 +42,7 @@ func TestWorkflowTracingContinuesW3CHeader(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.SetHeader(&commonpb.Header{Fields: headers})
-	env.SetContextPropagators([]workflow.ContextPropagator{temporalContextPropagator{}})
+	env.SetContextPropagators([]workflow.ContextPropagator{temporalContextPropagator{tracing: &workflowTracing{}}})
 	env.RegisterWorkflow(workflowW3CParent)
 	env.ExecuteWorkflow(workflowW3CParent)
 	require.NoError(t, env.GetWorkflowError())

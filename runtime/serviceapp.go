@@ -597,7 +597,7 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 	return nil
 }
 
-func (app *ServiceApp) Release() {
+func (app *ServiceApp) Release(ctx context.Context) {
 }
 
 func (app *ServiceApp) Stop(ctx context.Context) {

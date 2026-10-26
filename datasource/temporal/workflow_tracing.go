@@ -24,19 +24,16 @@ import (
 // Temporal Header. Calls are suppressed by the durable context recording
 // policy during replay; exporters therefore observe each graph span once.
 type workflowTracing struct {
-	root context.Context
+	carrier propagation.MapCarrier
 }
 
 func newWorkflowTracing(ctx workflow.Context) servicetracing.Tracing {
 	carrier, _ := ctx.Value(temporalCarrierContextKey{}).(map[string]string)
-	root := otel.GetTextMapPropagator().Extract(
-		context.Background(), propagation.MapCarrier(carrier),
-	)
-	return &workflowTracing{root: root}
+	return &workflowTracing{carrier: propagation.MapCarrier(carrier)}
 }
 
 func (t *workflowTracing) Tracer(name string) servicetracing.Tracer {
-	return &workflowTracer{tracer: otel.GetTracerProvider().Tracer(name), root: t.root}
+	return &workflowTracer{tracer: otel.GetTracerProvider().Tracer(name), carrier: t.carrier}
 }
 
 func (*workflowTracing) Inject(ctx context.Context, carrier map[string]string) {
@@ -48,8 +45,8 @@ func (*workflowTracing) Extract(ctx context.Context, carrier map[string]string) 
 }
 
 type workflowTracer struct {
-	tracer oteltrace.Tracer
-	root   context.Context
+	tracer  oteltrace.Tracer
+	carrier propagation.MapCarrier
 }
 
 func (t *workflowTracer) Start(
@@ -57,10 +54,8 @@ func (t *workflowTracer) Start(
 	name string,
 	attrs ...servicetracing.Attribute,
 ) (context.Context, servicetracing.Span) {
-	if !oteltrace.SpanContextFromContext(ctx).IsValid() && t.root != nil {
-		if root := oteltrace.SpanContextFromContext(t.root); root.IsValid() {
-			ctx = oteltrace.ContextWithRemoteSpanContext(ctx, root)
-		}
+	if !oteltrace.SpanContextFromContext(ctx).IsValid() && len(t.carrier) != 0 {
+		ctx = otel.GetTextMapPropagator().Extract(ctx, t.carrier)
 	}
 	ctx, span := t.tracer.Start(ctx, name, oteltrace.WithAttributes(workflowAttributes(attrs)...))
 	return ctx, workflowSpan{span: span}

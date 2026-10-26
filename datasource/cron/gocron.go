@@ -21,18 +21,18 @@ import (
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime"
 	"github.com/gorundebug/servicelib/runtime/config"
+	"github.com/gorundebug/servicelib/runtime/environment/log"
 )
 
 type inputEndpoint interface {
 	runtime.InputEndpoint
-	register(gocron.Scheduler) error
+	register(context.Context, gocron.Scheduler, *cronRun) error
 }
 
 type dataSource struct {
 	*runtime.InputDataSource
-	mu        sync.Mutex
-	scheduler gocron.Scheduler
-	started   bool
+	mu  sync.Mutex
+	run *cronRun
 }
 
 type endpoint[T, R, E any] struct {
@@ -155,7 +155,7 @@ func (ec *endpointConsumer[T, R, E]) consumeResult(ctx context.Context, _ R) {
 	}
 }
 
-func (ep *endpoint[T, R, E]) register(scheduler gocron.Scheduler) error {
+func (ep *endpoint[T, R, E]) register(ctx context.Context, scheduler gocron.Scheduler, run *cronRun) error {
 	cfg, ok := ep.GetConfig().(*config.CronEndpointConfig)
 	if !ok {
 		return fmt.Errorf("invalid config type for cron endpoint %q", ep.GetName())
@@ -177,9 +177,7 @@ func (ep *endpoint[T, R, E]) register(scheduler gocron.Scheduler) error {
 	if cfg.OverlapPolicy == api.ScheduleOverlapPolicySkip {
 		options = append(options, gocron.WithSingletonMode(gocron.LimitModeReschedule))
 	}
-	ep.job, err = scheduler.NewJob(definition, gocron.NewTask(func(ctx context.Context) {
-		ep.fire(ctx)
-	}), options...)
+	ep.job, err = scheduler.NewJob(definition, cronOccurrenceTask(ctx, func(owner context.Context) { run.invoke(owner, ep.fire) }), options...)
 	if err != nil {
 		return fmt.Errorf("register cron endpoint %q: %w", ep.GetName(), err)
 	}
@@ -191,10 +189,6 @@ func cronExpression(expression, timezone string) string {
 }
 
 func (ep *endpoint[T, R, E]) fire(ctx context.Context) {
-	// gocron cancels its executor context as part of Shutdown. That cancellation
-	// closes admission, but an occurrence already accepted by ServiceLib must
-	// drain through its configured result boundary just like an RPC request.
-	ctx = context.WithoutCancel(ctx)
 	firedAt := time.Now().UTC()
 	if ep.tracker == nil {
 		return
@@ -296,19 +290,29 @@ func portableScheduledTime(value time.Time, location *time.Location) bool {
 		local.Second() != earlier.Second()
 }
 
-func (ds *dataSource) Start(context.Context) error {
+func (ds *dataSource) Start(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("cron source start context is nil")
+	}
+	if err := context.Cause(ctx); err != nil {
+		return err
+	}
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
-	if ds.started {
+	if ds.run != nil {
+		if ds.run.stopDone != nil {
+			return fmt.Errorf("cron data source %q is stopping", ds.GetName())
+		}
 		return nil
 	}
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
 		return fmt.Errorf("create cron scheduler %q: %w", ds.GetName(), err)
 	}
+	run := &cronRun{scheduler: scheduler, accepting: true}
 	endpoints := ds.GetEndpoints()
 	for index := 0; index < endpoints.Len(); index++ {
-		if err := endpoints.At(index).(inputEndpoint).register(scheduler); err != nil {
+		if err := endpoints.At(index).(inputEndpoint).register(ctx, scheduler, run); err != nil {
 			if shutdownErr := scheduler.Shutdown(); shutdownErr != nil {
 				return errors.Join(err, fmt.Errorf("shutdown cron scheduler after registration failure: %w", shutdownErr))
 			}
@@ -316,29 +320,75 @@ func (ds *dataSource) Start(context.Context) error {
 		}
 	}
 	scheduler.Start()
-	ds.scheduler = scheduler
-	ds.started = true
+	ds.run = run
 	return nil
 }
 
 func (ds *dataSource) Stop(ctx context.Context) {
 	ds.mu.Lock()
-	if !ds.started {
+	run := ds.run
+	if run == nil {
 		ds.mu.Unlock()
 		return
 	}
-	scheduler := ds.scheduler
-	ds.scheduler = nil
-	ds.started = false
+	if run.stopDone == nil {
+		run.mu.Lock()
+		run.accepting = false
+		run.mu.Unlock()
+		run.stopDone = make(chan struct{})
+		go func() {
+			if err := run.scheduler.Shutdown(); err != nil {
+				ds.GetEnvironment().Log().Warn(ctx, "cron scheduler shutdown failed", log.Err(err))
+			}
+			// The scheduler may time out before its callbacks finish. Keep
+			// ownership until all work admitted by this run has really drained.
+			run.active.Wait()
+			ds.mu.Lock()
+			if ds.run == run {
+				ds.run = nil
+			}
+			close(run.stopDone)
+			ds.mu.Unlock()
+		}()
+	}
+	done := run.stopDone
 	ds.mu.Unlock()
-
-	done := make(chan error, 1)
-	go func() { done <- scheduler.Shutdown() }()
+	select {
+	case <-done:
+		return
+	default:
+	}
 	select {
 	case <-done:
 	case <-ctx.Done():
-		ds.OnStopTimeout(ctx)
+		select {
+		case <-done:
+		default:
+			ds.OnStopTimeout(ctx)
+		}
 	}
+}
+
+// cronRun owns one scheduler generation and all callbacks it has admitted.
+// Admission closes before Wait so no new Add can race with a completed drain.
+type cronRun struct {
+	scheduler gocron.Scheduler
+	mu        sync.Mutex
+	accepting bool
+	active    sync.WaitGroup
+	stopDone  chan struct{}
+}
+
+func (run *cronRun) invoke(ctx context.Context, fire func(context.Context)) {
+	run.mu.Lock()
+	if !run.accepting {
+		run.mu.Unlock()
+		return
+	}
+	run.active.Add(1)
+	run.mu.Unlock()
+	defer run.active.Done()
+	fire(ctx)
 }
 
 func getOrCreateDataSource(id int, environment runtime.RuntimeEnvironment) (runtime.DataSource, error) {
@@ -404,4 +454,11 @@ func MakeGocronEndpointConsumer[T, R, E any](
 	ds.AddEndpoint(ep)
 	environment.RegisterEndpointConsumer(consumer)
 	return consumer, nil
+}
+
+// Bind the service owner, not gocron's executor context. Scheduler shutdown
+// closes admission and drains accepted work without cancelling its owner.
+// Owner cancellation and deadlines still propagate to every occurrence.
+func cronOccurrenceTask(ctx context.Context, run func(context.Context)) gocron.Task {
+	return gocron.NewTask(func() { run(ctx) })
 }

@@ -453,7 +453,7 @@ func executeWorkflowEndpoint(
 	}
 	workflowCtx = workflow.WithValue(workflowCtx, temporalCarrierContextKey{}, workflowCarrier)
 	ctx := propagator.extractWorkflowContextWithTracing(
-		context.Background(), workflowCarrier, !request.Telemetry.NoopTracing,
+		WorkflowGraphContext(workflowCtx), workflowCarrier, !request.Telemetry.NoopTracing,
 	)
 	endpointConfigs := make(map[int]workflowEndpointConfig, len(request.Endpoints))
 	for _, endpoint := range request.Endpoints {
@@ -578,6 +578,12 @@ func executeEndpointActivity(
 }
 
 func (c *Connector) Start(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("Temporal connector start context is nil")
+	}
+	if err := context.Cause(ctx); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.started {
@@ -594,11 +600,11 @@ func (c *Connector) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Temporal data connector %q: %w", c.name, err)
 	}
-	clientOptions, err := c.makeClientOptions(cfg)
+	clientOptions, err := c.makeClientOptions(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	temporalClient, err := client.Dial(clientOptions)
+	temporalClient, err := client.DialContext(ctx, clientOptions)
 	if err != nil {
 		return fmt.Errorf("connect Temporal data connector %q: %w", c.name, err)
 	}
@@ -762,7 +768,7 @@ func resolveWorkerStopTimeout(configuredMillis, serviceShutdownMillis int) (time
 	return time.Duration(configuredMillis) * time.Millisecond, nil
 }
 
-func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
+func (c *Connector) makeClientOptions(ctx context.Context, cfg *config.TemporalDataConnectorConfig) (client.Options, error) {
 	tracingEngine := c.environment.Tracing()
 	var tracingInterceptors []interceptor.ClientInterceptor
 	if tracingEngine != nil {
@@ -781,7 +787,7 @@ func (c *Connector) makeClientOptions(cfg *config.TemporalDataConnectorConfig) (
 			temporalContextPropagator{tracing: tracingEngine},
 		},
 	}
-	metricsHandler, err := sdkMetricsHandler(c.environment)
+	metricsHandler, err := sdkMetricsHandler(ctx, c.environment)
 	if err != nil {
 		return options, err
 	}

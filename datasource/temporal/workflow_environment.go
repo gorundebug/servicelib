@@ -132,7 +132,7 @@ func (env *WorkflowEnvironment) TracingEngine() tracing.TracingEngine { return n
 func (env *WorkflowEnvironment) HasCustomHTTPServer() bool            { return true }
 func (env *WorkflowEnvironment) ServiceInit() error                   { return nil }
 func (env *WorkflowEnvironment) ReloadConfig()                        {}
-func (env *WorkflowEnvironment) Release()                             {}
+func (env *WorkflowEnvironment) Release(context.Context)              {}
 
 func (env *WorkflowEnvironment) RegisterHTTPHandler(string, http.Handler) {
 	panic("HTTP handlers are unavailable in a Temporal Workflow")
@@ -390,13 +390,19 @@ func mustWorkflowHistogram(
 	return value
 }
 
-func (env *WorkflowEnvironment) Start(context.Context) error {
+func (env *WorkflowEnvironment) Start(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("Temporal Workflow lifecycle context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if env.started {
 		return nil
 	}
 	info := workflow.GetInfo(env.workflowCtx)
 	env.logger.Info(
-		context.Background(),
+		ctx,
 		"temporal workflow graph started",
 		log.Str("workflow_id", info.WorkflowExecution.ID),
 		log.Str("workflow_type", info.WorkflowType.Name),
@@ -405,12 +411,12 @@ func (env *WorkflowEnvironment) Start(context.Context) error {
 		return err
 	}
 	for _, item := range sortedWorkflowPools(env.taskPools) {
-		if err := item.Start(context.Background()); err != nil {
+		if err := item.Start(ctx); err != nil {
 			return err
 		}
 	}
 	for _, item := range sortedWorkflowPools(env.priority) {
-		if err := item.Start(context.Background()); err != nil {
+		if err := item.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -418,7 +424,10 @@ func (env *WorkflowEnvironment) Start(context.Context) error {
 	return nil
 }
 
-func (env *WorkflowEnvironment) Stop(context.Context) {
+func (env *WorkflowEnvironment) Stop(ctx context.Context) {
+	if ctx == nil {
+		panic("Temporal Workflow lifecycle context is nil")
+	}
 	if !env.started {
 		return
 	}
@@ -432,14 +441,14 @@ func (env *WorkflowEnvironment) Stop(context.Context) {
 		env.started = false
 		return
 	}
-	if err := env.AwaitWorkflowGraph(env.workflowCtx); err != nil {
+	if err := env.AwaitWorkflowGraph(workflowExecutionContext(ctx, env.workflowCtx)); err != nil {
 		panic(fmt.Errorf("wait for Temporal Workflow graph quiescence: %w", err))
 	}
 	for _, item := range sortedWorkflowPools(env.taskPools) {
-		item.Stop(context.Background())
+		item.Stop(ctx)
 	}
 	for _, item := range sortedWorkflowPools(env.priority) {
-		item.Stop(context.Background())
+		item.Stop(ctx)
 	}
 	env.started = false
 }
@@ -544,7 +553,13 @@ type workflowPool struct {
 func (p *workflowPool) GetName() string        { return p.name }
 func (p *workflowPool) GetExecutorsCount() int { return p.executors }
 
-func (p *workflowPool) Start(context.Context) error {
+func (p *workflowPool) Start(ctx context.Context) error {
+	if ctx == nil {
+		return fmt.Errorf("Temporal Workflow pool context is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if p.started {
 		return pool.ErrPoolAlreadyStarted
 	}
@@ -558,7 +573,7 @@ func (p *workflowPool) Start(context.Context) error {
 		p.metrics.executorsAllocated.Set(int64(p.executors))
 	}
 	for range p.executors {
-		workflow.Go(p.ctx, p.run)
+		workflow.Go(workflowExecutionContext(ctx, p.ctx), p.run)
 	}
 	return nil
 }
@@ -614,15 +629,19 @@ func runWorkflowTask(fn func(context.Context), ctx context.Context) (failure any
 	return nil
 }
 
-func (p *workflowPool) Stop(context.Context) {
+func (p *workflowPool) Stop(ctx context.Context) {
+	if ctx == nil {
+		panic("Temporal Workflow pool context is nil")
+	}
+	workflowCtx := workflowExecutionContext(ctx, p.ctx)
 	if p.stopped {
 		return
 	}
-	if err := workflow.Await(p.ctx, func() bool { return p.pending == 0 }); err != nil {
+	if err := workflow.Await(workflowCtx, func() bool { return p.pending == 0 }); err != nil {
 		panic(fmt.Errorf("wait for Temporal Workflow pool %q: %w", p.name, err))
 	}
 	p.stopped = true
-	if err := workflow.Await(p.ctx, func() bool { return p.workers == 0 }); err != nil {
+	if err := workflow.Await(workflowCtx, func() bool { return p.workers == 0 }); err != nil {
 		panic(fmt.Errorf("stop Temporal Workflow pool %q: %w", p.name, err))
 	}
 }

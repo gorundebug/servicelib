@@ -32,7 +32,8 @@ type RuntimeEnvironment interface {
 	Start(context.Context) error
 	ReloadConfig()
 	Stop(context.Context)
-	Release()
+	// Release receives the caller-owned cleanup context, including its deadline.
+	Release(context.Context)
 
 	GetRuntime() ServiceExecutionRuntime
 
