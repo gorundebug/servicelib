@@ -506,7 +506,7 @@ type Endpoint struct {
 	// ReplicationFactor Kafka topic replication factor (used when createTopic is true).
 	ReplicationFactor *int `json:"replicationFactor,omitempty"`
 
-	// Schedule Cron expression for a local Cron endpoint or an optional Temporal Schedule.
+	// Schedule Local Cron accepts a portable five-field calendar expression or @every Nms with canonical integer milliseconds from 10 to 86400000. Temporal schedules accept only the five-field calendar expression. Both require UTC; local intervals do not provide durable replay.
 	Schedule *string `json:"schedule,omitempty"`
 
 	// ScheduleId Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.

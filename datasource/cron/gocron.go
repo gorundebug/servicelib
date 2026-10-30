@@ -220,13 +220,26 @@ type portableCron struct {
 	schedule     robfigcron.Schedule
 	lastReturned time.Time
 	lastAdvanced time.Time
-	due          []time.Time
+	dueLatest    time.Time
+	dueCount     int
 }
 
 func (c *portableCron) IsValid(crontab string, _ *time.Location, now time.Time) error {
-	schedule, err := robfigcron.ParseStandard(cronExpression(crontab, c.location.String()))
-	if err != nil {
-		return err
+	var schedule robfigcron.Schedule
+	if interval, recognized, err := runtime.ParseLocalScheduleInterval(crontab); recognized {
+		if err != nil {
+			return err
+		}
+		if c.location != time.UTC {
+			return fmt.Errorf("local interval requires timezone UTC")
+		}
+		schedule = localInterval{anchor: now.UTC().Truncate(time.Millisecond), interval: interval}
+	} else {
+		var err error
+		schedule, err = robfigcron.ParseStandard(cronExpression(crontab, c.location.String()))
+		if err != nil {
+			return err
+		}
 	}
 	if schedule.Next(now).IsZero() {
 		return fmt.Errorf("cron expression has no next occurrence")
@@ -235,7 +248,8 @@ func (c *portableCron) IsValid(crontab string, _ *time.Location, now time.Time) 
 	c.schedule = schedule
 	c.lastReturned = time.Time{}
 	c.lastAdvanced = time.Time{}
-	c.due = nil
+	c.dueLatest = time.Time{}
+	c.dueCount = 0
 	c.mu.Unlock()
 	return nil
 }
@@ -247,7 +261,8 @@ func (c *portableCron) Next(lastRun time.Time) time.Time {
 		return time.Time{}
 	}
 	if !c.lastReturned.IsZero() && lastRun.Equal(c.lastReturned) && !lastRun.Equal(c.lastAdvanced) {
-		c.due = append(c.due, c.lastReturned.UTC())
+		c.dueLatest = c.lastReturned.UTC()
+		c.dueCount++
 		c.lastAdvanced = lastRun
 	}
 	next := c.schedule.Next(lastRun)
@@ -261,13 +276,28 @@ func (c *portableCron) Next(lastRun time.Time) time.Time {
 func (c *portableCron) consumeDue() (time.Time, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.due) == 0 {
+	if c.dueCount == 0 {
 		return time.Time{}, 0
 	}
-	latest := c.due[len(c.due)-1]
-	count := len(c.due)
-	c.due = nil
+	latest := c.dueLatest
+	count := c.dueCount
+	c.dueLatest = time.Time{}
+	c.dueCount = 0
 	return latest, count
+}
+
+// localInterval calculates logical slots; gocron still owns timers, overlap,
+// dispatch and shutdown. Restarting a service creates a new local anchor.
+type localInterval struct {
+	anchor   time.Time
+	interval time.Duration
+}
+
+func (s localInterval) Next(last time.Time) time.Time {
+	if last.Before(s.anchor) {
+		return s.anchor.Add(s.interval)
+	}
+	return s.anchor.Add((last.Sub(s.anchor)/s.interval + 1) * s.interval)
 }
 
 // portableScheduledTime rejects the second instant of an ambiguous local wall

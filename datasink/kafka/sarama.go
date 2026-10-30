@@ -166,11 +166,12 @@ type kafkaEndpointConsumer interface {
 
 type saramaKafkaDataSink struct {
 	*runtime.OutputDataSink
-	producer kafka.AsyncProducer
-	wg       sync.WaitGroup
-	sendWG   sync.WaitGroup
-	mu       sync.Mutex
-	stopped  bool
+	producer    kafka.AsyncProducer
+	wg          sync.WaitGroup
+	enqueueWG   sync.WaitGroup
+	stopEnqueue chan struct{}
+	mu          sync.Mutex
+	stopped     bool
 }
 
 type saramaKafkaEndpoint struct {
@@ -310,7 +311,6 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
 		defer ds.wg.Done()
 		for msg := range ds.producer.Successes() {
 			func() {
-				defer ds.sendWG.Done()
 				if msg.Metadata == nil {
 					ds.GetEnvironment().Log().Error(ctx,
 						"metadata is nil inside ProducerMessage for success channel",
@@ -330,7 +330,6 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
 		defer ds.wg.Done()
 		for errMsg := range ds.producer.Errors() {
 			func() {
-				defer ds.sendWG.Done()
 				if errMsg.Msg.Metadata == nil {
 					ds.GetEnvironment().Log().Error(ctx,
 						"metadata is nil inside ProducerMessage for errors channel",
@@ -349,7 +348,14 @@ func (ds *saramaKafkaDataSink) Start(ctx context.Context) error {
 
 func (ds *saramaKafkaDataSink) Stop(ctx context.Context) {
 	ds.mu.Lock()
+	firstStop := !ds.stopped
 	ds.stopped = true
+	if firstStop {
+		if ds.stopEnqueue == nil {
+			ds.stopEnqueue = make(chan struct{})
+		}
+		close(ds.stopEnqueue)
+	}
 	ds.mu.Unlock()
 
 	if ds.producer == nil {
@@ -359,7 +365,12 @@ func (ds *saramaKafkaDataSink) Stop(ctx context.Context) {
 		}
 		return
 	}
-	ds.producer.AsyncClose()
+	if firstStop {
+		// No sender may still be evaluating/selecting the producer input when Sarama
+		// closes it. Closing admission wakes blocked sends without awaiting broker ACKs.
+		ds.enqueueWG.Wait()
+		ds.producer.AsyncClose()
+	}
 
 	c := make(chan struct{})
 	go func() {
@@ -381,25 +392,41 @@ func (ds *saramaKafkaDataSink) Stop(ctx context.Context) {
 }
 
 func (ds *saramaKafkaDataSink) SendMessage(ctx context.Context, msg *kafka.ProducerMessage) {
+	fail := func(err error) {
+		meta := msg.Metadata.(*messageMetadata)
+		if meta.onDelivery != nil {
+			meta.onDelivery(0, 0, err)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		fail(err)
+		return
+	}
 	ds.mu.Lock()
 	if ds.stopped {
 		ds.mu.Unlock()
-		meta := msg.Metadata.(*messageMetadata)
-		if meta.onDelivery != nil {
-			meta.onDelivery(0, 0, fmt.Errorf("kafka producer is stopped"))
-		}
+		fail(errors.New("kafka producer is stopped"))
 		return
 	}
-	ds.sendWG.Add(1)
+	if ds.stopEnqueue == nil {
+		ds.stopEnqueue = make(chan struct{})
+	}
+	stopping := ds.stopEnqueue
+	ds.enqueueWG.Add(1)
 	ds.mu.Unlock()
+	var err error
 	select {
 	case ds.producer.Input() <- msg:
 	case <-ctx.Done():
-		ds.sendWG.Done()
-		meta := msg.Metadata.(*messageMetadata)
-		if meta.onDelivery != nil {
-			meta.onDelivery(0, 0, ctx.Err())
-		}
+		err = ctx.Err()
+	case <-stopping:
+		err = errors.New("kafka producer is stopped")
+	}
+	// Delivery callbacks may execute arbitrary graph code. They must not hold
+	// the enqueue barrier needed by Stop before AsyncClose.
+	ds.enqueueWG.Done()
+	if err != nil {
+		fail(err)
 	}
 }
 
@@ -497,12 +524,31 @@ func (rs *collector[R]) Out(ctx context.Context, value R) {
 	rs.consumer.Consume(ctx, value)
 }
 
+// Both sink variants share the producer and request lifecycle. The constructor
+// selects the declared result route once, rather than inspecting handler types.
+type kafkaSinkStream[T any] interface {
+	runtime.RuntimeStream
+	runtime.Stream
+	GetEndpointId() int
+	SetSinkConsumer(runtime.Consumer[T])
+}
+
 type saramaKafkaEndpointConsumer[HandlerState, T, R any] struct {
-	*runtime.DataSinkEndpointConsumer[T, R]
+	endpoint       *saramaKafkaEndpoint
+	stream         kafkaSinkStream[T]
+	result         runtime.Consumer[R]
 	handler        EndpointHandler[HandlerState, T, R]
 	partitioner    Partitioner[T]
 	tracer         tracing.Tracer
 	spanAttributes [4]tracing.Attribute
+}
+
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Endpoint() runtime.SinkEndpoint {
+	return ec.endpoint
+}
+
+func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Stream() runtime.Stream {
+	return ec.stream
 }
 
 func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) getEndpoint() *saramaKafkaEndpoint {
@@ -531,7 +577,7 @@ func (ec *saramaKafkaEndpointConsumer[HandlerState, T, R]) Consume(ctx context.C
 	startTime := ec.Endpoint().OnRequestStart(handlerCtx)
 
 	ep := ec.getEndpoint()
-	rs := &collector[R]{consumer: stream.GetErrorStream()}
+	rs := &collector[R]{consumer: ec.result}
 
 	msg := &SinkMessage[R]{
 		topic:        ep.topic,
@@ -641,6 +687,26 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
 	handler EndpointHandler[HandlerState, T, R],
 	opts ...SaramaKafkaSinkOption[HandlerState, T, R],
 ) (runtime.Consumer[T], error) {
+	return makeSaramaKafkaEndpointConsumer(stream, stream.GetErrorStream(), handler, opts...)
+}
+
+// MakeSaramaKafkaEndpointConsumerWithResult sends SinkMessage results to the
+// ordinary output of SinkWithResult. Error-stream delivery remains explicit via
+// the stream's error contract; it is never used as a success continuation.
+func MakeSaramaKafkaEndpointConsumerWithResult[HandlerState, T, R, E any](
+	stream runtime.TypedSinkStreamWithResult[T, R, E],
+	handler EndpointHandler[HandlerState, T, R],
+	opts ...SaramaKafkaSinkOption[HandlerState, T, R],
+) (runtime.Consumer[T], error) {
+	return makeSaramaKafkaEndpointConsumer(stream, runtime.ConsumerFunc[R](stream.ConsumeResult), handler, opts...)
+}
+
+func makeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
+	stream kafkaSinkStream[T],
+	result runtime.Consumer[R],
+	handler EndpointHandler[HandlerState, T, R],
+	opts ...SaramaKafkaSinkOption[HandlerState, T, R],
+) (runtime.Consumer[T], error) {
 	if handler == nil {
 		return nil, fmt.Errorf("handler is nil for kafka endpoint sink for the stream %q", stream.GetName())
 	}
@@ -654,9 +720,11 @@ func MakeSaramaKafkaEndpointConsumer[HandlerState, T, R any](
 		tr = t.Tracer(env.ServiceConfig().Name)
 	}
 	ec := &saramaKafkaEndpointConsumer[HandlerState, T, R]{
-		DataSinkEndpointConsumer: runtime.MakeDataSinkEndpointConsumer[T, R](endpoint, stream),
-		handler:                  handler,
-		tracer:                   tr,
+		endpoint: endpoint,
+		stream:   stream,
+		result:   result,
+		handler:  handler,
+		tracer:   tr,
 	}
 	if ec.tracer != nil {
 		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())

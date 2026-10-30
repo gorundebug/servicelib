@@ -116,3 +116,31 @@ func TestCronResultWaitReleasesWatches(t *testing.T) {
 		t.Fatal("closed wait retained or accepted a watch")
 	}
 }
+
+func TestCronResultWaitEmptyActivationPreservesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(runtime.WithStreamId(t.Context(), "empty-cancelled"))
+	defer cancel()
+	consumer := endpointConsumer[string, string, error]{hasResult: true, pending: make(map[string]chan struct{})}
+	consumer.function = cancellationScheduleFunction(func(context.Context, runtime.ScheduleTrigger, runtime.Collect[string]) { cancel() })
+	if err := consumer.onTrigger(ctx, runtime.ScheduleTrigger{}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if len(consumer.pending) != 0 {
+		t.Fatal("cancelled empty activation retained pending state")
+	}
+}
+
+func TestCronResultWaitRejectsNilContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(runtime.WithStreamId(t.Context(), "nil-emission"), time.Second)
+	defer cancel()
+	consumer := endpointConsumer[string, string, error]{hasResult: true, pending: make(map[string]chan struct{})}
+	consumer.function = cancellationScheduleFunction(func(_ context.Context, _ runtime.ScheduleTrigger, out runtime.Collect[string]) {
+		out.Out(nil, "invalid")
+	})
+	if err := consumer.onTrigger(ctx, runtime.ScheduleTrigger{}); err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("nil context was not rejected immediately", err)
+	}
+	if len(consumer.pending) != 0 {
+		t.Fatal("invalid emission retained pending state")
+	}
+}

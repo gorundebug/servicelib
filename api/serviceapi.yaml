@@ -1071,7 +1071,7 @@ components:
           description: gRPC method name as defined in the proto file. Applies to gRPC endpoints.
         schedule:
           type: string
-          description: Cron expression for a local Cron endpoint or an optional Temporal Schedule.
+          description: 'Local Cron accepts a portable five-field calendar expression or @every Nms with canonical integer milliseconds from 10 to 86400000. Temporal schedules accept only the five-field calendar expression. Both require UTC; local intervals do not provide durable replay.'
         scheduleId:
           type: string
           description: Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.

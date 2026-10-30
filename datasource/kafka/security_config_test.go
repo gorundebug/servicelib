@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/IBM/sarama"
+
 	"github.com/gorundebug/servicelib/api"
 	"github.com/gorundebug/servicelib/runtime/config"
 )
@@ -48,5 +50,18 @@ func TestKafkaTransportKeepsTLSAndSASL(t *testing.T) {
 	plain, err := makeKafkaConfig(&config.KafkaDataConnectorConfig{SecurityProtocol: api.PLAINTEXT})
 	if err != nil || plain.Net.SASL.Enable || plain.Net.TLS.Enable {
 		t.Fatal("explicit plaintext changed", err)
+	}
+}
+
+func TestKafkaNativeInputUsesCommittedIsolation(t *testing.T) {
+	cfg, err := makeKafkaConfig(&config.KafkaDataConnectorConfig{SecurityProtocol: api.PLAINTEXT})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Consumer.IsolationLevel != sarama.ReadCommitted {
+		t.Fatal("Kafka inputs must not deliver aborted records")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
