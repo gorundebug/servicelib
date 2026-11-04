@@ -175,6 +175,7 @@ type netHTTPEndpoint struct {
 	*runtime.DataSourceEndpoint
 	consumer netHTTPEndpointConsumer
 	method   string
+	path     string
 }
 
 type resultConsumer[T any] interface {
@@ -198,6 +199,7 @@ type netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E any] struct 
 	tracer         tracing.Tracer
 	tracingEnabled bool
 	spanAttributes [4]tracing.Attribute
+	pathAttribute  tracing.Attribute
 }
 
 func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) Out(ctx context.Context, value T) {
@@ -278,6 +280,7 @@ func createNetHTTPDataSourceEndpoint(id int, env runtime.RuntimeEnvironment) (*n
 	ep := &netHTTPEndpoint{
 		DataSourceEndpoint: sourceEndpoint,
 		method:             method,
+		path:               epCfg.Path,
 	}
 	var inputEndpoint runtime.InputEndpoint = ep
 	dataSource.AddEndpoint(inputEndpoint)
@@ -427,7 +430,7 @@ func (ec *netHTTPEndpointTypedConsumer[HandlerState, ReqT, ResR, T, R, E]) serve
 			ec.spanAttributes[2],
 			ec.spanAttributes[3],
 			tracing.StringAttr("method", r.Method),
-			tracing.StringAttr("path", r.URL.Path),
+			ec.pathAttribute,
 		}
 		reqCtx, span = ec.tracer.Start(reqCtx, "http.input", attributes[:]...)
 		defer span.End()
@@ -636,6 +639,8 @@ func MakeNetHTTPEndpointConsumer[HandlerState, ReqT, ResR, T, R, E any](
 	}
 	if ec.tracer != nil {
 		ec.spanAttributes = runtime.MakeEndpointSpanAttributes(ec.Stream(), ec.Endpoint())
+		// Route configuration is stable; the request path may contain private identifiers.
+		ec.pathAttribute = tracing.StringAttr("path", endpoint.path)
 	}
 	ec.sc = runtime.MakeStreamContext[T, R, E](
 		ec.Stream(),

@@ -116,8 +116,8 @@ func checkEndpointTraceCall(t *testing.T, fileSet *token.FileSet, function *ast.
 		}
 		return
 	}
-	// HTTP method/path belong to the individual request and must not be cached
-	// on the shared consumer, nor added after Start (samplers may inspect them).
+	// Method belongs to the request; path is the cached configured route.
+	// Both are present at Start so samplers see no private request-path values.
 	if traceExpression(fileSet, call.Args[2]) != "attributes[:]" {
 		t.Fatal("HTTP input must use a request-local attribute array")
 	}
@@ -129,15 +129,15 @@ func checkEndpointTraceCall(t *testing.T, fileSet *token.FileSet, function *ast.
 		}
 		array, ok := assignment.Rhs[0].(*ast.CompositeLit)
 		if !ok || len(array.Elts) != 6 || traceExpression(fileSet, array.Type) != "[6]tracing.Attribute" {
-			t.Fatal("HTTP request attributes must contain the four cached labels and two dynamic labels")
+			t.Fatal("HTTP request attributes must contain the four cached labels, the request method and the cached route")
 		}
 		for index := 0; index < 4; index++ {
 			if traceExpression(fileSet, array.Elts[index]) != fmt.Sprintf("%s.spanAttributes[%d]", receiver, index) {
 				t.Fatal("HTTP static attribute was rebuilt instead of copied from the cache")
 			}
 		}
-		if traceExpression(fileSet, array.Elts[4]) != `tracing.StringAttr("method", r.Method)` || traceExpression(fileSet, array.Elts[5]) != `tracing.StringAttr("path", r.URL.Path)` {
-			t.Fatal("HTTP method/path must be taken from the current request")
+		if traceExpression(fileSet, array.Elts[4]) != `tracing.StringAttr("method", r.Method)` || traceExpression(fileSet, array.Elts[5]) != receiver+".pathAttribute" {
+			t.Fatal("HTTP method must be current; path must be the cached configured route")
 		}
 		if !hasEndpointTraceGuard(fileSet, function.Body, assignment.Pos(), receiver, context) {
 			t.Fatal("disabled tracing must not construct HTTP request attributes")
