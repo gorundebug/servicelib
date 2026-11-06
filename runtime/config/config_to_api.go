@@ -382,6 +382,7 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
 		e.PublicFunction = boolOptPtr(c.PublicFunction)
 	case *CustomEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
 		e.FunctionName = c.FunctionName
 		e.FunctionPackage = strOptPtr(c.FunctionPackage)
 		e.FunctionModule = strOptPtr(c.FunctionModule)

@@ -471,9 +471,13 @@ func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, 
 	return nil, fmt.Errorf("getSerializer error. Unsupported type: %s", valueType.Name())
 }
 
-func (app *ServiceApp) Start(ctx context.Context) error {
-
-	serviceConfig := app.environment.ServiceConfig()
+// StartGraph starts registered graph execution resources and sinks without
+// admitting datasource traffic or starting the service HTTP listener. Use it for
+// explicit operator/substream execution. Call either StartGraph or Start once
+// per lifecycle, then Stop, including after a partial startup failure.
+// Managed connectors acquire their outbound resources here; their admission
+// remains closed until Start. No source handler behavior is overridden.
+func (app *ServiceApp) StartGraph(ctx context.Context) error {
 
 	for _, stream := range app.streams {
 		if err := stream.Build(); err != nil {
@@ -514,6 +518,16 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (app *ServiceApp) Start(ctx context.Context) error {
+	if err := app.StartGraph(ctx); err != nil {
+		return err
+	}
+
+	serviceConfig := app.environment.ServiceConfig()
+
 	// A managed connector may expose inbound polling as well as an outbound
 	// client. Open that admission only after every downstream graph resource
 	// and sink is ready; an existing durable backlog can arrive immediately.

@@ -188,3 +188,7 @@ func TestConsumerRequestEndpointLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func (_ *requestLifecycleHandler) RestoreCheckpoint(_ context.Context, _ StreamContext[int, int, error]) (map[int32]int64, error) {
+	return nil, nil
+}

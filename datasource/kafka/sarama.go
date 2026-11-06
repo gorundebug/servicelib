@@ -104,10 +104,16 @@ func contextFromKafkaHeaders(ctx context.Context, engine tracing.Tracing, header
 }
 
 func (m *ConsumerMessage) Commit() {
+	if m.handlerData.session.Context().Err() != nil {
+		return
+	}
 	m.handlerData.session.Commit()
 }
 
 func (m *ConsumerMessage) MarkMessage(metadata string) {
+	if m.handlerData.session.Context().Err() != nil {
+		return
+	}
 	m.handlerData.session.MarkMessage(m.handlerData.message, metadata)
 }
 
@@ -218,6 +224,13 @@ func (r *kafkaResult[HandlerState, T, R, E]) Done() {
 // but access to HandlerState from these methods still requires synchronisation
 // if it is shared with GetMessageID or a registered callback.
 type EndpointHandler[HandlerState, T, R, E any] interface {
+	// RestoreCheckpoint returns the next offsets embodied in externally restored
+	// durable state, keyed by partition of this endpoint's topic. Nil retains
+	// broker-managed positions. A non-nil map enables strict restoration and
+	// must cover every assigned partition. Called before startup and on each
+	// assignment; use already loaded state, never mutate the returned map.
+	// The prefix may be committed immediately. No new record is acknowledged.
+	RestoreCheckpoint(context.Context, StreamContext[T, R, E]) (map[int32]int64, error)
 	// OnError receives transport/group errors, including failures before a
 	// message or HandlerState exists. Map them to E through sc.ErrorCollect as
 	// appropriate. It may run concurrently with requests and must return promptly.
@@ -256,6 +269,7 @@ type saramaKafkaEndpointConsumer interface {
 	Start(context.Context) error
 	Stop(context.Context)
 	EndpointError(context.Context, error)
+	RestoreCheckpoint(context.Context) (map[int32]int64, error)
 	EndpointRequest(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim, message *kafka.ConsumerMessage) error
 }
 
@@ -273,6 +287,9 @@ type saramaKafkaEndpoint struct {
 	*runtime.DataSourceEndpoint
 	consumer      saramaKafkaEndpointConsumer
 	consumerGroup kafka.ConsumerGroup
+	client        kafka.Client
+	restoring     bool
+	restored      map[int32]int64 // immutable throughout the group session
 	errorsDone    <-chan struct{}
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -303,6 +320,10 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointError
 		return
 	}
 	ec.handler.OnError(ctx, ec.sc, err)
+}
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) RestoreCheckpoint(ctx context.Context) (map[int32]int64, error) {
+	return ec.handler.RestoreCheckpoint(ctx, ec.sc)
 }
 
 func makeKafkaConfig(cfg *config.KafkaDataConnectorConfig) (*kafka.Config, error) {
@@ -413,11 +434,19 @@ func (ds *saramaKafkaDataSource) Stop(ctx context.Context) {
 	}
 }
 
-func (ep *saramaKafkaEndpoint) Setup(kafka.ConsumerGroupSession) error { return nil }
+func (ep *saramaKafkaEndpoint) Setup(session kafka.ConsumerGroupSession) error {
+	return ep.restoreAssignment(session)
+}
 
 func (ep *saramaKafkaEndpoint) Cleanup(kafka.ConsumerGroupSession) error { return nil }
 
 func (ep *saramaKafkaEndpoint) ConsumeClaim(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim) error {
+	if ep.restoring {
+		expected, ok := ep.restored[claim.Partition()]
+		if !ok || claim.InitialOffset() != expected {
+			return fmt.Errorf("%w: assigned position changed for partition %d", ErrCheckpointRestore, claim.Partition())
+		}
+	}
 	for {
 		select {
 		case <-session.Context().Done():
@@ -457,6 +486,65 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context) (err error) {
 		return err
 	}
 	kafkaConfig.Consumer.Offsets.Initial = kafka.OffsetOldest
+	if cfg.ConsumerGroup == "" {
+		return fmt.Errorf("consumer group does not set for kafka source endpoint %q", ep.GetName())
+	}
+	if err := ep.consumer.Start(ctx); err != nil {
+		return err
+	}
+	cancelCtx, cancelCause := context.WithCancelCause(ctx)
+	ep.cancel = func() { cancelCause(context.Canceled) }
+	ep.started = true
+	ep.wg.Add(1)
+	go func() {
+		defer ep.wg.Done()
+		report := func(err error) {
+			ep.GetRuntimeEnvironment().Log().Error(cancelCtx, "consumer group consume error", log.Str("endpoint", ep.GetName()), log.Err(err))
+			ep.consumer.EndpointError(ctx, err)
+			cancelOnInvalidOffset(err, kafkaConfig.Consumer.Group.ResetInvalidOffsets, cancelCause)
+			if errors.Is(err, ErrCheckpointRestore) {
+				cancelCause(err)
+			}
+		}
+		// Restoration may wait for another source to install application state.
+		// Do not hold the service's sequential Start loop while waiting; no Kafka
+		// client/group exists yet, so no records or assignments can pass the gate.
+		if err := ep.initializeConsumer(cancelCtx, cfg, dsCfg, kafkaConfig); err != nil {
+			if cancelCtx.Err() == nil {
+				report(err)
+			}
+			cancelCause(err)
+			return
+		}
+		if cancelCtx.Err() != nil {
+			return
+		}
+		ep.errorsDone = drainConsumerErrors(ep.consumerGroup.Errors(), report)
+		for cancelCtx.Err() == nil {
+			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
+				report(err)
+			}
+		}
+	}()
+	return nil
+}
+
+func (ep *saramaKafkaEndpoint) initializeConsumer(ctx context.Context, cfg *config.KafkaEndpointConfig, dsCfg *config.KafkaDataConnectorConfig, kafkaConfig *kafka.Config) (err error) {
+	checkpoint, err := ep.consumer.RestoreCheckpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrCheckpointRestore, err)
+	}
+	if err := validateCheckpoint(checkpoint); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	ep.restoring = checkpoint != nil
+	if ep.restoring {
+		// Missing restored history must fail, including after the initial check.
+		kafkaConfig.Consumer.Group.ResetInvalidOffsets = false
+	}
 	// Transport errors belong to the endpoint contract, not to an optional
 	// handler capability or a custom maker enabling Sarama's error channel.
 	kafkaConfig.Consumer.Return.Errors = true
@@ -483,44 +571,20 @@ func (ep *saramaKafkaEndpoint) Start(ctx context.Context) (err error) {
 		return err
 	}
 
-	if err := ep.consumer.Start(ctx); err != nil {
-		return err
+	ep.client, err = kafka.NewClient(strings.Split(dsCfg.Brokers, ","), kafkaConfig)
+	if err == nil {
+		ep.consumerGroup, err = kafka.NewConsumerGroupFromClient(cfg.ConsumerGroup, ep.client)
 	}
-	ep.consumerGroup, err = kafka.NewConsumerGroup(strings.Split(dsCfg.Brokers, ","), cfg.ConsumerGroup, kafkaConfig)
 	if err != nil {
-		ep.consumer.Stop(ctx)
+		if ep.client != nil {
+			err = errors.Join(err, ep.client.Close())
+			ep.client = nil
+		}
 		return fmt.Errorf("new consumer group failed for kafka source endpoint %q: %v",
 			ep.GetName(), err)
 	}
 
-	cancelCtx, cancelCause := context.WithCancelCause(ctx)
-	ep.cancel = func() { cancelCause(context.Canceled) }
-	report := func(err error) {
-		ep.GetRuntimeEnvironment().Log().Error(cancelCtx,
-			"consumer group consume error", log.Str("endpoint", ep.GetName()), log.Err(err))
-		// The service context remains valid while this endpoint is being stopped.
-		// Session cancellation may already carry a different Sarama-specific cause.
-		ep.consumer.EndpointError(ctx, err)
-		cancelOnInvalidOffset(err, kafkaConfig.Consumer.Group.ResetInvalidOffsets, cancelCause)
-	}
-	if kafkaConfig.Consumer.Return.Errors {
-		ep.errorsDone = drainConsumerErrors(ep.consumerGroup.Errors(), report)
-	}
-	ep.started = true
-	ep.wg.Add(1)
-	go func() {
-		defer ep.wg.Done()
-		for cancelCtx.Err() == nil {
-			if err := ep.consumerGroup.Consume(cancelCtx, topics, ep); err != nil {
-				report(err)
-			}
-			if cancelCtx.Err() != nil {
-				break
-			}
-		}
-	}()
-
-	return nil
+	return ctx.Err()
 }
 
 // Only auto-provisioning endpoints need an admin client. It shares the bounded
@@ -556,8 +620,8 @@ func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
 	if !ep.started {
 		return
 	}
-	ep.consumer.Stop(ctx)
 	ep.cancel()
+	ep.consumer.Stop(ctx)
 	c := make(chan struct{})
 	go func() {
 		defer close(c)
@@ -565,10 +629,16 @@ func (ep *saramaKafkaEndpoint) Stop(ctx context.Context) {
 	}()
 	select {
 	case <-c:
-		if err := ep.consumerGroup.Close(); err != nil {
-			ep.GetRuntimeEnvironment().Log().Warn(ctx,
-				"close consumer group failed",
-				log.Str("endpoint", ep.GetName()), log.Err(err))
+		if ep.consumerGroup != nil {
+			if err := ep.consumerGroup.Close(); err != nil {
+				ep.GetRuntimeEnvironment().Log().Warn(ctx, "close consumer group failed", log.Str("endpoint", ep.GetName()), log.Err(err))
+			}
+		}
+		if ep.client != nil {
+			if err := ep.client.Close(); err != nil {
+				ep.GetRuntimeEnvironment().Log().Warn(ctx, "close Kafka client failed", log.Str("endpoint", ep.GetName()), log.Err(err))
+			}
+			ep.client = nil
 		}
 		if ep.errorsDone != nil {
 			select {

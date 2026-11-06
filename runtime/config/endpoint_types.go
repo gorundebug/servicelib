@@ -155,6 +155,7 @@ func (e *TemporalEndpointConfig) GetProperty(name string) interface{} { return e
 
 // CustomEndpointConfig is the configuration for a custom endpoint.
 type CustomEndpointConfig struct {
+	Enabled                  bool                   `yaml:"enabled" mapstructure:"enabled"`
 	ID                       int                    `yaml:"id" mapstructure:"id"`
 	Name                     string                 `yaml:"name" mapstructure:"name"`
 	IdDataConnector          int                    `yaml:"idDataConnector" mapstructure:"idDataConnector"`

@@ -184,6 +184,13 @@ func (ep *customEndpoint[T]) Consume(ctx context.Context, value T) {
 }
 
 func (ep *customEndpoint[T]) Start(ctx context.Context) error {
+	cfg, ok := ep.GetConfig().(*config.CustomEndpointConfig)
+	if !ok {
+		return fmt.Errorf("invalid custom endpoint config for %s", ep.GetName())
+	}
+	if !cfg.Enabled {
+		return nil
+	}
 	if err := ep.consumer.Start(ctx); err != nil {
 		return err
 	}
@@ -201,6 +208,9 @@ func (ep *customEndpoint[T]) Start(ctx context.Context) error {
 }
 
 func (ep *customEndpoint[T]) Stop(ctx context.Context) {
+	if ep.cancel == nil {
+		return
+	}
 	ep.consumer.Stop(ctx)
 	// Runtime cleanup also visits endpoints that never reached Start (for
 	// example, a graph built only for an explicit control substream).

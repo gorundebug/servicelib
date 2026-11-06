@@ -107,7 +107,7 @@ func TestServiceStartsManagedAdmissionAfterDownstreamGraph(t *testing.T) {
 	app.taskPools = map[string]pool.TaskPool{}
 	app.priorityTaskPools = map[string]pool.PriorityTaskPool{}
 
-	if err := app.Start(context.Background()); err != nil {
+	if err := app.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -125,6 +125,39 @@ func TestServiceStartsManagedAdmissionAfterDownstreamGraph(t *testing.T) {
 	for index := range want {
 		if events[index] != want[index] {
 			t.Fatalf("start events = %v, want %v", events, want)
+		}
+	}
+}
+
+// A control graph needs live storage timers and sinks, while ordinary source
+// recovery/admission must remain stopped until explicitly requested by its owner.
+func TestStartGraphLeavesSourcesAndManagedAdmissionClosed(t *testing.T) {
+	events := []string{}
+	service := &config.ServiceConfig{ID: 1, Name: "operator"}
+	cfg, err := config.NewRuntimeConfig(startOrderConfig{service: service})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &ServiceApp{}
+	if err = app.InitIsolatedGraphRuntime(cfg, app, service.ID); err != nil {
+		t.Fatal(err)
+	}
+	app.managedDataConnectors[1] = &recordingManagedConnector{recordingLifecycle{name: "managed", events: &events}}
+	app.storages = []store.Storage{&recordingStorage{recordingLifecycle{name: "storage", events: &events}}}
+	app.delayPool = &recordingDelayPool{recordingLifecycle{name: "delay", events: &events}}
+	app.components = []environment.Lifecycle{recordingLifecycle{name: "component", events: &events}}
+	app.dataSinks[1] = &recordingDataSink{recordingLifecycle: recordingLifecycle{name: "sink", events: &events}}
+	app.dataSources[1] = &recordingDataSource{recordingLifecycle: recordingLifecycle{name: "source", events: &events}}
+	if err = app.StartGraph(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"start:managed", "start:storage", "start:delay", "start:component", "start:sink"}
+	if len(events) != len(want) {
+		t.Fatalf("events=%v, want=%v", events, want)
+	}
+	for i := range want {
+		if events[i] != want[i] {
+			t.Fatalf("events=%v, want=%v", events, want)
 		}
 	}
 }

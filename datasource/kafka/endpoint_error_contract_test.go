@@ -145,3 +145,7 @@ func TestKafkaTransportErrorWithoutMessageState(t *testing.T) {
 		t.Fatal("transport error was lost or fabricated a message lifecycle", received, handler)
 	}
 }
+
+func (_ *ordinaryErrorHandler) RestoreCheckpoint(_ context.Context, _ StreamContext[int, int, error]) (map[int32]int64, error) {
+	return nil, nil
+}
