@@ -344,10 +344,10 @@ func MakeConfig() *Config {
 			SinkGrpcSrcClientStream: cfg.CustomEndpointConfig{ID: sinkEndpointGrpcSrcClientStreamId, Name: "SinkGrpcSrcClientStream", IdDataConnector: CustomSinkConnId, FunctionName: "SinkGrpcSrcClientStream"},
 			SinkGrpcSrcBidiStream:   cfg.CustomEndpointConfig{ID: sinkEndpointGrpcSrcBidiStreamId, Name: "SinkGrpcSrcBidiStream", IdDataConnector: CustomSinkConnId, FunctionName: "SinkGrpcSrcBidiStream"},
 
-			LocalDstUnary:        cfg.CustomEndpointConfig{ID: endpointLocalDstUnaryId, Name: "LocalDstUnary", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstUnary"},
-			LocalDstServerStream: cfg.CustomEndpointConfig{ID: endpointLocalDstServerStreamId, Name: "LocalDstServerStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstServerStream"},
-			LocalDstClientStream: cfg.CustomEndpointConfig{ID: endpointLocalDstClientStreamId, Name: "LocalDstClientStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstClientStream"},
-			LocalDstBidiStream:   cfg.CustomEndpointConfig{ID: endpointLocalDstBidiStreamId, Name: "LocalDstBidiStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstBidiStream"},
+			LocalDstUnary:        cfg.CustomEndpointConfig{Enabled: true, ID: endpointLocalDstUnaryId, Name: "LocalDstUnary", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstUnary"},
+			LocalDstServerStream: cfg.CustomEndpointConfig{Enabled: true, ID: endpointLocalDstServerStreamId, Name: "LocalDstServerStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstServerStream"},
+			LocalDstClientStream: cfg.CustomEndpointConfig{Enabled: true, ID: endpointLocalDstClientStreamId, Name: "LocalDstClientStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstClientStream"},
+			LocalDstBidiStream:   cfg.CustomEndpointConfig{Enabled: true, ID: endpointLocalDstBidiStreamId, Name: "LocalDstBidiStream", IdDataConnector: LocalSourceConnId, FunctionName: "LocalDstBidiStream"},
 
 			GrpcDstUnary:        cfg.GrpcEndpointConfig{ID: endpointGrpcDstUnaryId, Name: "GrpcDstUnary", IdDataConnector: GrpcSinkConnId, GrpcMethodType: api.GrpcMethodTypeNoStreaming, MethodName: "Unary"},
 			GrpcDstServerStream: cfg.GrpcEndpointConfig{ID: endpointGrpcDstServerStreamId, Name: "GrpcDstServerStream", IdDataConnector: GrpcSinkConnId, GrpcMethodType: api.GrpcMethodTypeServerStreaming, MethodName: "ServerStream"},
