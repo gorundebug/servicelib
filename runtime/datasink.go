@@ -144,9 +144,10 @@ func MakeDataSinkEndpoint(dataSink DataSink, id int, environment RuntimeEnvironm
 	labels := metrics.Labels{
 		"connector": connectorName,
 		"endpoint":  endpointName,
-	}
-	if protocol := dataConnectorProtocol(dataSink.GetConfig().GetType()); protocol != "" {
-		labels["protocol"] = protocol
+		// Prometheus requires one label schema for every series of a metric.
+		// Preserve the existing empty value for non-gRPC connectors, not an
+		// absent key that conflicts with the gRPC endpoint's descriptor.
+		"protocol": dataConnectorProtocol(dataSink.GetConfig().GetType()),
 	}
 	scope := environment.Metrics().Scope("datasink_endpoint", labels)
 	var err error

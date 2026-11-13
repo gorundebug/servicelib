@@ -160,9 +160,8 @@ func MakeDataSourceEndpoint(dataSource DataSource, id int, environment RuntimeEn
 	labels := metrics.Labels{
 		"connector": connectorName,
 		"endpoint":  endpointName,
-	}
-	if protocol := dataConnectorProtocol(dataSource.GetConfig().GetType()); protocol != "" {
-		labels["protocol"] = protocol
+		// Keep the label schema identical across all connector protocols.
+		"protocol": dataConnectorProtocol(dataSource.GetConfig().GetType()),
 	}
 	scope := environment.Metrics().Scope("datasource_endpoint", labels)
 	var err error
