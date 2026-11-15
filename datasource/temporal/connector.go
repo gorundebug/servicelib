@@ -162,12 +162,13 @@ type connectorEndpointHandler = WorkflowGraphHandler
 type connectorEndpointEncoder = WorkflowInputEncoder
 
 type endpointWorkflowRequest struct {
-	ActivityType               string           `json:"activityType"`
-	ActivityStartToCloseMillis int              `json:"activityStartToCloseMillis"`
-	ActivityHeartbeatMillis    int              `json:"activityHeartbeatMillis,omitempty"`
-	MaximumAttempts            int32            `json:"maximumAttempts"`
-	Priority                   int              `json:"priority"`
-	Envelope                   EndpointEnvelope `json:"envelope"`
+	ActivityScheduleToStartTimeout time.Duration    `json:"activityScheduleToStartTimeout,omitempty"`
+	ActivityType                   string           `json:"activityType"`
+	ActivityStartToCloseMillis     int              `json:"activityStartToCloseMillis"`
+	ActivityHeartbeatMillis        int              `json:"activityHeartbeatMillis,omitempty"`
+	MaximumAttempts                int32            `json:"maximumAttempts"`
+	Priority                       int              `json:"priority"`
+	Envelope                       EndpointEnvelope `json:"envelope"`
 }
 
 type WorkflowEndpointConfig struct {
@@ -1011,6 +1012,15 @@ func submitEndpointFromWorkflow(
 	endpointID int,
 	envelope EndpointEnvelope,
 ) (EndpointResult, error) {
+	return submitEndpointFromWorkflowWithOptions(state, endpointID, envelope, SubmissionOptions{})
+}
+
+func submitEndpointFromWorkflowWithOptions(
+	state workflowSubmissionContext,
+	endpointID int,
+	envelope EndpointEnvelope,
+	options SubmissionOptions,
+) (EndpointResult, error) {
 	cfg, ok := state.endpoints[endpointID]
 	if !ok {
 		return EndpointResult{}, fmt.Errorf(
@@ -1019,6 +1029,10 @@ func submitEndpointFromWorkflow(
 	}
 	if state.connector == "" {
 		return EndpointResult{}, fmt.Errorf("Temporal Workflow connector identity is empty")
+	}
+	queue, err := options.resolve(cfg.TaskQueue, cfg.ExecutionType)
+	if err != nil {
+		return EndpointResult{}, err
 	}
 	if envelope.MessageID == "" || envelope.StreamID == "" {
 		return EndpointResult{}, fmt.Errorf(
@@ -1034,11 +1048,12 @@ func submitEndpointFromWorkflow(
 	switch cfg.ExecutionType {
 	case api.Activity:
 		activityCtx := workflow.WithActivityOptions(state.workflowCtx, workflow.ActivityOptions{
-			TaskQueue:           cfg.TaskQueue,
-			StartToCloseTimeout: time.Duration(cfg.ActivityStartToCloseMillis) * time.Millisecond,
-			HeartbeatTimeout:    time.Duration(cfg.ActivityHeartbeatMillis) * time.Millisecond,
-			RetryPolicy:         retryPolicy,
-			Priority:            priority,
+			TaskQueue:              queue,
+			ScheduleToStartTimeout: options.ScheduleToStartTimeout,
+			StartToCloseTimeout:    time.Duration(cfg.ActivityStartToCloseMillis) * time.Millisecond,
+			HeartbeatTimeout:       time.Duration(cfg.ActivityHeartbeatMillis) * time.Millisecond,
+			RetryPolicy:            retryPolicy,
+			Priority:               priority,
 		})
 		if err := workflow.ExecuteActivity(activityCtx, cfg.ActivityType, envelope).Get(activityCtx, &result); err != nil {
 			return EndpointResult{}, fmt.Errorf("execute Temporal endpoint Activity %q: %w", cfg.Name, err)
@@ -1046,7 +1061,7 @@ func submitEndpointFromWorkflow(
 	case api.Workflow:
 		childCtx := workflow.WithChildOptions(state.workflowCtx, workflow.ChildWorkflowOptions{
 			WorkflowID:               temporalEndpointWorkflowID(state.connector, cfg.Name, envelope.MessageID),
-			TaskQueue:                cfg.TaskQueue,
+			TaskQueue:                queue,
 			WorkflowExecutionTimeout: time.Duration(cfg.WorkflowExecutionMillis) * time.Millisecond,
 			WorkflowIDReusePolicy:    enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 			RetryPolicy:              retryPolicy,
@@ -1079,8 +1094,21 @@ func (c *Connector) SubmitEndpoint(
 	envelope EndpointEnvelope,
 	waitForResult bool,
 ) (EndpointResult, error) {
+	return c.SubmitEndpointWithOptions(ctx, endpointID, envelope, waitForResult, SubmissionOptions{})
+}
+
+// SubmitEndpointWithOptions is the explicit per-call scheduling variant of
+// SubmitEndpoint. It preserves identity, serialization, results and retries.
+// A selected queue is never silently replaced with the configured default.
+func (c *Connector) SubmitEndpointWithOptions(
+	ctx context.Context,
+	endpointID int,
+	envelope EndpointEnvelope,
+	waitForResult bool,
+	submissionOptions SubmissionOptions,
+) (EndpointResult, error) {
 	if state, ok := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); ok {
-		return submitEndpointFromWorkflow(state, endpointID, envelope)
+		return submitEndpointFromWorkflowWithOptions(state, endpointID, envelope, submissionOptions)
 	}
 	c.mu.Lock()
 	temporalClient := c.client
@@ -1094,6 +1122,10 @@ func (c *Connector) SubmitEndpoint(
 	if !cfg.Enabled {
 		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q is disabled", cfg.Name)
 	}
+	queue, err := submissionOptions.resolve(cfg.TaskQueue, cfg.TemporalExecutionType)
+	if err != nil {
+		return EndpointResult{}, err
+	}
 	if !started || temporalClient == nil {
 		return EndpointResult{}, fmt.Errorf("Temporal connector %q is not started", c.name)
 	}
@@ -1106,12 +1138,13 @@ func (c *Connector) SubmitEndpoint(
 	envelope.Version = 1
 	envelope.EndpointID = endpointID
 	request := endpointWorkflowRequest{
-		ActivityType:               temporalEndpointActivityType(c.name, cfg.Name),
-		ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
-		ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
-		MaximumAttempts:            int32(cfg.MaximumAttempts),
-		Priority:                   runtime.NormalizeTemporalPriority(envelope.Priority),
-		Envelope:                   envelope,
+		ActivityScheduleToStartTimeout: submissionOptions.ScheduleToStartTimeout,
+		ActivityType:                   temporalEndpointActivityType(c.name, cfg.Name),
+		ActivityStartToCloseMillis:     cfg.ActivityStartToCloseTimeout,
+		ActivityHeartbeatMillis:        cfg.ActivityHeartbeatTimeout,
+		MaximumAttempts:                int32(cfg.MaximumAttempts),
+		Priority:                       runtime.NormalizeTemporalPriority(envelope.Priority),
+		Envelope:                       envelope,
 	}
 	registration, registered := c.endpointRegistrations[endpointID]
 	if !registered {
@@ -1144,7 +1177,7 @@ func (c *Connector) SubmitEndpoint(
 	owner := temporalEndpointOwner(c.name, cfg.Name)
 	options := client.StartWorkflowOptions{
 		ID:                       workflowID,
-		TaskQueue:                cfg.TaskQueue,
+		TaskQueue:                queue,
 		WorkflowIDReusePolicy:    enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 		WorkflowIDConflictPolicy: enums.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
 		Priority:                 sdktemporal.Priority{PriorityKey: request.Priority},
@@ -1165,7 +1198,7 @@ func (c *Connector) SubmitEndpoint(
 		}
 		run = temporalClient.GetWorkflow(ctx, workflowID, "")
 	}
-	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), workflowType, owner, envelope.MessageID); err != nil {
+	if err := validateWorkflowOwnership(ctx, temporalClient, workflowID, run.GetRunID(), workflowType, owner, envelope.MessageID, submissionOptions.TaskQueue); err != nil {
 		return EndpointResult{}, err
 	}
 	if !waitForResult {
@@ -1186,6 +1219,7 @@ func validateWorkflowOwnership(
 	expectedWorkflowType string,
 	expectedOwner string,
 	expectedCallID string,
+	expectedQueue ...string,
 ) error {
 	description, err := temporalClient.DescribeWorkflowExecution(ctx, workflowID, runID)
 	if err != nil {
@@ -1198,6 +1232,9 @@ func validateWorkflowOwnership(
 			actual = info.GetType().GetName()
 		}
 		return fmt.Errorf("durable workflow %q ownership collision: workflow type %q, expected %q", workflowID, actual, expectedWorkflowType)
+	}
+	if len(expectedQueue) > 0 && expectedQueue[0] != "" && description.GetExecutionConfig().GetTaskQueue().GetName() != expectedQueue[0] {
+		return fmt.Errorf("durable workflow %q task queue collision: expected %q", workflowID, expectedQueue[0])
 	}
 	if err := validateMemoOwnership(info.GetMemo(), expectedOwner, expectedCallID); err != nil {
 		return fmt.Errorf("durable workflow %q ownership collision: %w", workflowID, err)
@@ -1254,10 +1291,11 @@ func temporalEndpointWorkflow(ctx workflow.Context, request endpointWorkflowRequ
 		).UnixNano()
 	}
 	options := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Duration(request.ActivityStartToCloseMillis) * time.Millisecond,
-		HeartbeatTimeout:    time.Duration(request.ActivityHeartbeatMillis) * time.Millisecond,
-		RetryPolicy:         &sdktemporal.RetryPolicy{MaximumAttempts: request.MaximumAttempts},
-		Priority:            sdktemporal.Priority{PriorityKey: request.Priority},
+		ScheduleToStartTimeout: request.ActivityScheduleToStartTimeout,
+		StartToCloseTimeout:    time.Duration(request.ActivityStartToCloseMillis) * time.Millisecond,
+		HeartbeatTimeout:       time.Duration(request.ActivityHeartbeatMillis) * time.Millisecond,
+		RetryPolicy:            &sdktemporal.RetryPolicy{MaximumAttempts: request.MaximumAttempts},
+		Priority:               sdktemporal.Priority{PriorityKey: request.Priority},
 	}
 	var result EndpointResult
 	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, options), request.ActivityType, request.Envelope).Get(ctx, &result); err != nil {

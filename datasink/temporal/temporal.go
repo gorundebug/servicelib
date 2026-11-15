@@ -31,6 +31,10 @@ type EndpointHandler[HandlerState, T any] interface {
 	EndRequest(context.Context, runtime.Stream, error, HandlerState)
 }
 
+// SubmissionOptionsProvider is an explicit per-message transport policy.
+// It must be deterministic when called inside a Temporal Workflow.
+type SubmissionOptionsProvider[T any] func(context.Context, T) (datasourcetemporal.SubmissionOptions, error)
+
 type directEndpointHandler[T any] struct{}
 
 func (directEndpointHandler[T]) GetMessageID(
@@ -90,6 +94,7 @@ type endpointConsumer[HandlerState, T, R, E any] struct {
 	inputSerde     serde.StreamSerde[T]
 	resultSerde    serde.StreamSerde[R]
 	waitResult     bool
+	options        SubmissionOptionsProvider[T]
 	done           func(context.Context, T, R, error)
 	sinkDone       runtime.SinkCallback[T]
 	dataSink       *outputDataSink
@@ -168,7 +173,17 @@ func (ec *endpointConsumer[HandlerState, T, R, E]) submit(ctx context.Context, v
 	if deadline, ok := handlerCtx.Deadline(); ok {
 		envelope.DeadlineUnixNano = deadline.UTC().UnixNano()
 	}
-	result, submitErr := ec.connector.SubmitEndpoint(handlerCtx, ec.endpoint.GetID(), envelope, ec.waitResult)
+	var options datasourcetemporal.SubmissionOptions
+	if ec.options != nil {
+		options, err = ec.options(handlerCtx, value)
+		if err != nil {
+			if span != nil {
+				tracing.SpanError(span, err)
+			}
+			return
+		}
+	}
+	result, submitErr := ec.connector.SubmitEndpointWithOptions(handlerCtx, ec.endpoint.GetID(), envelope, ec.waitResult, options)
 	if submitErr != nil {
 		err = submitErr
 		if span != nil {
@@ -243,7 +258,11 @@ func makeConsumer[HandlerState, T, R, E any](
 	waitResult bool,
 	handler EndpointHandler[HandlerState, T],
 	done func(context.Context, T, R, error),
+	options ...SubmissionOptionsProvider[T],
 ) (*endpointConsumer[HandlerState, T, R, E], error) {
+	if len(options) > 1 {
+		return nil, fmt.Errorf("Temporal sink accepts at most one submission options provider")
+	}
 	if handler == nil {
 		return nil, fmt.Errorf("handler is nil for Temporal sink stream %q", stream.Stream().GetName())
 	}
@@ -255,6 +274,9 @@ func makeConsumer[HandlerState, T, R, E any](
 		endpoint: ep, stream: stream, handler: handler, connector: connector,
 		inputSerde: inputSerde, resultSerde: resultSerde, waitResult: waitResult,
 		done: done, dataSink: ds,
+	}
+	if len(options) == 1 {
+		consumer.options = options[0]
 	}
 	ep.AddEndpointConsumer(consumer)
 	if tracer := env.Tracing(); tracer != nil {
@@ -272,6 +294,14 @@ func MakeEndpointConsumer[HandlerState, T, E any](
 	stream runtime.TypedSinkStream[T, E],
 	handler EndpointHandler[HandlerState, T],
 ) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumerWithOptions(stream, handler, nil)
+}
+
+func MakeEndpointConsumerWithOptions[HandlerState, T, E any](
+	stream runtime.TypedSinkStream[T, E],
+	handler EndpointHandler[HandlerState, T],
+	options SubmissionOptionsProvider[T],
+) (runtime.Consumer[T], error) {
 	consumer, err := makeConsumer[HandlerState, T, struct{}, E](
 		stream.GetRuntimeEnvironment(), stream, stream.GetEndpointId(), runtime.MakeSerde[T](stream.GetRuntimeEnvironment()),
 		nil, false, handler,
@@ -282,6 +312,7 @@ func MakeEndpointConsumer[HandlerState, T, E any](
 				}
 			}
 		},
+		options,
 	)
 	if err != nil {
 		return nil, err
@@ -296,7 +327,13 @@ func MakeEndpointConsumer[HandlerState, T, E any](
 func MakeDirectEndpointConsumer[T, E any](
 	stream runtime.TypedSinkStream[T, E],
 ) (runtime.Consumer[T], error) {
-	return MakeEndpointConsumer[struct{}](stream, directEndpointHandler[T]{})
+	return MakeDirectEndpointConsumerWithOptions(stream, nil)
+}
+
+func MakeDirectEndpointConsumerWithOptions[T, E any](
+	stream runtime.TypedSinkStream[T, E], options SubmissionOptionsProvider[T],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumerWithOptions[struct{}](stream, directEndpointHandler[T]{}, options)
 }
 
 // MakeEndpointConsumerWithResult creates a Temporal sink that waits for and
@@ -304,6 +341,14 @@ func MakeDirectEndpointConsumer[T, E any](
 func MakeEndpointConsumerWithResult[HandlerState, T, R, E any](
 	stream runtime.TypedSinkStreamWithResult[T, R, E],
 	handler EndpointHandler[HandlerState, T],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumerWithResultAndOptions(stream, handler, nil)
+}
+
+func MakeEndpointConsumerWithResultAndOptions[HandlerState, T, R, E any](
+	stream runtime.TypedSinkStreamWithResult[T, R, E],
+	handler EndpointHandler[HandlerState, T],
+	options SubmissionOptionsProvider[T],
 ) (runtime.Consumer[T], error) {
 	env := stream.GetRuntimeEnvironment()
 	consumer, err := makeConsumer[HandlerState, T, R, E](
@@ -315,6 +360,7 @@ func MakeEndpointConsumerWithResult[HandlerState, T, R, E any](
 				stream.GetErrorStream().Consume(ctx, value)
 			}
 		},
+		options,
 	)
 	if err != nil {
 		return nil, err
@@ -328,7 +374,13 @@ func MakeEndpointConsumerWithResult[HandlerState, T, R, E any](
 func MakeDirectEndpointConsumerWithResult[T, R, E any](
 	stream runtime.TypedSinkStreamWithResult[T, R, E],
 ) (runtime.Consumer[T], error) {
-	return MakeEndpointConsumerWithResult[struct{}](stream, directEndpointHandler[T]{})
+	return MakeDirectEndpointConsumerWithResultAndOptions(stream, nil)
+}
+
+func MakeDirectEndpointConsumerWithResultAndOptions[T, R, E any](
+	stream runtime.TypedSinkStreamWithResult[T, R, E], options SubmissionOptionsProvider[T],
+) (runtime.Consumer[T], error) {
+	return MakeEndpointConsumerWithResultAndOptions[struct{}](stream, directEndpointHandler[T]{}, options)
 }
 
 func (ec *endpointConsumer[HandlerState, T, R, E]) Start(context.Context) error { return nil }

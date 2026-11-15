@@ -20,7 +20,7 @@ var _ runtime.TypedLinkStream[any] = (*LinkStream[any])(nil)
 
 type LinkStream[T any] struct {
 	runtime.ConsumedStream[T]
-	source runtime.TypedConsumedStream[T]
+	source runtime.TypedStream[T]
 	serde  serde.StreamSerde[T]
 }
 
@@ -71,6 +71,12 @@ func (s *LinkStream[T]) Consume(ctx context.Context, value T) {
 }
 
 func (s *LinkStream[T]) SetSource(stream runtime.TypedConsumedStream[T]) error {
+	return s.BindSource(stream)
+}
+
+// BindSource accepts an output stream independently of its consumed input type.
+// The original SetSource method and TypedLinkStream contract remain unchanged.
+func (s *LinkStream[T]) BindSource(stream runtime.TypedStream[T]) error {
 	s.source = stream
 	s.serde = stream.GetSerde()
 	return stream.SetConsumer(s)
