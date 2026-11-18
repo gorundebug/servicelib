@@ -273,6 +273,57 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 		d.SaslMechanism = &c.SaslMechanism
 		d.Username = strOptPtr(c.Username)
 		d.Password = strOptPtr(c.Password)
+	case *NATSDataConnectorConfig:
+		servers := append([]string(nil), c.Servers...)
+		d.Servers = &servers
+		d.ConnectTimeoutMs = intOptPtr(c.ConnectTimeoutMs)
+		d.OperationTimeoutMs = intOptPtr(c.OperationTimeoutMs)
+		d.Username = strOptPtr(c.Username)
+		d.Password = strOptPtr(c.Password)
+		d.Token = strOptPtr(c.Token)
+		d.CredentialsFile = strOptPtr(c.CredentialsFile)
+		d.TlsServerName = strOptPtr(c.TLSServerName)
+		d.TlsCaFile = strOptPtr(c.TLSCAFile)
+		d.TlsCertFile = strOptPtr(c.TLSCertFile)
+		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
+		d.TlsEnabled = boolOptPtr(c.TLSEnabled)
+	case *RabbitMQDataConnectorConfig:
+		d.VirtualHost = strOptPtr(c.VirtualHost)
+		servers := append([]string(nil), c.Servers...)
+		d.Servers = &servers
+		d.ConnectTimeoutMs = intOptPtr(c.ConnectTimeoutMs)
+		d.OperationTimeoutMs = intOptPtr(c.OperationTimeoutMs)
+		d.Username = strOptPtr(c.Username)
+		d.Password = strOptPtr(c.Password)
+		d.TlsServerName = strOptPtr(c.TLSServerName)
+		d.TlsCaFile = strOptPtr(c.TLSCAFile)
+		d.TlsCertFile = strOptPtr(c.TLSCertFile)
+		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
+		d.TlsEnabled = boolOptPtr(c.TLSEnabled)
+	case *RedisStreamsDataConnectorConfig:
+		database := c.RedisDatabase
+		d.RedisDatabase = &database
+		servers := append([]string(nil), c.Servers...)
+		d.Servers = &servers
+		d.ConnectTimeoutMs = intOptPtr(c.ConnectTimeoutMs)
+		d.OperationTimeoutMs = intOptPtr(c.OperationTimeoutMs)
+		d.Username = strOptPtr(c.Username)
+		d.Password = strOptPtr(c.Password)
+		d.TlsServerName = strOptPtr(c.TLSServerName)
+		d.TlsCaFile = strOptPtr(c.TLSCAFile)
+		d.TlsCertFile = strOptPtr(c.TLSCertFile)
+		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
+		d.TlsEnabled = boolOptPtr(c.TLSEnabled)
+	case *PulsarDataConnectorConfig:
+		servers := append([]string(nil), c.Servers...)
+		d.Servers = &servers
+		d.AdminUrl = strOptPtr(c.AdminURL)
+		d.Token = strOptPtr(c.Token)
+		d.ConnectTimeoutMs = intOptPtr(c.ConnectTimeoutMs)
+		d.OperationTimeoutMs = intOptPtr(c.OperationTimeoutMs)
+		d.TlsCaFile = strOptPtr(c.TLSCAFile)
+		d.TlsCertFile = strOptPtr(c.TLSCertFile)
+		d.TlsKeyFile = strOptPtr(c.TLSKeyFile)
 	case *TemporalDataConnectorConfig:
 		d.Address = strOptPtr(c.Address)
 		d.Namespace = strOptPtr(c.Namespace)
@@ -333,6 +384,90 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		e.CreateTopic = boolOptPtr(c.CreateTopic)
 		e.Partitions = intOptPtr(c.Partitions)
 		e.ReplicationFactor = intOptPtr(c.ReplicationFactor)
+	case *NATSEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.CreateStream = boolOptPtr(c.CreateStream)
+		e.CreateConsumer = boolOptPtr(c.CreateConsumer)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
+		e.Subject = strOptPtr(c.Subject)
+		e.QueueGroup = strOptPtr(c.QueueGroup)
+		e.StreamName = strOptPtr(c.StreamName)
+		e.DurableName = strOptPtr(c.DurableName)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.FunctionName = c.FunctionName
+	case *RabbitMQEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.FunctionName = c.FunctionName
+
+		e.QueueName = strOptPtr(c.QueueName)
+		e.ExchangeName = strOptPtr(c.ExchangeName)
+		e.RoutingKey = strOptPtr(c.RoutingKey)
+		e.CreateQueue = boolOptPtr(c.CreateQueue)
+		e.CreateExchange = boolOptPtr(c.CreateExchange)
+		e.CreateBinding = boolOptPtr(c.CreateBinding)
+		e.ConsumerCredits = intOptPtr(c.ConsumerCredits)
+		e.PublisherMaxInFlight = intOptPtr(c.PublisherMaxInFlight)
+		if c.QueueType != "" {
+			v := c.QueueType
+			e.QueueType = &v
+		}
+		if c.ExchangeType != "" {
+			v := c.ExchangeType
+			e.ExchangeType = &v
+		}
+	case *RedisStreamsEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.FunctionName = c.FunctionName
+
+		e.StreamKey = strOptPtr(c.StreamKey)
+		e.ConsumerGroup = strOptPtr(c.ConsumerGroup)
+		e.ConsumerName = strOptPtr(c.ConsumerName)
+		e.CreateConsumerGroup = boolOptPtr(c.CreateConsumerGroup)
+		e.GroupStartId = strOptPtr(c.GroupStartId)
+		e.ReadCount = intOptPtr(c.ReadCount)
+		e.ReadBlockMs = intOptPtr(c.ReadBlockMs)
+		e.ClaimIdleMs = intOptPtr(c.ClaimIdleMs)
+		e.ClaimIntervalMs = intOptPtr(c.ClaimIntervalMs)
+		e.CreateStream = boolOptPtr(c.CreateStream)
+		e.PublisherMaxInFlight = intOptPtr(c.PublisherMaxInFlight)
+	case *PulsarEndpointConfig:
+		e.Enabled = boolOptPtr(c.Enabled)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.FunctionName = c.FunctionName
+
+		e.Topic = strOptPtr(c.Topic)
+		e.SubscriptionName = strOptPtr(c.SubscriptionName)
+		e.CreateTopic = boolOptPtr(c.CreateTopic)
+		e.CreateSubscription = boolOptPtr(c.CreateSubscription)
+		e.Partitions = intOptPtr(c.Partitions)
+		e.ReceiverQueueSize = intOptPtr(c.ReceiverQueueSize)
+		e.NegativeAckRedeliveryDelayMs = intOptPtr(c.NegativeAckRedeliveryDelayMs)
+		e.PublisherMaxInFlight = intOptPtr(c.PublisherMaxInFlight)
+		if c.SubscriptionType != "" {
+			v := c.SubscriptionType
+			e.SubscriptionType = &v
+		}
+		if c.SubscriptionInitialPosition != "" {
+			v := c.SubscriptionInitialPosition
+			e.SubscriptionInitialPosition = &v
+		}
 	case *CronEndpointConfig:
 		e.Enabled = boolOptPtr(c.Enabled)
 		e.Schedule = strOptPtr(c.Schedule)

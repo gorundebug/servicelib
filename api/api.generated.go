@@ -25,19 +25,35 @@ const (
 	DataConnectorImplementationAioHTTP                  DataConnectorImplementation = "aiohttp"
 	DataConnectorImplementationAioKafka                 DataConnectorImplementation = "aiokafka"
 	DataConnectorImplementationAsioGRPC                 DataConnectorImplementation = "asio/grpc"
+	DataConnectorImplementationAsyncNats                DataConnectorImplementation = "async-nats"
 	DataConnectorImplementationBoostBeastHTTP           DataConnectorImplementation = "boost/beast-http"
 	DataConnectorImplementationConfluentKafkaJavaScript DataConnectorImplementation = "confluent/kafka-javascript"
 	DataConnectorImplementationCppLibcron               DataConnectorImplementation = "cpp/libcron"
 	DataConnectorImplementationFunction                 DataConnectorImplementation = "function"
 	DataConnectorImplementationGoGocron                 DataConnectorImplementation = "go/gocron"
+	DataConnectorImplementationGoRedis                  DataConnectorImplementation = "go-redis"
 	DataConnectorImplementationGoogleGRPC               DataConnectorImplementation = "google/grpc"
 	DataConnectorImplementationGrpcJS                   DataConnectorImplementation = "grpc/grpc-js"
+	DataConnectorImplementationHiredis                  DataConnectorImplementation = "hiredis"
 	DataConnectorImplementationIBMsarama                DataConnectorImplementation = "IBM/Sarama"
 	DataConnectorImplementationLibrdkafka               DataConnectorImplementation = "librdkafka"
+	DataConnectorImplementationNatsC                    DataConnectorImplementation = "nats.c"
+	DataConnectorImplementationNatsGo                   DataConnectorImplementation = "nats.go"
+	DataConnectorImplementationNatsNode                 DataConnectorImplementation = "@nats-io/transport-node"
+	DataConnectorImplementationNatsPy                   DataConnectorImplementation = "nats.py"
 	DataConnectorImplementationNetHTTP                  DataConnectorImplementation = "net/http"
 	DataConnectorImplementationNodeCroner               DataConnectorImplementation = "node/croner"
 	DataConnectorImplementationNodeHTTP                 DataConnectorImplementation = "node/http"
+	DataConnectorImplementationNodeRedis                DataConnectorImplementation = "node-redis"
+	DataConnectorImplementationPulsarCpp                DataConnectorImplementation = "pulsar-client-cpp"
+	DataConnectorImplementationPulsarGo                 DataConnectorImplementation = "pulsar-client-go"
+	DataConnectorImplementationPulsarNode               DataConnectorImplementation = "pulsar-client-node"
+	DataConnectorImplementationPulsarPython             DataConnectorImplementation = "pulsar-client-python"
 	DataConnectorImplementationPythonAPScheduler        DataConnectorImplementation = "python/apscheduler"
+	DataConnectorImplementationRabbitMQAMQPGo           DataConnectorImplementation = "rabbitmq-amqp-go-client"
+	DataConnectorImplementationRabbitMQAMQPJavaScript   DataConnectorImplementation = "rabbitmq-amqp-js-client"
+	DataConnectorImplementationRabbitMQAMQPPython       DataConnectorImplementation = "rabbitmq-amqp-python-client"
+	DataConnectorImplementationRedisPy                  DataConnectorImplementation = "redis-py"
 	DataConnectorImplementationRustAxum                 DataConnectorImplementation = "rust/axum"
 	DataConnectorImplementationRustCroner               DataConnectorImplementation = "rust/croner"
 	DataConnectorImplementationRustRdkafka              DataConnectorImplementation = "rust/rdkafka"
@@ -53,13 +69,18 @@ const (
 
 // Defines values for DataConnectorType.
 const (
-	DataConnectorTypeCron      DataConnectorType = 5
-	DataConnectorTypeCustom    DataConnectorType = 4
-	DataConnectorTypeGRPC      DataConnectorType = 2
-	DataConnectorTypeHTTP      DataConnectorType = 1
-	DataConnectorTypeKafka     DataConnectorType = 3
-	DataConnectorTypeTemporal  DataConnectorType = 6
-	DataConnectorTypeUndefined DataConnectorType = 0
+	DataConnectorTypeCron         DataConnectorType = 5
+	DataConnectorTypeCustom       DataConnectorType = 4
+	DataConnectorTypeGRPC         DataConnectorType = 2
+	DataConnectorTypeHTTP         DataConnectorType = 1
+	DataConnectorTypeJetStream    DataConnectorType = 8
+	DataConnectorTypeKafka        DataConnectorType = 3
+	DataConnectorTypeNATS         DataConnectorType = 7
+	DataConnectorTypePulsar       DataConnectorType = 11
+	DataConnectorTypeRabbitMQ     DataConnectorType = 9
+	DataConnectorTypeRedisStreams DataConnectorType = 10
+	DataConnectorTypeTemporal     DataConnectorType = 6
+	DataConnectorTypeUndefined    DataConnectorType = 0
 )
 
 // Defines values for DataType.
@@ -89,6 +110,19 @@ const (
 	DataTypeUndefined     DataType = ""
 	DataTypeUnicodeChar   DataType = "unicode char"
 	DataTypeUnicodeString DataType = "unicode string"
+)
+
+// Defines values for EndpointSubscriptionInitialPosition.
+const (
+	Earliest EndpointSubscriptionInitialPosition = "Earliest"
+	Latest   EndpointSubscriptionInitialPosition = "Latest"
+)
+
+// Defines values for EndpointSubscriptionType.
+const (
+	Exclusive EndpointSubscriptionType = "Exclusive"
+	Failover  EndpointSubscriptionType = "Failover"
+	Shared    EndpointSubscriptionType = "Shared"
 )
 
 // Defines values for Environment.
@@ -189,6 +223,19 @@ const (
 	ProgrammingLanguageUndefined  ProgrammingLanguage = 0
 )
 
+// Defines values for RabbitMQExchangeType.
+const (
+	Direct RabbitMQExchangeType = "direct"
+	Fanout RabbitMQExchangeType = "fanout"
+	Topic  RabbitMQExchangeType = "topic"
+)
+
+// Defines values for RabbitMQQueueType.
+const (
+	Classic RabbitMQQueueType = "classic"
+	Quorum  RabbitMQQueueType = "quorum"
+)
+
 // Defines values for ScheduleMissedRunPolicy.
 const (
 	ScheduleMissedRunPolicyFireOnce ScheduleMissedRunPolicy = "FireOnce"
@@ -261,6 +308,9 @@ type DataConnector struct {
 	// Address gRPC connection address.
 	Address *string `json:"address,omitempty"`
 
+	// AdminUrl Pulsar administrative HTTP(S) URL for explicit resource provisioning and policy verification. Credentials are runtime-only.
+	AdminUrl *string `json:"adminUrl,omitempty"`
+
 	// ApiKey Temporal API key. Supply at runtime through an environment-backed override.
 	ApiKey *string `json:"apiKey,omitempty"`
 
@@ -271,8 +321,18 @@ type DataConnector struct {
 	// Brokers Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
 	Brokers *string `json:"brokers,omitempty"`
 
+	// ConnectTimeoutMs NATS, JetStream, and RabbitMQ connection timeout in integer milliseconds; omitted
+	// means 2000 in every target language. Convert to the native SDK duration
+	// at the adapter boundary; this value is not seconds or nanoseconds.
+	ConnectTimeoutMs *int `json:"connectTimeoutMs,omitempty"`
+
 	// ConnectionsCount Number of independent transport connections used by a gRPC sink connector.
 	ConnectionsCount *int `json:"connectionsCount,omitempty"`
+
+	// CredentialsFile Path to a mounted NATS credentials file for NATS or JetStream, supplied
+	// through a generated environment-backed override. Mutually exclusive
+	// with token and username/password. Do not embed credential contents.
+	CredentialsFile *string `json:"credentialsFile,omitempty"`
 
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
 	DialTimeout *float32 `json:"dialTimeout,omitempty"`
@@ -306,6 +366,8 @@ type DataConnector struct {
 	// - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 	// - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
 	// - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
+	// - `nats.go`, `nats.py`, `@nats-io/transport-node`, `async-nats`, `nats.c`: official native NATS SDK profiles
+	// - `rabbitmq-amqp-go-client`, `rabbitmq-amqp-python-client`, `rabbitmq-amqp-js-client`: official/designated RabbitMQ AMQP 1.0 SDK profiles
 	Implementation *DataConnectorImplementation `json:"implementation,omitempty"`
 
 	// Implementations Transport implementation selections keyed by template target identifier.
@@ -325,11 +387,21 @@ type DataConnector struct {
 	// Namespace Temporal namespace. Applies to Temporal connectors.
 	Namespace *string `json:"namespace,omitempty"`
 
-	// Password Kafka SASL password. Supply at runtime through the generated environment override.
+	// OperationTimeoutMs NATS flush, JetStream operations, and RabbitMQ management/publication-outcome timeout
+	// in integer milliseconds; omitted means 5000 in every target language.
+	// Convert to the native SDK duration at the adapter boundary. A timeout
+	// after publication may indicate unknown delivery. Core flush does not
+	// confirm subscriber processing. This does not enable request/reply.
+	OperationTimeoutMs *int `json:"operationTimeoutMs,omitempty"`
+
+	// Password Kafka SASL, NATS/JetStream, or RabbitMQ SASL PLAIN password. Supply at runtime through the generated environment override. For NATS/JetStream, set with username and do not combine with token or credentialsFile.
 	Password *string `json:"password,omitempty"`
 
 	// Port Port number. Applies to HTTP and gRPC connectors.
 	Port *int `json:"port,omitempty"`
+
+	// RedisDatabase Redis Streams standalone database index, separate from server URLs.
+	RedisDatabase *int `json:"redisDatabase,omitempty"`
 
 	// SaslMechanism Kafka SASL authentication mechanism.
 	SaslMechanism *KafkaSaslMechanism `json:"saslMechanism,omitempty"`
@@ -337,20 +409,35 @@ type DataConnector struct {
 	// SecurityProtocol Kafka client transport security protocol.
 	SecurityProtocol *KafkaSecurityProtocol `json:"securityProtocol,omitempty"`
 
-	// TlsCaFile Path to a PEM CA bundle mounted into the service container.
+	// Servers Native server URLs for NATS, JetStream, RabbitMQ and Redis Streams connectors, supplied explicitly
+	// or through a generated environment-backed override. No implicit localhost
+	// server. NATS/JetStream accept nats:// and tls://; RabbitMQ accepts amqp://
+	// and amqps://. Redis Streams uses one standalone redis:// or rediss:// server.
+	// URLs have no path,
+	// query, fragment or embedded credentials. Explicit ports are in 1..65535.
+	// Mixed plain and TLS URLs require tlsEnabled=true to prevent downgrade.
+	// Keep credentials in runtime authentication overrides, not topology URLs.
+	Servers *[]string `json:"servers,omitempty"`
+
+	// TlsCaFile Path to a PEM CA bundle mounted into the service container. For NATS/JetStream, omission uses system trust roots. Supply through a generated environment-backed override.
 	TlsCaFile *string `json:"tlsCaFile,omitempty"`
 
-	// TlsCertFile Path to a PEM client certificate for Temporal mTLS.
+	// TlsCertFile Path to a PEM client certificate for Temporal, NATS, JetStream, or RabbitMQ mTLS. Set together with tlsKeyFile. Supply through a generated environment-backed override.
 	TlsCertFile *string `json:"tlsCertFile,omitempty"`
 
-	// TlsEnabled Enables TLS for a Temporal connector.
+	// TlsEnabled Enables TLS for a Temporal, NATS, JetStream, or RabbitMQ connector. For NATS/JetStream, omission means false; a TLS server URL also requires TLS. Supply through a generated environment-backed override.
 	TlsEnabled *bool `json:"tlsEnabled,omitempty"`
 
-	// TlsKeyFile Path to the PEM private key paired with tlsCertFile.
+	// TlsKeyFile Path to the PEM private key paired with tlsCertFile. Supply through a generated environment-backed override.
 	TlsKeyFile *string `json:"tlsKeyFile,omitempty"`
 
-	// TlsServerName Expected TLS server name for a Temporal connector.
+	// TlsServerName Expected TLS server name for a Temporal, NATS, JetStream, or RabbitMQ connector. Omitted uses the server hostname; certificate verification must remain enabled. Supply through a generated environment-backed override.
 	TlsServerName *string `json:"tlsServerName,omitempty"`
+
+	// Token NATS or JetStream authentication token. Supply through a generated
+	// environment-backed override. Mutually exclusive with username/password
+	// and credentialsFile; omission of all authentication fields means no auth.
+	Token *string `json:"token,omitempty"`
 
 	// Type Type of external system the data connector connects to.
 	// - `HTTP` (1): HTTP server or client
@@ -359,6 +446,11 @@ type DataConnector struct {
 	// - `Custom` (4): in-process local connector for testing or internal pipelines
 	// - `Cron` (5): process-local cron scheduler
 	// - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
+	// - `NATS` (7): Core NATS ephemeral publish/subscribe
+	// - `JetStream` (8): NATS JetStream durable publish/subscribe
+	// - `RabbitMQ` (9): RabbitMQ AMQP 1.0 queues and publication outcomes
+	// - `RedisStreams` (10): Redis consumer groups and explicit XACK
+	// - `Pulsar` (11): Apache Pulsar persistent topics and durable subscriptions
 	Type DataConnectorType `json:"type"`
 
 	// UseDedicatedListener When true, this HTTP connector starts its own dedicated listener.
@@ -371,11 +463,14 @@ type DataConnector struct {
 	// Applies to Kafka sink connectors.
 	UsePartitioner *bool `json:"usePartitioner,omitempty"`
 
-	// Username Kafka SASL username. Supply at runtime through the generated environment override.
+	// Username Kafka SASL, NATS/JetStream, or RabbitMQ SASL PLAIN username. Supply at runtime through the generated environment override. For NATS/JetStream, set with password and do not combine with token or credentialsFile.
 	Username *string `json:"username,omitempty"`
 
 	// Version Kafka protocol version expected by the broker (e.g. `2.8.0`). Applies to Kafka connectors.
 	Version *string `json:"version,omitempty"`
+
+	// VirtualHost RabbitMQ virtual host. Supply separately from server URLs; omitted means the default '/' virtual host.
+	VirtualHost *string `json:"virtualHost,omitempty"`
 
 	// WorkerStopTimeout Maximum milliseconds for Temporal Workers to drain during shutdown; zero inherits the owning service shutdownTimeout.
 	WorkerStopTimeout *int `json:"workerStopTimeout,omitempty"`
@@ -401,6 +496,8 @@ type DataConnector struct {
 // - `grpc/grpc-js`: official pure-JavaScript gRPC transport
 // - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
 // - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
+// - `nats.go`, `nats.py`, `@nats-io/transport-node`, `async-nats`, `nats.c`: official native NATS SDK profiles
+// - `rabbitmq-amqp-go-client`, `rabbitmq-amqp-python-client`, `rabbitmq-amqp-js-client`: official/designated RabbitMQ AMQP 1.0 SDK profiles
 type DataConnectorImplementation string
 
 // DataConnectorType Type of external system the data connector connects to.
@@ -410,6 +507,11 @@ type DataConnectorImplementation string
 // - `Custom` (4): in-process local connector for testing or internal pipelines
 // - `Cron` (5): process-local cron scheduler
 // - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
+// - `NATS` (7): Core NATS ephemeral publish/subscribe
+// - `JetStream` (8): NATS JetStream durable publish/subscribe
+// - `RabbitMQ` (9): RabbitMQ AMQP 1.0 queues and publication outcomes
+// - `RedisStreams` (10): Redis consumer groups and explicit XACK
+// - `Pulsar` (11): Apache Pulsar persistent topics and durable subscriptions
 type DataConnectorType int
 
 // DataType Primitive or composite data type for a named type. Controls generated serde code
@@ -428,16 +530,70 @@ type Endpoint struct {
 	// ActivityStartToCloseTimeout Temporal Activity start-to-close timeout in milliseconds.
 	ActivityStartToCloseTimeout *int `json:"activityStartToCloseTimeout,omitempty"`
 
-	// ConsumerGroup Kafka consumer group ID. Applies to Kafka source endpoints.
+	// ClaimIdleMs Redis Streams. Minimum idle age for pending reclaim; does not fence former owners.
+	ClaimIdleMs *int `json:"claimIdleMs,omitempty"`
+
+	// ClaimIntervalMs Redis Streams. Reclaim scan cadence in milliseconds with retained cursor.
+	ClaimIntervalMs *int `json:"claimIntervalMs,omitempty"`
+
+	// ConsumerCredits RabbitMQ delivery admission bound; TypeScript bounds local work, not native wire credit. Explicit per-delivery settlement is required; request Done never settles.
+	ConsumerCredits *int `json:"consumerCredits,omitempty"`
+
+	// ConsumerGroup Kafka or Redis Streams source consumer group ID. Redis groups use explicit XACK, not Kafka offsets.
 	ConsumerGroup *string `json:"consumerGroup,omitempty"`
 
-	// CreateTopic When true, the generated service attempts to create the Kafka topic on startup if it does not exist.
+	// ConsumerName Redis Streams. Source consumer identity; omitted generates a unique endpoint instance name.
+	ConsumerName *string `json:"consumerName,omitempty"`
+
+	// CreateBinding RabbitMQ only. Explicitly permits creating an exchangeName-to-queueName binding with routingKey. Does not enable queue or exchange creation and never removes bindings.
+	CreateBinding *bool `json:"createBinding,omitempty"`
+
+	// CreateConsumer JetStream sources only. False or omitted requires an existing durable
+	// pull consumer. True permits creating a missing durableName consumer on
+	// streamName, filtered by subject, with explicit acknowledgement, delivery
+	// of all available messages, and instant replay. Never delete or reconfigure
+	// an existing consumer; reject incompatible configuration. Independent of
+	// createStream. Core NATS subjects require no resource creation.
+	CreateConsumer *bool `json:"createConsumer,omitempty"`
+
+	// CreateConsumerGroup Redis Streams. Opt-in XGROUP CREATE MKSTREAM; never resets an existing group.
+	CreateConsumerGroup *bool `json:"createConsumerGroup,omitempty"`
+
+	// CreateExchange RabbitMQ only. Explicitly permits declaring a durable non-auto-delete exchange, default direct. False never declares an exchange. Never reconcile an incompatible exchange.
+	CreateExchange *bool `json:"createExchange,omitempty"`
+
+	// CreateQueue RabbitMQ only. Explicitly permits declaring a durable nonexclusive non-auto-delete queue, default quorum. False requires an existing queue. Never reconcile an incompatible queue.
+	CreateQueue *bool `json:"createQueue,omitempty"`
+
+	// CreateStream Redis Streams sinks: true permits XADD to create a missing key; false
+	// uses NOMKSTREAM and reports a missing stream. No implicit trimming.
+	// JetStream: false or omitted requires an existing stream and must
+	// not provision it. True permits creating a missing stream covering subject
+	// with file storage and one replica. Never delete or reconfigure an existing
+	// stream; reject an incompatible stream rather than silently changing it.
+	CreateStream *bool `json:"createStream,omitempty"`
+
+	// CreateSubscription Pulsar source explicit subscription creation; independent of createTopic.
+	CreateSubscription *bool `json:"createSubscription,omitempty"`
+
+	// CreateTopic Explicitly allows missing Kafka or Pulsar topic creation at startup; never changes an existing topic. Pulsar tenant and namespace must already exist.
 	CreateTopic *bool `json:"createTopic,omitempty"`
+
+	// DurableName Required durable pull consumer name for JetStream sources. Not applicable
+	// to sinks. Consumers use explicit acknowledgement; completing the service
+	// request lifecycle does not acknowledge a message.
+	DurableName *string `json:"durableName,omitempty"`
 
 	// Enabled Controls whether an endpoint starts its transport integration.
 	// When omitted or false, the endpoint remains in the execution graph but its
 	// external transport or scheduler is not started.
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// ExchangeName RabbitMQ sink exchange destination or source exchange for an explicitly created binding.
+	ExchangeName *string `json:"exchangeName,omitempty"`
+
+	// ExchangeType RabbitMQ AMQP 1.0 exchange kind; bindings use routingKey.
+	ExchangeType *RabbitMQExchangeType `json:"exchangeType,omitempty"`
 
 	// FunctionDescription Doc comment added to the generated handler struct.
 	FunctionDescription *string `json:"functionDescription,omitempty"`
@@ -454,6 +610,9 @@ type Endpoint struct {
 
 	// FunctionPackage Subdirectory under the functions package where the generated handler is placed.
 	FunctionPackage *string `json:"functionPackage,omitempty"`
+
+	// GroupStartId Redis Streams. Group creation position, 0-0 or $, only with createConsumerGroup.
+	GroupStartId *string `json:"groupStartId,omitempty"`
 
 	// GrpcMethodType gRPC streaming mode for a gRPC endpoint. Determines the generated handler signature
 	// and the streaming behavior of the connector.
@@ -490,6 +649,9 @@ type Endpoint struct {
 	// Name Human-readable endpoint name shown in the visual designer.
 	Name string `json:"name"`
 
+	// NegativeAckRedeliveryDelayMs Pulsar source native negative acknowledgement redelivery delay; scheduling is approximate.
+	NegativeAckRedeliveryDelayMs *int `json:"negativeAckRedeliveryDelayMs,omitempty"`
+
 	// OverlapPolicy Portable policy for a firing that overlaps a still-running firing.
 	OverlapPolicy *ScheduleOverlapPolicy `json:"overlapPolicy,omitempty"`
 
@@ -503,14 +665,59 @@ type Endpoint struct {
 	// and can be imported by other services. When false, it goes into `internal/functions`.
 	PublicFunction *bool `json:"publicFunction,omitempty"`
 
+	// PublisherMaxInFlight RabbitMQ, Redis Streams or Pulsar sink maximum outstanding native asynchronous publications; adapter byte capacity is additionally bounded.
+	PublisherMaxInFlight *int `json:"publisherMaxInFlight,omitempty"`
+
+	// QueueGroup Optional Core NATS source queue group. Omitted means an independent
+	// subscription. Not applicable to sinks or JetStream durable pull consumers.
+	QueueGroup *string `json:"queueGroup,omitempty"`
+
+	// QueueName RabbitMQ source queue; sink destination when exchangeName is absent. Also the destination of an explicitly created exchange-to-queue binding.
+	QueueName *string `json:"queueName,omitempty"`
+
+	// QueueType RabbitMQ AMQP 1.0 queue kind; stream queues are outside this profile.
+	QueueType *RabbitMQQueueType `json:"queueType,omitempty"`
+
+	// ReadBlockMs Redis Streams. Bounded blocking read milliseconds on a dedicated connection.
+	ReadBlockMs *int `json:"readBlockMs,omitempty"`
+
+	// ReadCount Redis Streams. Maximum source read or reclaim batch.
+	ReadCount *int `json:"readCount,omitempty"`
+
+	// ReceiverQueueSize Pulsar source native receive queue capacity; no unbounded adapter queue.
+	ReceiverQueueSize *int `json:"receiverQueueSize,omitempty"`
+
 	// ReplicationFactor Kafka topic replication factor (used when createTopic is true).
 	ReplicationFactor *int `json:"replicationFactor,omitempty"`
+
+	// RoutingKey RabbitMQ exchange publication key and exchange-to-queue binding key; empty is a valid key.
+	RoutingKey *string `json:"routingKey,omitempty"`
 
 	// Schedule Local Cron accepts a portable five-field calendar expression or @every Nms with canonical integer milliseconds from 10 to 86400000. Temporal schedules accept only the five-field calendar expression. Both require UTC; local intervals do not provide durable replay.
 	Schedule *string `json:"schedule,omitempty"`
 
 	// ScheduleId Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.
 	ScheduleId *string `json:"scheduleId,omitempty"`
+
+	// StreamKey Redis Streams. Exact Redis stream key, not a pattern.
+	StreamKey *string `json:"streamKey,omitempty"`
+
+	// StreamName Required native stream name for JetStream source and sink endpoints.
+	StreamName *string `json:"streamName,omitempty"`
+
+	// Subject Required native subject for NATS and JetStream endpoints. Sources may
+	// use subject wildcards; sinks require a concrete publish subject.
+	// For JetStream sources this is the durable consumer filter subject.
+	Subject *string `json:"subject,omitempty"`
+
+	// SubscriptionInitialPosition Pulsar subscription creation position only; never resets an existing subscription.
+	SubscriptionInitialPosition *EndpointSubscriptionInitialPosition `json:"subscriptionInitialPosition,omitempty"`
+
+	// SubscriptionName Pulsar source durable subscription name. Stop never deletes this subscription.
+	SubscriptionName *string `json:"subscriptionName,omitempty"`
+
+	// SubscriptionType Pulsar source subscription dispatch mode; acknowledgements are individual in every mode.
+	SubscriptionType *EndpointSubscriptionType `json:"subscriptionType,omitempty"`
 
 	// TaskQueue Temporal Task Queue used by this durable endpoint.
 	TaskQueue *string `json:"taskQueue,omitempty"`
@@ -534,6 +741,12 @@ type Endpoint struct {
 	// WorkflowExecutionTimeout Temporal Workflow execution timeout in milliseconds; zero means SDK default.
 	WorkflowExecutionTimeout *int `json:"workflowExecutionTimeout,omitempty"`
 }
+
+// EndpointSubscriptionInitialPosition Pulsar subscription creation position only; never resets an existing subscription.
+type EndpointSubscriptionInitialPosition string
+
+// EndpointSubscriptionType Pulsar source subscription dispatch mode; acknowledgements are individual in every mode.
+type EndpointSubscriptionType string
 
 // Environment Deployment environment for the service. Controls which observability engines
 // are selected in the generated bootstrap code.
@@ -664,6 +877,12 @@ type ProjectSettings struct {
 	// RepoPath Git repository path for the project itself (e.g. `github.com/example/myproject`). When set, `make init` and `make git-push` will also push the project root to this remote.
 	RepoPath *string `json:"repoPath,omitempty"`
 }
+
+// RabbitMQExchangeType RabbitMQ AMQP 1.0 exchange kind; bindings use routingKey.
+type RabbitMQExchangeType string
+
+// RabbitMQQueueType RabbitMQ AMQP 1.0 queue kind; stream queues are outside this profile.
+type RabbitMQQueueType string
 
 // ScheduleMissedRunPolicy Portable policy for a firing delayed while the scheduler process is running.
 type ScheduleMissedRunPolicy string

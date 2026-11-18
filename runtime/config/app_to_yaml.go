@@ -301,6 +301,30 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 				}
 				dcObj["implementations"] = bindings
 			}
+			if dc.Servers != nil {
+				dcObj["servers"] = *dc.Servers
+			}
+			if dc.AdminUrl != nil {
+				dcObj["adminUrl"] = *dc.AdminUrl
+			}
+			if dc.RedisDatabase != nil {
+				dcObj["redisDatabase"] = *dc.RedisDatabase
+			}
+			if dc.VirtualHost != nil {
+				dcObj["virtualHost"] = *dc.VirtualHost
+			}
+			if dc.ConnectTimeoutMs != nil {
+				dcObj["connectTimeoutMs"] = *dc.ConnectTimeoutMs
+			}
+			if dc.OperationTimeoutMs != nil {
+				dcObj["operationTimeoutMs"] = *dc.OperationTimeoutMs
+			}
+			if dc.Token != nil {
+				dcObj["token"] = *dc.Token
+			}
+			if dc.CredentialsFile != nil {
+				dcObj["credentialsFile"] = *dc.CredentialsFile
+			}
 			if dc.Host != nil {
 				dcObj["host"] = *dc.Host
 			}
@@ -384,6 +408,96 @@ func AppToYaml(app *api.StreamApp) ([]byte, error) {
 					}
 					if ep.HttpMethodType != nil {
 						epObj["httpMethodType"] = string(*ep.HttpMethodType)
+					}
+					if ep.Subject != nil {
+						epObj["subject"] = *ep.Subject
+					}
+					if ep.QueueGroup != nil {
+						epObj["queueGroup"] = *ep.QueueGroup
+					}
+					if ep.StreamName != nil {
+						epObj["streamName"] = *ep.StreamName
+					}
+					if ep.DurableName != nil {
+						epObj["durableName"] = *ep.DurableName
+					}
+					if ep.CreateStream != nil {
+						epObj["createStream"] = *ep.CreateStream
+					}
+					if ep.CreateConsumer != nil {
+						epObj["createConsumer"] = *ep.CreateConsumer
+					}
+					if ep.QueueName != nil {
+						epObj["queueName"] = *ep.QueueName
+					}
+					if ep.ExchangeName != nil {
+						epObj["exchangeName"] = *ep.ExchangeName
+					}
+					if ep.RoutingKey != nil {
+						epObj["routingKey"] = *ep.RoutingKey
+					}
+					if ep.QueueType != nil {
+						epObj["queueType"] = *ep.QueueType
+					}
+					if ep.ExchangeType != nil {
+						epObj["exchangeType"] = *ep.ExchangeType
+					}
+					if ep.CreateQueue != nil {
+						epObj["createQueue"] = *ep.CreateQueue
+					}
+					if ep.CreateExchange != nil {
+						epObj["createExchange"] = *ep.CreateExchange
+					}
+					if ep.CreateBinding != nil {
+						epObj["createBinding"] = *ep.CreateBinding
+					}
+					if ep.StreamKey != nil {
+						epObj["streamKey"] = *ep.StreamKey
+					}
+					if ep.ConsumerName != nil {
+						epObj["consumerName"] = *ep.ConsumerName
+					}
+					if ep.CreateConsumerGroup != nil {
+						epObj["createConsumerGroup"] = *ep.CreateConsumerGroup
+					}
+					if ep.GroupStartId != nil {
+						epObj["groupStartId"] = *ep.GroupStartId
+					}
+					if ep.ReadCount != nil {
+						epObj["readCount"] = *ep.ReadCount
+					}
+					if ep.ReadBlockMs != nil {
+						epObj["readBlockMs"] = *ep.ReadBlockMs
+					}
+					if ep.ClaimIdleMs != nil {
+						epObj["claimIdleMs"] = *ep.ClaimIdleMs
+					}
+					if ep.ClaimIntervalMs != nil {
+						epObj["claimIntervalMs"] = *ep.ClaimIntervalMs
+					}
+					if ep.SubscriptionName != nil {
+						epObj["subscriptionName"] = *ep.SubscriptionName
+					}
+					if ep.SubscriptionType != nil {
+						epObj["subscriptionType"] = *ep.SubscriptionType
+					}
+					if ep.CreateSubscription != nil {
+						epObj["createSubscription"] = *ep.CreateSubscription
+					}
+					if ep.SubscriptionInitialPosition != nil {
+						epObj["subscriptionInitialPosition"] = *ep.SubscriptionInitialPosition
+					}
+					if ep.ReceiverQueueSize != nil {
+						epObj["receiverQueueSize"] = *ep.ReceiverQueueSize
+					}
+					if ep.NegativeAckRedeliveryDelayMs != nil {
+						epObj["negativeAckRedeliveryDelayMs"] = *ep.NegativeAckRedeliveryDelayMs
+					}
+					if ep.ConsumerCredits != nil {
+						epObj["consumerCredits"] = *ep.ConsumerCredits
+					}
+					if ep.PublisherMaxInFlight != nil {
+						epObj["publisherMaxInFlight"] = *ep.PublisherMaxInFlight
 					}
 					if ep.Path != nil {
 						epObj["path"] = *ep.Path

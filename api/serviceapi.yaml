@@ -463,7 +463,12 @@ components:
         - `Custom` (4): in-process local connector for testing or internal pipelines
         - `Cron` (5): process-local cron scheduler
         - `Temporal` (6): Temporal Service connection, Workers, Schedules, and durable jobs
-      enum: [ 0, 1, 2, 3, 4, 5, 6 ]
+        - `NATS` (7): Core NATS ephemeral publish/subscribe
+        - `JetStream` (8): NATS JetStream durable publish/subscribe
+        - `RabbitMQ` (9): RabbitMQ AMQP 1.0 queues and publication outcomes
+        - `RedisStreams` (10): Redis consumer groups and explicit XACK
+        - `Pulsar` (11): Apache Pulsar persistent topics and durable subscriptions
+      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]
       x-enum-varnames:
         - Undefined
         - HTTP
@@ -472,6 +477,20 @@ components:
         - Custom
         - Cron
         - Temporal
+        - NATS
+        - JetStream
+        - RabbitMQ
+        - RedisStreams
+        - Pulsar
+
+    RabbitMQQueueType:
+      type: string
+      enum: ['quorum', 'classic']
+      description: RabbitMQ AMQP 1.0 queue kind; stream queues are outside this profile.
+    RabbitMQExchangeType:
+      type: string
+      enum: ['direct', 'topic', 'fanout']
+      description: RabbitMQ AMQP 1.0 exchange kind; bindings use routingKey.
 
     ProcessPattern:
       type: integer
@@ -763,6 +782,8 @@ components:
         - `grpc/grpc-js`: official pure-JavaScript gRPC transport
         - `confluent/kafka-javascript`: Confluent Kafka JavaScript client
         - `cpp/libcron`: libcron-backed UTC cron scheduler for C++ runtimes
+        - `nats.go`, `nats.py`, `@nats-io/transport-node`, `async-nats`, `nats.c`: official native NATS SDK profiles
+        - `rabbitmq-amqp-go-client`, `rabbitmq-amqp-python-client`, `rabbitmq-amqp-js-client`: official/designated RabbitMQ AMQP 1.0 SDK profiles
       enum: [ '',
               'net/http',
               'function',
@@ -789,7 +810,23 @@ components:
               'cpp/libcron',
               'temporal/go',
               'temporal/python',
-              'temporal/typescript'
+              'temporal/typescript',
+              'nats.go',
+              'nats.py',
+              '@nats-io/transport-node',
+              'async-nats',
+              'nats.c',
+              'rabbitmq-amqp-go-client',
+              'rabbitmq-amqp-python-client',
+              'rabbitmq-amqp-js-client',
+              'go-redis',
+              'redis-py',
+              'node-redis',
+              'hiredis',
+              'pulsar-client-go',
+              'pulsar-client-python',
+              'pulsar-client-node',
+              'pulsar-client-cpp'
       ]
       x-enum-varnames:
         - Undefined
@@ -819,6 +856,22 @@ components:
         - TemporalGo
         - TemporalPython
         - TemporalTypeScript
+        - NatsGo
+        - NatsPy
+        - NatsNode
+        - AsyncNats
+        - NatsC
+        - RabbitMQAMQPGo
+        - RabbitMQAMQPPython
+        - RabbitMQAMQPJavaScript
+        - GoRedis
+        - RedisPy
+        - NodeRedis
+        - Hiredis
+        - PulsarGo
+        - PulsarPython
+        - PulsarNode
+        - PulsarCpp
 
     DataConnector:
       type: object
@@ -871,6 +924,67 @@ components:
         brokers:
           type: string
           description: Comma-separated list of Kafka broker addresses (e.g. `kafka1:9092,kafka2:9092`). Applies to Kafka connectors.
+        servers:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
+          description: |
+            Native server URLs for NATS, JetStream, RabbitMQ and Redis Streams connectors, supplied explicitly
+            or through a generated environment-backed override. No implicit localhost
+            server. NATS/JetStream accept nats:// and tls://; RabbitMQ accepts amqp://
+            and amqps://. Redis Streams uses one standalone redis:// or rediss:// server.
+            URLs have no path,
+            query, fragment or embedded credentials. Explicit ports are in 1..65535.
+            Mixed plain and TLS URLs require tlsEnabled=true to prevent downgrade.
+            Keep credentials in runtime authentication overrides, not topology URLs.
+        adminUrl:
+          type: string
+          description: Pulsar administrative HTTP(S) URL for explicit resource provisioning and policy verification. Credentials are runtime-only.
+        redisDatabase:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Redis Streams standalone database index, separate from server URLs.
+        virtualHost:
+          type: string
+          default: '/'
+          description: RabbitMQ virtual host. Supply separately from server URLs; omitted means the default '/' virtual host.
+        connectTimeoutMs:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854
+          default: 2000
+          description: |
+            NATS, JetStream, and RabbitMQ connection timeout in integer milliseconds; omitted
+            means 2000 in every target language. Convert to the native SDK duration
+            at the adapter boundary; this value is not seconds or nanoseconds.
+        operationTimeoutMs:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854
+          default: 5000
+          description: |
+            NATS flush, JetStream operations, and RabbitMQ management/publication-outcome timeout
+            in integer milliseconds; omitted means 5000 in every target language.
+            Convert to the native SDK duration at the adapter boundary. A timeout
+            after publication may indicate unknown delivery. Core flush does not
+            confirm subscriber processing. This does not enable request/reply.
+        token:
+          type: string
+          writeOnly: true
+          description: |
+            NATS or JetStream authentication token. Supply through a generated
+            environment-backed override. Mutually exclusive with username/password
+            and credentialsFile; omission of all authentication fields means no auth.
+        credentialsFile:
+          type: string
+          writeOnly: true
+          description: |
+            Path to a mounted NATS credentials file for NATS or JetStream, supplied
+            through a generated environment-backed override. Mutually exclusive
+            with token and username/password. Do not embed credential contents.
         version:
           type: string
           description: Kafka protocol version expected by the broker (e.g. `2.8.0`). Applies to Kafka connectors.
@@ -898,11 +1012,11 @@ components:
           description: SASL mechanism used when securityProtocol enables SASL.
         username:
           type: string
-          description: Kafka SASL username. Supply at runtime through the generated environment override.
+          description: Kafka SASL, NATS/JetStream, or RabbitMQ SASL PLAIN username. Supply at runtime through the generated environment override. For NATS/JetStream, set with password and do not combine with token or credentialsFile.
           writeOnly: true
         password:
           type: string
-          description: Kafka SASL password. Supply at runtime through the generated environment override.
+          description: Kafka SASL, NATS/JetStream, or RabbitMQ SASL PLAIN password. Supply at runtime through the generated environment override. For NATS/JetStream, set with username and do not combine with token or credentialsFile.
           writeOnly: true
         useDedicatedListener:
           type: boolean
@@ -928,20 +1042,20 @@ components:
           description: Temporal API key. Supply at runtime through an environment-backed override.
         tlsEnabled:
           type: boolean
-          description: Enables TLS for a Temporal connector.
+          description: Enables TLS for a Temporal, NATS, JetStream, or RabbitMQ connector. For NATS/JetStream, omission means false; a TLS server URL also requires TLS. Supply through a generated environment-backed override.
         tlsServerName:
           type: string
-          description: Expected TLS server name for a Temporal connector.
+          description: Expected TLS server name for a Temporal, NATS, JetStream, or RabbitMQ connector. Omitted uses the server hostname; certificate verification must remain enabled. Supply through a generated environment-backed override.
         tlsCaFile:
           type: string
-          description: Path to a PEM CA bundle mounted into the service container.
+          description: Path to a PEM CA bundle mounted into the service container. For NATS/JetStream, omission uses system trust roots. Supply through a generated environment-backed override.
         tlsCertFile:
           type: string
-          description: Path to a PEM client certificate for Temporal mTLS.
+          description: Path to a PEM client certificate for Temporal, NATS, JetStream, or RabbitMQ mTLS. Set together with tlsKeyFile. Supply through a generated environment-backed override.
         tlsKeyFile:
           type: string
           writeOnly: true
-          description: Path to the PEM private key paired with tlsCertFile.
+          description: Path to the PEM private key paired with tlsCertFile. Supply through a generated environment-backed override.
         workerStopTimeout:
           type: integer
           description: Maximum milliseconds for Temporal Workers to drain during shutdown; zero inherits the owning service shutdownTimeout.
@@ -1048,6 +1162,160 @@ components:
         topic:
           type: string
           description: Kafka topic name. Applies to Kafka endpoints.
+        subject:
+          type: string
+          minLength: 1
+          description: |
+            Required native subject for NATS and JetStream endpoints. Sources may
+            use subject wildcards; sinks require a concrete publish subject.
+            For JetStream sources this is the durable consumer filter subject.
+        queueName:
+          type: string
+          minLength: 1
+          description: RabbitMQ source queue; sink destination when exchangeName is absent. Also the destination of an explicitly created exchange-to-queue binding.
+        exchangeName:
+          type: string
+          minLength: 1
+          description: RabbitMQ sink exchange destination or source exchange for an explicitly created binding.
+        routingKey:
+          type: string
+          description: RabbitMQ exchange publication key and exchange-to-queue binding key; empty is a valid key.
+        queueType:
+          $ref: '#/components/schemas/RabbitMQQueueType'
+        exchangeType:
+          $ref: '#/components/schemas/RabbitMQExchangeType'
+        createQueue:
+          type: boolean
+          default: false
+          description: RabbitMQ only. Explicitly permits declaring a durable nonexclusive non-auto-delete queue, default quorum. False requires an existing queue. Never reconcile an incompatible queue.
+        createExchange:
+          type: boolean
+          default: false
+          description: RabbitMQ only. Explicitly permits declaring a durable non-auto-delete exchange, default direct. False never declares an exchange. Never reconcile an incompatible exchange.
+        createBinding:
+          type: boolean
+          default: false
+          description: RabbitMQ only. Explicitly permits creating an exchangeName-to-queueName binding with routingKey. Does not enable queue or exchange creation and never removes bindings.
+        subscriptionName:
+          type: string
+          minLength: 1
+          description: Pulsar source durable subscription name. Stop never deletes this subscription.
+        subscriptionType:
+          type: string
+          enum: ['Shared', 'Exclusive', 'Failover']
+          default: 'Shared'
+          description: Pulsar source subscription dispatch mode; acknowledgements are individual in every mode.
+        createSubscription:
+          type: boolean
+          default: false
+          description: Pulsar source explicit subscription creation; independent of createTopic.
+        subscriptionInitialPosition:
+          type: string
+          enum: ['Earliest', 'Latest']
+          default: 'Earliest'
+          description: Pulsar subscription creation position only; never resets an existing subscription.
+        receiverQueueSize:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 256
+          description: Pulsar source native receive queue capacity; no unbounded adapter queue.
+        negativeAckRedeliveryDelayMs:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          default: 60000
+          description: Pulsar source native negative acknowledgement redelivery delay; scheduling is approximate.
+        streamKey:
+          type: string
+          minLength: 1
+          description: Redis Streams. Exact Redis stream key, not a pattern.
+        consumerName:
+          type: string
+          minLength: 1
+          description: Redis Streams. Source consumer identity; omitted generates a unique endpoint instance name.
+        createConsumerGroup:
+          type: boolean
+          default: false
+          description: Redis Streams. Opt-in XGROUP CREATE MKSTREAM; never resets an existing group.
+        groupStartId:
+          type: string
+          minLength: 1
+          default: '0-0'
+          description: Redis Streams. Group creation position, 0-0 or $, only with createConsumerGroup.
+        readCount:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 64
+          description: Redis Streams. Maximum source read or reclaim batch.
+        readBlockMs:
+          type: integer
+          minimum: 1
+          maximum: 60000
+          default: 1000
+          description: Redis Streams. Bounded blocking read milliseconds on a dedicated connection.
+        claimIdleMs:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          default: 60000
+          description: Redis Streams. Minimum idle age for pending reclaim; does not fence former owners.
+        claimIntervalMs:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          default: 1000
+          description: Redis Streams. Reclaim scan cadence in milliseconds with retained cursor.
+        consumerCredits:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 256
+          description: RabbitMQ delivery admission bound; TypeScript bounds local work, not native wire credit. Explicit per-delivery settlement is required; request Done never settles.
+        publisherMaxInFlight:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 256
+          description: RabbitMQ, Redis Streams or Pulsar sink maximum outstanding native asynchronous publications; adapter byte capacity is additionally bounded.
+        queueGroup:
+          type: string
+          minLength: 1
+          description: |
+            Optional Core NATS source queue group. Omitted means an independent
+            subscription. Not applicable to sinks or JetStream durable pull consumers.
+        streamName:
+          type: string
+          minLength: 1
+          description: Required native stream name for JetStream source and sink endpoints.
+        durableName:
+          type: string
+          minLength: 1
+          description: |
+            Required durable pull consumer name for JetStream sources. Not applicable
+            to sinks. Consumers use explicit acknowledgement; completing the service
+            request lifecycle does not acknowledge a message.
+        createStream:
+          type: boolean
+          default: false
+          description: |
+            Redis Streams sinks: true permits XADD to create a missing key; false
+            uses NOMKSTREAM and reports a missing stream. No implicit trimming.
+            JetStream: false or omitted requires an existing stream and must
+            not provision it. True permits creating a missing stream covering subject
+            with file storage and one replica. Never delete or reconfigure an existing
+            stream; reject an incompatible stream rather than silently changing it.
+        createConsumer:
+          type: boolean
+          default: false
+          description: |
+            JetStream sources only. False or omitted requires an existing durable
+            pull consumer. True permits creating a missing durableName consumer on
+            streamName, filtered by subject, with explicit acknowledgement, delivery
+            of all available messages, and instant replay. Never delete or reconfigure
+            an existing consumer; reject incompatible configuration. Independent of
+            createStream. Core NATS subjects require no resource creation.
         partitions:
           type: integer
           description: "Number of partitions for the Kafka topic (used when createTopic is true)."
@@ -1055,7 +1323,8 @@ components:
           maximum: 1000
         createTopic:
           type: boolean
-          description: When true, the generated service attempts to create the Kafka topic on startup if it does not exist.
+          default: false
+          description: Explicitly allows missing Kafka or Pulsar topic creation at startup; never changes an existing topic. Pulsar tenant and namespace must already exist.
         replicationFactor:
           type: integer
           description: "Kafka topic replication factor (used when createTopic is true)."
@@ -1063,7 +1332,7 @@ components:
           maximum: 1000
         consumerGroup:
           type: string
-          description: Kafka consumer group ID. Applies to Kafka source endpoints.
+          description: Kafka or Redis Streams source consumer group ID. Redis groups use explicit XACK, not Kafka offsets.
         grpcMethodType:
           $ref: '#/components/schemas/GrpcMethodType'
         methodName:

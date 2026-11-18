@@ -672,26 +672,37 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) Stop(ctx cont
 	ec.concCond.Broadcast()
 }
 
-// acquireConcurrency blocks until a concurrency slot is available or the consumer is stopped.
-// Note: during a Kafka rebalance, session.Context() is cancelled by sarama. In-flight requests
-// will complete via handlerCtx.Done() and release their slots, which broadcasts to any goroutine
-// waiting here. This may slightly delay ConsumeClaim returning during rebalance, but is not
-// critical in practice since in-flight requests finish quickly on a cancelled context.
-func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) acquireConcurrency() bool {
+// acquireConcurrency waits for a slot with the original Kafka session context.
+// Zero is unlimited; negative limits are invalid. Cancellation only installs a
+// wake callback on the contended path, not on each admitted message.
+
+func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) acquireConcurrency(ctx context.Context) error {
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		limit := ec.handler.Concurrency(ec.sc)
+		if limit < 0 {
+			return fmt.Errorf("Kafka concurrency must be non-negative, got %d", limit)
+		}
 
 		ec.concMu.Lock()
 		if ec.stopped {
 			ec.concMu.Unlock()
-			return false
+			return context.Canceled
 		}
 		if limit == 0 || ec.active < limit {
 			ec.active++
 			ec.concMu.Unlock()
-			return true
+			return nil
 		}
+		wake := context.AfterFunc(ctx, func() {
+			ec.concMu.Lock()
+			ec.concCond.Broadcast()
+			ec.concMu.Unlock()
+		})
 		ec.concCond.Wait()
+		wake()
 		ec.concMu.Unlock()
 	}
 }
@@ -704,8 +715,8 @@ func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) releaseConcur
 }
 
 func (ec *saramaKafkaTypedEndpointConsumer[HandlerState, T, R, E]) EndpointRequest(session kafka.ConsumerGroupSession, claim kafka.ConsumerGroupClaim, message *kafka.ConsumerMessage) error {
-	if !ec.acquireConcurrency() {
-		return context.Canceled
+	if err := ec.acquireConcurrency(session.Context()); err != nil {
+		return err
 	}
 	defer ec.releaseConcurrency()
 
