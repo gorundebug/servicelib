@@ -12,8 +12,8 @@ import (
 	"github.com/gorundebug/servicelib/runtime/environment/tracing"
 )
 
-// Each phase deliberately outlives the Stop deadline. Its eventual completion
-// must not decrement another phase's counter or close another phase's channel.
+// Each phase outlives the caller deadline. Timeout may return to the caller,
+// but later teardown must wait for the preceding owners to finish.
 type stopTimeoutGate struct {
 	entered  chan struct{}
 	release  chan struct{}
@@ -71,7 +71,7 @@ type stopTimeoutLogs struct{ envlog.LogsEngine }
 
 func (stopTimeoutLogs) Shutdown(context.Context) error { return nil }
 
-func TestServiceStopDeadlineDoesNotReusePhaseState(t *testing.T) {
+func TestServiceStopDeadlinePreservesPhaseOwnership(t *testing.T) {
 	cfg := &MockServiceConfig{}
 	cfg.Services.MockService.ID = 1
 	cfg.Services.MockService.Name = "shutdown-timeout"
@@ -102,7 +102,15 @@ func TestServiceStopDeadlineDoesNotReusePhaseState(t *testing.T) {
 	}
 	app.config.Store(runtimeConfig)
 	app.environment = stopTimeoutEnvironment{app}
-	ctx, cancel := context.WithCancel(context.Background())
+	operationRelease := make(chan struct{})
+	finalizerEntered := make(chan struct{})
+	finalizerRelease := make(chan struct{})
+	app.RunParallel(t.Context(), func() {
+		<-operationRelease
+		close(finalizerEntered)
+		<-finalizerRelease
+	})
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
@@ -120,15 +128,33 @@ func TestServiceStopDeadlineDoesNotReusePhaseState(t *testing.T) {
 	await(gates[0].entered)
 	cancel()
 	await(done)
-	for _, g := range gates {
-		await(g.entered)
+	// Retrying Stop joins the original shutdown; it must not call Stop twice.
+	retryDone := make(chan struct{})
+	go func() { app.Stop(t.Context()); close(retryDone) }()
+	for i, gate := range gates {
+		await(gate.entered)
+		if i+1 < len(gates) {
+			select {
+			case <-gates[i+1].entered:
+				t.Errorf("phase %d started before phase %d finished", i+1, i)
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		close(gate.release)
+		await(gate.returned)
+		if i == 2 { // Pools are done; accepted graph work still owns clients.
+			for _, release := range []chan struct{}{operationRelease, finalizerRelease} {
+				select {
+				case <-gates[3].entered:
+					t.Error("sink teardown started while graph/finalizer was active")
+				case <-time.After(10 * time.Millisecond):
+				}
+				close(release)
+				if release == operationRelease {
+					await(finalizerEntered)
+				}
+			}
+		}
 	}
-	// Let old workers finish after Stop has already returned, in reverse order.
-	// Before the fix these callbacks mutate the final reused WaitGroup.
-	for i := len(gates) - 1; i >= 0; i-- {
-		close(gates[i].release)
-		await(gates[i].returned)
-	}
-	// Allow the surrounding deferred Done/close callbacks to run as well.
-	time.Sleep(10 * time.Millisecond)
+	await(retryDone)
 }

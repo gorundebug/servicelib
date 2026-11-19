@@ -30,26 +30,33 @@ const (
 	DataConnectorImplementationConfluentKafkaJavaScript DataConnectorImplementation = "confluent/kafka-javascript"
 	DataConnectorImplementationCppLibcron               DataConnectorImplementation = "cpp/libcron"
 	DataConnectorImplementationFunction                 DataConnectorImplementation = "function"
+	DataConnectorImplementationGoAWS                    DataConnectorImplementation = "go/aws"
+	DataConnectorImplementationGoBun                    DataConnectorImplementation = "go/bun"
 	DataConnectorImplementationGoGocron                 DataConnectorImplementation = "go/gocron"
 	DataConnectorImplementationGoRedis                  DataConnectorImplementation = "go-redis"
 	DataConnectorImplementationGoogleGRPC               DataConnectorImplementation = "google/grpc"
 	DataConnectorImplementationGrpcJS                   DataConnectorImplementation = "grpc/grpc-js"
 	DataConnectorImplementationHiredis                  DataConnectorImplementation = "hiredis"
 	DataConnectorImplementationIBMsarama                DataConnectorImplementation = "IBM/Sarama"
+	DataConnectorImplementationLibpq                    DataConnectorImplementation = "libpq"
 	DataConnectorImplementationLibrdkafka               DataConnectorImplementation = "librdkafka"
 	DataConnectorImplementationNatsC                    DataConnectorImplementation = "nats.c"
 	DataConnectorImplementationNatsGo                   DataConnectorImplementation = "nats.go"
 	DataConnectorImplementationNatsNode                 DataConnectorImplementation = "@nats-io/transport-node"
 	DataConnectorImplementationNatsPy                   DataConnectorImplementation = "nats.py"
 	DataConnectorImplementationNetHTTP                  DataConnectorImplementation = "net/http"
+	DataConnectorImplementationNodeAWS                  DataConnectorImplementation = "node/aws"
 	DataConnectorImplementationNodeCroner               DataConnectorImplementation = "node/croner"
 	DataConnectorImplementationNodeHTTP                 DataConnectorImplementation = "node/http"
+	DataConnectorImplementationNodeKysely               DataConnectorImplementation = "node/kysely"
 	DataConnectorImplementationNodeRedis                DataConnectorImplementation = "node-redis"
 	DataConnectorImplementationPulsarCpp                DataConnectorImplementation = "pulsar-client-cpp"
 	DataConnectorImplementationPulsarGo                 DataConnectorImplementation = "pulsar-client-go"
 	DataConnectorImplementationPulsarNode               DataConnectorImplementation = "pulsar-client-node"
 	DataConnectorImplementationPulsarPython             DataConnectorImplementation = "pulsar-client-python"
 	DataConnectorImplementationPythonAPScheduler        DataConnectorImplementation = "python/apscheduler"
+	DataConnectorImplementationPythonAiobotocore        DataConnectorImplementation = "python/aiobotocore"
+	DataConnectorImplementationPythonSQLAlchemy         DataConnectorImplementation = "python/sqlalchemy"
 	DataConnectorImplementationRabbitMQAMQPGo           DataConnectorImplementation = "rabbitmq-amqp-go-client"
 	DataConnectorImplementationRabbitMQAMQPJavaScript   DataConnectorImplementation = "rabbitmq-amqp-js-client"
 	DataConnectorImplementationRabbitMQAMQPPython       DataConnectorImplementation = "rabbitmq-amqp-python-client"
@@ -57,6 +64,7 @@ const (
 	DataConnectorImplementationRustAxum                 DataConnectorImplementation = "rust/axum"
 	DataConnectorImplementationRustCroner               DataConnectorImplementation = "rust/croner"
 	DataConnectorImplementationRustRdkafka              DataConnectorImplementation = "rust/rdkafka"
+	DataConnectorImplementationRustSQLx                 DataConnectorImplementation = "rust/sqlx"
 	DataConnectorImplementationRustTonic                DataConnectorImplementation = "rust/tonic"
 	DataConnectorImplementationTemporalGo               DataConnectorImplementation = "temporal/go"
 	DataConnectorImplementationTemporalPython           DataConnectorImplementation = "temporal/python"
@@ -65,22 +73,31 @@ const (
 	DataConnectorImplementationUserverGRPC              DataConnectorImplementation = "userver/grpc"
 	DataConnectorImplementationUserverHTTP              DataConnectorImplementation = "userver/http"
 	DataConnectorImplementationUserverKafka             DataConnectorImplementation = "userver/kafka"
+	DataConnectorImplementationUserverPostgreSQL        DataConnectorImplementation = "userver/postgresql"
 )
 
 // Defines values for DataConnectorType.
 const (
-	DataConnectorTypeCron         DataConnectorType = 5
-	DataConnectorTypeCustom       DataConnectorType = 4
-	DataConnectorTypeGRPC         DataConnectorType = 2
-	DataConnectorTypeHTTP         DataConnectorType = 1
-	DataConnectorTypeJetStream    DataConnectorType = 8
-	DataConnectorTypeKafka        DataConnectorType = 3
-	DataConnectorTypeNATS         DataConnectorType = 7
-	DataConnectorTypePulsar       DataConnectorType = 11
-	DataConnectorTypeRabbitMQ     DataConnectorType = 9
-	DataConnectorTypeRedisStreams DataConnectorType = 10
-	DataConnectorTypeTemporal     DataConnectorType = 6
-	DataConnectorTypeUndefined    DataConnectorType = 0
+	DataConnectorTypeCron                 DataConnectorType = 5
+	DataConnectorTypeCustom               DataConnectorType = 4
+	DataConnectorTypeGRPC                 DataConnectorType = 2
+	DataConnectorTypeHTTP                 DataConnectorType = 1
+	DataConnectorTypeJetStream            DataConnectorType = 8
+	DataConnectorTypeKafka                DataConnectorType = 3
+	DataConnectorTypeNATS                 DataConnectorType = 7
+	DataConnectorTypePostgreSQLBun        DataConnectorType = 12
+	DataConnectorTypePostgreSQLKysely     DataConnectorType = 13
+	DataConnectorTypePostgreSQLLibpq      DataConnectorType = 17
+	DataConnectorTypePostgreSQLSQLAlchemy DataConnectorType = 14
+	DataConnectorTypePostgreSQLSQLx       DataConnectorType = 15
+	DataConnectorTypePostgreSQLUserver    DataConnectorType = 16
+	DataConnectorTypePulsar               DataConnectorType = 11
+	DataConnectorTypeRabbitMQ             DataConnectorType = 9
+	DataConnectorTypeRedisStreams         DataConnectorType = 10
+	DataConnectorTypeS3AWS                DataConnectorType = 18
+	DataConnectorTypeS3Userver            DataConnectorType = 19
+	DataConnectorTypeTemporal             DataConnectorType = 6
+	DataConnectorTypeUndefined            DataConnectorType = 0
 )
 
 // Defines values for DataType.
@@ -110,6 +127,17 @@ const (
 	DataTypeUndefined     DataType = ""
 	DataTypeUnicodeChar   DataType = "unicode char"
 	DataTypeUnicodeString DataType = "unicode string"
+)
+
+// Defines values for EndpointQueryOperation.
+const (
+	EndpointQueryOperationDeleteObject EndpointQueryOperation = "DeleteObject"
+	EndpointQueryOperationExecute      EndpointQueryOperation = "Execute"
+	EndpointQueryOperationGetObject    EndpointQueryOperation = "GetObject"
+	EndpointQueryOperationHeadObject   EndpointQueryOperation = "HeadObject"
+	EndpointQueryOperationListObjects  EndpointQueryOperation = "ListObjects"
+	EndpointQueryOperationPutObject    EndpointQueryOperation = "PutObject"
+	EndpointQueryOperationRows         EndpointQueryOperation = "Rows"
 )
 
 // Defines values for EndpointSubscriptionInitialPosition.
@@ -270,6 +298,7 @@ const (
 	TransformationTypeMerge           TransformationType = 10
 	TransformationTypeMultiJoin       TransformationType = 5
 	TransformationTypeProcess         TransformationType = 6
+	TransformationTypeQuery           TransformationType = 19
 	TransformationTypeSink            TransformationType = 13
 	TransformationTypeSplit           TransformationType = 11
 	TransformationTypeSubStream       TransformationType = 18
@@ -289,7 +318,7 @@ const (
 
 // Defines values for UndefinedEnum.
 const (
-	Undefined UndefinedEnum = 0
+	UndefinedEnumUndefined UndefinedEnum = 0
 )
 
 // CallSemantics Delivery semantics for a stream link — controls how messages are passed between nodes.
@@ -326,6 +355,9 @@ type DataConnector struct {
 	// at the adapter boundary; this value is not seconds or nanoseconds.
 	ConnectTimeoutMs *int `json:"connectTimeoutMs,omitempty"`
 
+	// ConnectionString PostgreSQL DSN supplied through runtime configuration, never embedded credentials in the model.
+	ConnectionString *string `json:"connectionString,omitempty"`
+
 	// ConnectionsCount Number of independent transport connections used by a gRPC sink connector.
 	ConnectionsCount *int `json:"connectionsCount,omitempty"`
 
@@ -336,6 +368,9 @@ type DataConnector struct {
 
 	// DialTimeout Connection dial timeout in milliseconds. Applies to Kafka connectors.
 	DialTimeout *float32 `json:"dialTimeout,omitempty"`
+
+	// ForcePathStyle Use path-style S3 addressing for a compatible endpoint.
+	ForcePathStyle *bool `json:"forcePathStyle,omitempty"`
 
 	// Host Hostname or IP address. Applies to HTTP and gRPC connectors.
 	Host *string `json:"host,omitempty"`
@@ -402,6 +437,9 @@ type DataConnector struct {
 
 	// RedisDatabase Redis Streams standalone database index, separate from server URLs.
 	RedisDatabase *int `json:"redisDatabase,omitempty"`
+
+	// Region S3 region used by the selected connector implementation.
+	Region *string `json:"region,omitempty"`
 
 	// SaslMechanism Kafka SASL authentication mechanism.
 	SaslMechanism *KafkaSaslMechanism `json:"saslMechanism,omitempty"`
@@ -521,7 +559,7 @@ type DataConnectorType int
 type DataType string
 
 // Endpoint A specific entry or exit point on a data connector — an HTTP route, a Kafka topic,
-// or a gRPC method. Each Input or Sink stream node references exactly one endpoint.
+// or a gRPC method. Each Input, Sink or Query stream node references exactly one endpoint.
 // The endpoint determines the handler interface that the code generator produces.
 type Endpoint struct {
 	// ActivityHeartbeatTimeout Temporal Activity heartbeat timeout in milliseconds; zero disables it.
@@ -529,6 +567,9 @@ type Endpoint struct {
 
 	// ActivityStartToCloseTimeout Temporal Activity start-to-close timeout in milliseconds.
 	ActivityStartToCloseTimeout *int `json:"activityStartToCloseTimeout,omitempty"`
+
+	// Bucket Optional default S3 bucket; the request builder may supply the bucket explicitly.
+	Bucket *string `json:"bucket,omitempty"`
 
 	// ClaimIdleMs Redis Streams. Minimum idle age for pending reclaim; does not fence former owners.
 	ClaimIdleMs *int `json:"claimIdleMs,omitempty"`
@@ -594,6 +635,9 @@ type Endpoint struct {
 
 	// ExchangeType RabbitMQ AMQP 1.0 exchange kind; bindings use routingKey.
 	ExchangeType *RabbitMQExchangeType `json:"exchangeType,omitempty"`
+
+	// FetchSize Native row/page fetch size; not a separate graph queue or concurrency limit.
+	FetchSize *int `json:"fetchSize,omitempty"`
 
 	// FunctionDescription Doc comment added to the generated handler struct.
 	FunctionDescription *string `json:"functionDescription,omitempty"`
@@ -668,6 +712,9 @@ type Endpoint struct {
 	// PublisherMaxInFlight RabbitMQ, Redis Streams or Pulsar sink maximum outstanding native asynchronous publications; adapter byte capacity is additionally bounded.
 	PublisherMaxInFlight *int `json:"publisherMaxInFlight,omitempty"`
 
+	// QueryOperation Operation of a Query endpoint. Completion invokes EndRequest with the ordinary result collector; no completion port exists.
+	QueryOperation *EndpointQueryOperation `json:"queryOperation,omitempty"`
+
 	// QueueGroup Optional Core NATS source queue group. Omitted means an independent
 	// subscription. Not applicable to sinks or JetStream durable pull consumers.
 	QueueGroup *string `json:"queueGroup,omitempty"`
@@ -698,6 +745,9 @@ type Endpoint struct {
 
 	// ScheduleId Immutable Temporal Schedule ID. Required when a Temporal endpoint has a schedule.
 	ScheduleId *string `json:"scheduleId,omitempty"`
+
+	// SqlFile Optional user-owned parameterized SQL file; omitted when the handler builds the query in code.
+	SqlFile *string `json:"sqlFile,omitempty"`
 
 	// StreamKey Redis Streams. Exact Redis stream key, not a pattern.
 	StreamKey *string `json:"streamKey,omitempty"`
@@ -741,6 +791,9 @@ type Endpoint struct {
 	// WorkflowExecutionTimeout Temporal Workflow execution timeout in milliseconds; zero means SDK default.
 	WorkflowExecutionTimeout *int `json:"workflowExecutionTimeout,omitempty"`
 }
+
+// EndpointQueryOperation Operation of a Query endpoint. Completion invokes EndRequest with the ordinary result collector; no completion port exists.
+type EndpointQueryOperation string
 
 // EndpointSubscriptionInitialPosition Pulsar subscription creation position only; never resets an existing subscription.
 type EndpointSubscriptionInitialPosition string
@@ -1006,7 +1059,7 @@ type Stream struct {
 	// Id Unique identifier for this stream node within the topology.
 	Id int `json:"id"`
 
-	// IdEndpoint ID of the associated endpoint. Required for Input and Sink nodes;
+	// IdEndpoint ID of the associated endpoint. Required for Input, Sink and Query nodes;
 	// determines which data connector entry/exit point this node uses.
 	IdEndpoint *int `json:"idEndpoint,omitempty"`
 
@@ -1014,7 +1067,7 @@ type Stream struct {
 	IdService int `json:"idService"`
 
 	// IdSource ID of the single upstream stream node. Used by operators with one input
-	// (Map, Filter, FlatMap, Process, KeyBy, Split, Case, Delay, Sink).
+	// (Map, Filter, FlatMap, Process, KeyBy, Split, Case, Delay, Sink, Query).
 	// Set to 0 when the node has no single source (Input nodes, Merge, MultiJoin).
 	IdSource int `json:"idSource"`
 
@@ -1079,6 +1132,7 @@ type Stream struct {
 	// - `Delay` (16): defers downstream delivery by a computed duration
 	// - `When` (17): a typed branch of a Case node
 	// - `SubStream` (18): a service-local callable entry whose source supplies results
+	// - `Query` (19): executes an endpoint operation and emits zero or more results; completion is internal EndRequest
 	Type TransformationType `json:"type"`
 
 	// ValueType Name of the output message type for this node (e.g. `OrderEvent`).
@@ -1157,6 +1211,7 @@ type TemporalExecutionType string
 // - `Delay` (16): defers downstream delivery by a computed duration
 // - `When` (17): a typed branch of a Case node
 // - `SubStream` (18): a service-local callable entry whose source supplies results
+// - `Query` (19): executes an endpoint operation and emits zero or more results; completion is internal EndRequest
 type TransformationType int
 
 // Type A named data type used as a message type in the topology graph.

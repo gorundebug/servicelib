@@ -225,6 +225,16 @@ type TypedSinkStreamWithResult[T, R, E any] interface {
 	GetEndpointId() int
 }
 
+// TypedQueryStream executes endpoint operations independently of Sink.
+// Results may be emitted repeatedly, including by the endpoint's EndRequest hook.
+type TypedQueryStream[T, R, E any] interface {
+	TypedTransformConsumedStream[T, R]
+	GetErrorStream() TypedConsumedStream[E]
+	ConsumeResult(ctx context.Context, value R)
+	SetQueryConsumer(Consumer[T])
+	GetEndpointId() int
+}
+
 type TypedStreamConsumer[T any] interface {
 	Stream
 	Consumer[T]

@@ -457,6 +457,33 @@ func (s *SinkStreamConfig) GetXPos() float64                    { return s.XPos 
 func (s *SinkStreamConfig) GetYPos() float64                    { return s.YPos }
 func (s *SinkStreamConfig) GetProperty(name string) interface{} { return s.Properties[name] }
 
+// QueryStreamConfig is the configuration for the Query transformation.
+type QueryStreamConfig struct {
+	ID         int                    `yaml:"id" mapstructure:"id"`
+	Name       string                 `yaml:"name" mapstructure:"name"`
+	Pipeline   string                 `yaml:"pipeline" mapstructure:"pipeline"`
+	Component  string                 `yaml:"component,omitempty" mapstructure:"component"`
+	IdService  int                    `yaml:"idService" mapstructure:"idService"`
+	IdSource   int                    `yaml:"idSource" mapstructure:"idSource"`
+	XPos       float64                `yaml:"xPos" mapstructure:"xPos"`
+	YPos       float64                `yaml:"yPos" mapstructure:"yPos"`
+	IdEndpoint int                    `yaml:"idEndpoint,omitempty" mapstructure:"idEndpoint"`
+	ValueType  string                 `yaml:"valueType,omitempty" mapstructure:"valueType"`
+	Properties map[string]interface{} `yaml:",inline" mapstructure:",remain"`
+}
+
+func (s *QueryStreamConfig) GetID() int                          { return s.ID }
+func (s *QueryStreamConfig) GetName() string                     { return s.Name }
+func (s *QueryStreamConfig) GetPipeline() string                 { return s.Pipeline }
+func (s *QueryStreamConfig) GetComponent() string                { return s.Component }
+func (s *QueryStreamConfig) GetType() api.TransformationType     { return api.TransformationTypeQuery }
+func (s *QueryStreamConfig) GetIdService() int                   { return s.IdService }
+func (s *QueryStreamConfig) GetIdSource() int                    { return s.IdSource }
+func (s *QueryStreamConfig) GetIdSources() []int                 { return nil }
+func (s *QueryStreamConfig) GetXPos() float64                    { return s.XPos }
+func (s *QueryStreamConfig) GetYPos() float64                    { return s.YPos }
+func (s *QueryStreamConfig) GetProperty(name string) interface{} { return s.Properties[name] }
+
 // CycleLinkStreamConfig is the configuration for the CycleLink transformation.
 type CycleLinkStreamConfig struct {
 	ID         int                    `yaml:"id" mapstructure:"id"`

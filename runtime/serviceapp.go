@@ -64,6 +64,8 @@ type ServiceApp struct {
 	components            []environment.Lifecycle
 	parallel              sync.WaitGroup
 	isolated              bool
+	stopMu                sync.Mutex
+	stopDone              chan struct{}
 }
 
 func (app *ServiceApp) GetSerde(_ reflect.Type) (serde.Serializer, error) {
@@ -478,6 +480,17 @@ func (app *ServiceApp) getSerializer(valueType reflect.Type) (serde.Serializer, 
 // Managed connectors acquire their outbound resources here; their admission
 // remains closed until Start. No source handler behavior is overridden.
 func (app *ServiceApp) StartGraph(ctx context.Context) error {
+	app.stopMu.Lock()
+	if app.stopDone != nil {
+		select {
+		case <-app.stopDone:
+			app.stopDone = nil
+		default:
+			app.stopMu.Unlock()
+			return errors.New("service shutdown is still in progress")
+		}
+	}
+	app.stopMu.Unlock()
 
 	for _, stream := range app.streams {
 		if err := stream.Build(); err != nil {
@@ -614,7 +627,34 @@ func (app *ServiceApp) Start(ctx context.Context) error {
 func (app *ServiceApp) Release(ctx context.Context) {
 }
 
+// Stop bounds the caller's wait, not the lifetime of accepted graph work.
+// The same ordered teardown continues after timeout; subsequent callers join it.
+// Components still receive the original supplied context, including cancellation.
 func (app *ServiceApp) Stop(ctx context.Context) {
+	app.stopMu.Lock()
+	if app.stopDone == nil {
+		app.stopDone = make(chan struct{})
+		done := app.stopDone
+		go func() {
+			defer close(done)
+			app.stopInOrder(ctx)
+		}()
+	}
+	done := app.stopDone
+	app.stopMu.Unlock()
+	select {
+	case <-done:
+		return
+	default:
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", app.ServiceConfig().Name), log.Err(ctx.Err()))
+	}
+}
+
+func (app *ServiceApp) stopInOrder(ctx context.Context) {
 	serviceConfig := app.ServiceConfig()
 
 	sourceWG := sync.WaitGroup{}
@@ -668,6 +708,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-sourceDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-sourceDone
 	}
 
 	// Managed connectors may be used by graph work already admitted by another
@@ -691,6 +732,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-admissionDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "managed connector admission shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-admissionDone
 	}
 
 	// Source admission has stopped and source-owned work (including Cron and
@@ -737,6 +779,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-poolDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "runtime pool and storage shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-poolDone
 	}
 
 	parallelDone := make(chan struct{})
@@ -748,6 +791,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-parallelDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp graph drain timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-parallelDone
 	}
 
 	sinkWG := sync.WaitGroup{}
@@ -769,6 +813,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-sinkDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "ServiceApp stop timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-sinkDone
 	}
 
 	// Durable clients remain open until every sink submission has drained.
@@ -790,6 +835,7 @@ func (app *ServiceApp) Stop(ctx context.Context) {
 	case <-managedDone:
 	case <-ctx.Done():
 		app.environment.Log().Warn(ctx, "managed connector shutdown timeout", log.Str("service", serviceConfig.Name), log.Err(ctx.Err()))
+		<-managedDone
 	}
 
 	shutdownTelemetry := func(name string, shutdown func(context.Context) error) {

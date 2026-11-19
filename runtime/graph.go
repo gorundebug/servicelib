@@ -189,6 +189,37 @@ func (app *ServiceApp) RuntimeToStreamApp() *api.StreamApp {
 		}
 	}
 
+	// Query clients are managed resources, not DataSource/DataSink instances.
+	seenConnectors := make(map[int]bool)
+	seenEndpoints := make(map[int]bool)
+	for _, connector := range dataConnectors {
+		seenConnectors[connector.Id] = true
+	}
+	for _, endpoint := range endpoints {
+		seenEndpoints[endpoint.Id] = true
+	}
+	for _, stream := range streams {
+		if stream.Type != api.TransformationTypeQuery || stream.IdEndpoint == nil {
+			continue
+		}
+		endpoint := rc.GetEndpointConfigByID(*stream.IdEndpoint)
+		if endpoint == nil {
+			continue
+		}
+		connector := rc.GetDataConnectorByID(endpoint.GetIdDataConnector())
+		if connector == nil {
+			continue
+		}
+		if !seenConnectors[connector.GetID()] {
+			dataConnectors = append(dataConnectors, config.DataConnectorConfigToAPI(connector))
+			seenConnectors[connector.GetID()] = true
+		}
+		if !seenEndpoints[endpoint.GetID()] {
+			endpoints = append(endpoints, config.EndpointConfigToAPI(endpoint))
+			seenEndpoints[endpoint.GetID()] = true
+		}
+	}
+
 	// Links: only non-default call semantics; topology is in IdSource/IdSources.
 	// Semantics come from runtime callers (resolved in MakeCaller), not from config.
 	defaultCS := api.CallSemanticsInherited

@@ -72,6 +72,7 @@ var streamIconMap = map[api.TransformationType]string{
 	api.TransformationTypeSplit:           mdiCallSplit,
 	api.TransformationTypeCase:            mdiSourceFork,
 	api.TransformationTypeSink:            mdiDatabaseArrowLeft,
+	api.TransformationTypeQuery:           mdiDatabaseArrowLeft,
 	api.TransformationTypeCycleLink:       mdiSync,
 	api.TransformationTypeError:           mdiAlertCircle,
 	api.TransformationTypeDelay:           mdiTimer,
@@ -277,6 +278,8 @@ func endpointIDForStatusIcon(stream config.StreamConfig) int {
 	case *config.InputStreamConfig:
 		return cfg.IdEndpoint
 	case *config.SinkStreamConfig:
+		return cfg.IdEndpoint
+	case *config.QueryStreamConfig:
 		return cfg.IdEndpoint
 	default:
 		return 0

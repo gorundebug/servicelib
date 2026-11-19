@@ -369,7 +369,8 @@ components:
         - `Delay` (16): defers downstream delivery by a computed duration
         - `When` (17): a typed branch of a Case node
         - `SubStream` (18): a service-local callable entry whose source supplies results
-      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 ]
+        - `Query` (19): executes an endpoint operation and emits zero or more results; completion is internal EndRequest
+      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 ]
       x-enum-varnames:
         - Undefined
         - Input
@@ -390,6 +391,7 @@ components:
         - Delay
         - When
         - SubStream
+        - Query
 
     JoinType:
       type: integer
@@ -468,7 +470,7 @@ components:
         - `RabbitMQ` (9): RabbitMQ AMQP 1.0 queues and publication outcomes
         - `RedisStreams` (10): Redis consumer groups and explicit XACK
         - `Pulsar` (11): Apache Pulsar persistent topics and durable subscriptions
-      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ]
+      enum: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 ]
       x-enum-varnames:
         - Undefined
         - HTTP
@@ -482,6 +484,14 @@ components:
         - RabbitMQ
         - RedisStreams
         - Pulsar
+        - PostgreSQLBun
+        - PostgreSQLKysely
+        - PostgreSQLSQLAlchemy
+        - PostgreSQLSQLx
+        - PostgreSQLUserver
+        - PostgreSQLLibpq
+        - S3AWS
+        - S3Userver
 
     RabbitMQQueueType:
       type: string
@@ -609,7 +619,7 @@ components:
           type: integer
           description: |
             ID of the single upstream stream node. Used by operators with one input
-            (Map, Filter, FlatMap, Process, KeyBy, Split, Case, Delay, Sink).
+            (Map, Filter, FlatMap, Process, KeyBy, Split, Case, Delay, Sink, Query).
             Set to 0 when the node has no single source (Input nodes, Merge, MultiJoin).
           minimum: 0
         idSources:
@@ -642,7 +652,7 @@ components:
         idEndpoint:
           type: integer
           description: |
-            ID of the associated endpoint. Required for Input and Sink nodes;
+            ID of the associated endpoint. Required for Input, Sink and Query nodes;
             determines which data connector entry/exit point this node uses.
         joinType:
           $ref: '#/components/schemas/JoinType'
@@ -826,7 +836,16 @@ components:
               'pulsar-client-go',
               'pulsar-client-python',
               'pulsar-client-node',
-              'pulsar-client-cpp'
+              'pulsar-client-cpp',
+              'go/bun',
+              'python/sqlalchemy',
+              'node/kysely',
+              'rust/sqlx',
+              'go/aws',
+              'node/aws',
+              'python/aiobotocore',
+              'userver/postgresql',
+              'libpq'
       ]
       x-enum-varnames:
         - Undefined
@@ -872,6 +891,15 @@ components:
         - PulsarPython
         - PulsarNode
         - PulsarCpp
+        - GoBun
+        - PythonSQLAlchemy
+        - NodeKysely
+        - RustSQLx
+        - GoAWS
+        - NodeAWS
+        - PythonAiobotocore
+        - UserverPostgreSQL
+        - Libpq
 
     DataConnector:
       type: object
@@ -914,6 +942,16 @@ components:
           description: Port number. Applies to HTTP and gRPC connectors.
           minimum: 80
           maximum: 65535
+        connectionString:
+          type: string
+          description: PostgreSQL DSN supplied through runtime configuration, never embedded credentials in the model.
+        region:
+          type: string
+          description: S3 region used by the selected connector implementation.
+        forcePathStyle:
+          type: boolean
+          default: false
+          description: Use path-style S3 addressing for a compatible endpoint.
         address:
           type: string
           description: gRPC connection address.
@@ -1104,7 +1142,7 @@ components:
       type: object
       description: |
         A specific entry or exit point on a data connector — an HTTP route, a Kafka topic,
-        or a gRPC method. Each Input or Sink stream node references exactly one endpoint.
+        or a gRPC method. Each Input, Sink or Query stream node references exactly one endpoint.
         The endpoint determines the handler interface that the code generator produces.
       additionalProperties: false
       properties:
@@ -1132,6 +1170,21 @@ components:
             Enables tracing for events admitted by this DataSource endpoint. The current
             reloadable value is evaluated for every inbound event. DataSink adapters ignore
             this flag and only propagate tracing already present in the message context.
+        queryOperation:
+          type: string
+          enum: [Rows, Execute, GetObject, HeadObject, ListObjects, PutObject, DeleteObject]
+          description: Operation of a Query endpoint. Completion invokes EndRequest with the ordinary result collector; no completion port exists.
+        sqlFile:
+          type: string
+          description: Optional user-owned parameterized SQL file; omitted when the handler builds the query in code.
+        fetchSize:
+          type: integer
+          minimum: 1
+          default: 256
+          description: Native row/page fetch size; not a separate graph queue or concurrency limit.
+        bucket:
+          type: string
+          description: Optional default S3 bucket; the request builder may supply the bucket explicitly.
         httpMethodType:
           $ref: '#/components/schemas/HTTPMethodType'
         path:

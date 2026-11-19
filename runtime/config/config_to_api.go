@@ -226,6 +226,9 @@ func StreamConfigToAPI(sc StreamConfig) api.Stream {
 		s.PublicFunction = boolOptPtr(c.PublicFunction)
 	case *WhenStreamConfig:
 		s.ValueType = strOptPtr(c.ValueType)
+	case *QueryStreamConfig:
+		s.ValueType = strOptPtr(c.ValueType)
+		s.IdEndpoint = intOptPtr(c.IdEndpoint)
 	case *SinkStreamConfig:
 		s.ValueType = strOptPtr(c.ValueType)
 		s.IdEndpoint = intOptPtr(c.IdEndpoint)
@@ -243,11 +246,20 @@ func DataConnectorConfigToAPI(dc DataConnectorConfig) api.DataConnector {
 	}
 	if d.Type == api.DataConnectorTypeCustom {
 		d.Implementation = &implementation
-	} else {
+	} else if d.Type != api.DataConnectorTypePostgreSQLBun && d.Type != api.DataConnectorTypeS3AWS {
 		bindings := map[string]string{"golang": string(implementation)}
 		d.Implementations = &bindings
 	}
 	switch c := dc.(type) {
+	case *S3AWSDataConnectorConfig:
+		d.Region = strOptPtr(c.Region)
+		d.ForcePathStyle = boolOptPtr(c.ForcePathStyle)
+		// Address is runtime-only: avoid exposing private endpoint details.
+	case *PostgreSQLBunDataConnectorConfig:
+		// ConnectionString may include credentials; runtime status must not export it.
+		d.ConnectionsCount = intOptPtr(c.ConnectionsCount)
+		d.ConnectTimeoutMs = intOptPtr(c.ConnectTimeoutMs)
+		d.OperationTimeoutMs = intOptPtr(c.OperationTimeoutMs)
 	case *HttpDataConnectorConfig:
 		d.Host = strOptPtr(c.Host)
 		d.Module = strOptPtr(c.Module)
@@ -347,6 +359,18 @@ func EndpointConfigToAPI(ep EndpointConfig) api.Endpoint {
 		TracingEnabled:  boolOptPtr(ep.GetTracingEnabled()),
 	}
 	switch c := ep.(type) {
+	case *QueryEndpointConfig:
+		e.Enabled = &c.Enabled
+		e.QueryOperation = &c.QueryOperation
+		e.SqlFile = strOptPtr(c.SQLFile)
+		e.FetchSize = intOptPtr(c.FetchSize)
+		e.Bucket = strOptPtr(c.Bucket)
+		e.FunctionName = c.FunctionName
+		e.FunctionPackage = strOptPtr(c.FunctionPackage)
+		e.FunctionModule = strOptPtr(c.FunctionModule)
+		e.FunctionDescription = strOptPtr(c.FunctionDescription)
+		e.FunctionInitializerGroup = strOptPtr(c.FunctionInitializerGroup)
+		e.PublicFunction = boolOptPtr(c.PublicFunction)
 	case *HttpEndpointConfig:
 		if c.HttpMethodType != "" {
 			m := c.HttpMethodType

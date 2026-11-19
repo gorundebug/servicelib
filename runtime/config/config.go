@@ -50,6 +50,7 @@ func (s *ModuleConfig) GetProperty(name string) interface{} {
 var transformationNameMap = map[api.TransformationType]string{
 	api.TransformationTypeCycleLink:       "cycleLink",
 	api.TransformationTypeSink:            "sink",
+	api.TransformationTypeQuery:           "query",
 	api.TransformationTypeFilter:          "filter",
 	api.TransformationTypeFlatMap:         "flatMap",
 	api.TransformationTypeFlatMapIterable: "flatMapIterable",
@@ -206,6 +207,11 @@ func NewRuntimeConfig(config Config) (*RuntimeConfig, error) {
 		taskQueue   string
 	}]temporalQueuePolicy)
 	for _, endpoint := range config.GetEndpoints() {
+		if query, ok := endpoint.(*QueryEndpointConfig); ok {
+			if err := ValidateQueryEndpoint(query, runtimeCfg.dataConnectorsByID[query.IdDataConnector]); err != nil {
+				return nil, err
+			}
+		}
 		if cronEndpoint, ok := endpoint.(*CronEndpointConfig); ok {
 			connector := runtimeCfg.dataConnectorsByID[cronEndpoint.IdDataConnector]
 			if connector == nil || connector.GetType() != api.DataConnectorTypeCron {
