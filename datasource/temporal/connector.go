@@ -516,14 +516,17 @@ func (c *Connector) endpointConfig(endpointID int) (*config.TemporalEndpointConf
 }
 
 func (c *Connector) workflowEndpointSnapshot() ([]workflowEndpointConfig, error) {
-	ids := make([]int, 0, len(c.endpointRegistrations))
-	for id := range c.endpointRegistrations {
-		ids = append(ids, id)
+	// Outgoing Activity contracts need no local input/handler registration.
+	// Snapshot all endpoints of this connector, not only locally hosted graphs.
+	ids := make([]int, 0)
+	for _, endpoint := range c.environment.RuntimeConfig().GetConfig().GetEndpoints() {
+		if cfg, ok := endpoint.(*config.TemporalEndpointConfig); ok && cfg.IdDataConnector == c.id {
+			ids = append(ids, cfg.ID)
+		}
 	}
 	sort.Ints(ids)
 	result := make([]workflowEndpointConfig, 0, len(ids))
 	for _, id := range ids {
-		registration := c.endpointRegistrations[id]
 		cfg, err := c.endpointConfig(id)
 		if err != nil {
 			return nil, err
@@ -531,7 +534,7 @@ func (c *Connector) workflowEndpointSnapshot() ([]workflowEndpointConfig, error)
 		result = append(result, workflowEndpointConfig{
 			ID: id, Name: cfg.Name, TaskQueue: cfg.TaskQueue,
 			ExecutionType: cfg.TemporalExecutionType,
-			ActivityType:  registration.activityType, WorkflowType: registration.workflowType,
+			ActivityType:  temporalEndpointActivityType(c.name, cfg.Name), WorkflowType: temporalDirectWorkflowType(c.name, cfg.Name),
 			WorkflowExecutionMillis:    cfg.WorkflowExecutionTimeout,
 			ActivityStartToCloseMillis: cfg.ActivityStartToCloseTimeout,
 			ActivityHeartbeatMillis:    cfg.ActivityHeartbeatTimeout,
@@ -560,9 +563,13 @@ func executeEndpointActivity(
 	heartbeat runtime.DurableCallHeartbeatRecorder,
 	diagnostics runtime.DurableCallDiagnostics,
 ) (EndpointResult, error) {
-	if envelope.Version != 1 || envelope.EndpointID != registration.id || envelope.MessageID == "" {
+	if envelope.Version != 1 || envelope.MessageID == "" {
 		return EndpointResult{}, fmt.Errorf("invalid endpoint envelope for Temporal endpoint %d", registration.id)
 	}
+	// Temporal selected this handler by the connector/endpoint Activity type.
+	// Numeric endpoint IDs belong to each generated service, not the wire
+	// contract. Present the receiver's local ID to its ordinary graph adapter.
+	envelope.EndpointID = registration.id
 	envelope.FiredAtNano = time.Now().UTC().UnixNano()
 	durable := runtime.NewDurableCallContext(
 		envelope.MessageID, heartbeat, diagnostics,
@@ -1146,10 +1153,6 @@ func (c *Connector) SubmitEndpointWithOptions(
 		Priority:                       runtime.NormalizeTemporalPriority(envelope.Priority),
 		Envelope:                       envelope,
 	}
-	registration, registered := c.endpointRegistrations[endpointID]
-	if !registered {
-		return EndpointResult{}, fmt.Errorf("Temporal endpoint %q is not registered", cfg.Name)
-	}
 	workflowType := endpointWorkflowType
 	var workflowInput interface{} = request
 	if cfg.TemporalExecutionType == api.Workflow {
@@ -1161,7 +1164,7 @@ func (c *Connector) SubmitEndpointWithOptions(
 		if snapshotErr != nil {
 			return EndpointResult{}, snapshotErr
 		}
-		workflowType = registration.workflowType
+		workflowType = temporalDirectWorkflowType(c.name, cfg.Name)
 		workflowInput = directEndpointWorkflowRequest{
 			ConnectorName: c.name,
 			Envelope:      envelope,

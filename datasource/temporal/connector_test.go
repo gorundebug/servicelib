@@ -72,6 +72,37 @@ func TestTemporalEndpointActivityPropagatesEndpointError(t *testing.T) {
 	}
 }
 
+func TestTemporalEndpointActivityUsesReceiverLocalID(t *testing.T) {
+	for _, senderID := range []int{7, 42} {
+		t.Run(fmt.Sprint(senderID), func(t *testing.T) {
+			input := EndpointEnvelope{Version: 1, EndpointID: senderID, MessageID: "external-job", StreamID: "original-stream", Payload: []byte("value")}
+			called := false
+			_, err := executeEndpointActivity(context.Background(), input, endpointRegistration{
+				id: 7,
+				handler: func(_ context.Context, received EndpointEnvelope) (EndpointResult, error) {
+					called = true
+					if received.EndpointID != 7 || received.MessageID != input.MessageID || received.StreamID != input.StreamID || string(received.Payload) != "value" {
+						t.Fatal("receiver lost local endpoint or original business identity")
+					}
+					return EndpointResult{}, nil
+				},
+			}, nil, nil)
+			if err != nil || !called || input.EndpointID != senderID {
+				t.Fatal("service-local ID prevented delivery or mutated caller envelope", err)
+			}
+		})
+	}
+	for _, input := range []EndpointEnvelope{{Version: 2, EndpointID: 42, MessageID: "job"}, {Version: 1, EndpointID: 42}} {
+		_, err := executeEndpointActivity(context.Background(), input, endpointRegistration{id: 7, handler: func(context.Context, EndpointEnvelope) (EndpointResult, error) {
+			t.Fatal("invalid envelope reached handler")
+			return EndpointResult{}, nil
+		}}, nil, nil)
+		if err == nil {
+			t.Fatal("invalid envelope accepted")
+		}
+	}
+}
+
 func TestTemporalRuntimeIdentityUsesEndpointContract(t *testing.T) {
 	if got := temporalEndpointActivityType("Temporal", "Durable Job"); got != "temporal.endpoint.durable_job.v1" {
 		t.Fatalf("endpoint activity type = %q", got)

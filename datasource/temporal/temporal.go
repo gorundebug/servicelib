@@ -12,6 +12,7 @@ package temporal
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,7 +28,7 @@ type StreamContext[T, R, E any] = runtime.StreamContext[T, R, E]
 
 // EndpointHandler is the user-visible lifecycle at a Temporal input boundary.
 // ConsumeMessage emits the already typed job into the existing graph. The
-// framework, not the handler, correlates the graph result by StreamID.
+// framework, not the handler, correlates the graph result by invocation context.
 type EndpointHandler[HandlerState, Input, T, R, E any] interface {
 	BeginRequest(context.Context, StreamContext[T, R, E]) (context.Context, HandlerState, error)
 	ConsumeMessage(context.Context, StreamContext[T, R, E], HandlerState, Input) error
@@ -78,16 +79,26 @@ func (c *resultConsumer[R]) Consume(ctx context.Context, value R) { c.consume(ct
 
 type endpointConsumer[HandlerState, Input, T, R, E any] struct {
 	*runtime.DataSourceEndpointConsumer[T, R, E]
-	handler         EndpointHandler[HandlerState, Input, T, R, E]
-	sc              StreamContext[T, R, E]
-	decode          func(EndpointEnvelope) (Input, error)
-	resultSer       runtime.TypedSerializedStream[R]
-	mu              sync.Mutex
-	pending         map[string]chan R
-	workflowPending map[string]workflow.Channel
-	tracer          tracing.Tracer
-	spanAttributes  [4]tracing.Attribute
-	tracing         tracing.Tracing
+	handler                EndpointHandler[HandlerState, Input, T, R, E]
+	sc                     StreamContext[T, R, E]
+	decode                 func(EndpointEnvelope) (Input, error)
+	resultSer              runtime.TypedSerializedStream[R]
+	mu                     sync.Mutex
+	pending                map[*endpointInvocation]chan R
+	workflowPending        map[*endpointInvocation]workflow.Channel
+	nextInvocation         uint64
+	nextWorkflowInvocation uint64
+	tracer                 tracing.Tracer
+	spanAttributes         [4]tracing.Attribute
+	tracing                tracing.Tracing
+}
+
+// StreamID is upstream correlation, not an Activity attempt identity. A private
+// context key (the consumer) binds each result to precisely its own invocation,
+// including concurrent calls and late results from a cancelled attempt.
+type endpointInvocation struct {
+	metricID string
+	settled  bool // Protected by ec.mu outside deterministic Workflow execution.
 }
 
 func (ec *endpointConsumer[HandlerState, Input, T, R, E]) GetID() int { return ec.Endpoint().GetID() }
@@ -102,27 +113,37 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) consumeResult(ctx cont
 		ec.Endpoint().OnMissingStreamID(ctx)
 		return
 	}
-	if state, workflowMode := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); workflowMode {
-		result := ec.workflowPending[sid.GetID()]
+	invocation, _ := ctx.Value(ec).(*endpointInvocation)
+	if _, workflowMode := ctx.Value(workflowSubmissionContextKey{}).(workflowSubmissionContext); workflowMode {
+		result := ec.workflowPending[invocation]
 		if result == nil {
 			ec.Endpoint().OnLateResult(ctx, sid.GetID())
 			return
 		}
-		result.Send(state.workflowCtx, value)
+		// Never suspend the graph on a second reply to a single-result endpoint.
+		if invocation.settled {
+			ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), sid.GetID())
+			return
+		}
+		invocation.settled = true
+		result.SendAsync(value)
 		return
 	}
 	ec.mu.Lock()
-	result := ec.pending[sid.GetID()]
-	ec.mu.Unlock()
+	result := ec.pending[invocation]
 	if result == nil {
+		ec.mu.Unlock()
 		ec.Endpoint().OnLateResult(ctx, sid.GetID())
 		return
 	}
-	select {
-	case result <- value:
-	default:
+	if invocation.settled {
+		ec.mu.Unlock()
 		ec.Endpoint().OnDuplicateMessageID(ctx, sid.GetID(), sid.GetID())
+		return
 	}
+	invocation.settled = true
+	ec.mu.Unlock()
+	result <- value
 }
 
 func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
@@ -175,32 +196,31 @@ func (ec *endpointConsumer[HandlerState, Input, T, R, E]) handle(
 		}
 	}
 	if hasResult {
+		invocation := &endpointInvocation{}
 		if workflowMode {
-			if _, exists := ec.workflowPending[envelope.StreamID]; exists {
-				return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
-			}
+			ec.nextWorkflowInvocation++
+			invocation.metricID = "workflow/" + strconv.FormatUint(ec.nextWorkflowInvocation, 10)
 			workflowResult = workflow.NewBufferedChannel(workflowState.workflowCtx, 1)
-			ec.workflowPending[envelope.StreamID] = workflowResult
+			ec.workflowPending[invocation] = workflowResult
 		} else {
 			resultCh = make(chan R, 1)
 			ec.mu.Lock()
-			if _, exists := ec.pending[envelope.StreamID]; exists {
-				ec.mu.Unlock()
-				return result, fmt.Errorf("Temporal endpoint %q already has an active execution %q", ec.Endpoint().GetName(), envelope.StreamID)
-			}
-			ec.pending[envelope.StreamID] = resultCh
+			ec.nextInvocation++
+			invocation.metricID = "activity/" + strconv.FormatUint(ec.nextInvocation, 10)
+			ec.pending[invocation] = resultCh
 			ec.mu.Unlock()
 		}
-		ec.Endpoint().OnPendingAdd(handlerCtx, envelope.StreamID)
+		handlerCtx = context.WithValue(handlerCtx, ec, invocation)
+		ec.Endpoint().OnPendingAdd(handlerCtx, invocation.metricID)
 		defer func() {
 			if workflowMode {
-				delete(ec.workflowPending, envelope.StreamID)
+				delete(ec.workflowPending, invocation)
 			} else {
 				ec.mu.Lock()
-				delete(ec.pending, envelope.StreamID)
+				delete(ec.pending, invocation)
 				ec.mu.Unlock()
 			}
-			ec.Endpoint().OnPendingRemove(handlerCtx, envelope.StreamID)
+			ec.Endpoint().OnPendingRemove(handlerCtx, invocation.metricID)
 		}()
 	}
 
@@ -331,8 +351,8 @@ func makeEndpointConsumer[HandlerState, Input, T, R, E any](
 	ds.AddEndpoint(ep)
 	consumer := &endpointConsumer[HandlerState, Input, T, R, E]{
 		DataSourceEndpointConsumer: runtime.MakeDataSourceEndpointConsumer[T, R, E](ep, stream),
-		handler:                    handler, decode: decode, pending: make(map[string]chan R),
-		workflowPending: make(map[string]workflow.Channel),
+		handler:                    handler, decode: decode, pending: make(map[*endpointInvocation]chan R),
+		workflowPending: make(map[*endpointInvocation]workflow.Channel),
 		resultSer:       stream.GetResultStream(),
 	}
 	if tracer := env.Tracing(); tracer != nil {

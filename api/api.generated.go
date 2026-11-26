@@ -129,6 +129,138 @@ const (
 	DataTypeUnicodeString DataType = "unicode string"
 )
 
+// Defines values for DeploymentContainerImagePullPolicy.
+const (
+	DeploymentContainerImagePullPolicyAlways       DeploymentContainerImagePullPolicy = "Always"
+	DeploymentContainerImagePullPolicyIfNotPresent DeploymentContainerImagePullPolicy = "IfNotPresent"
+	DeploymentContainerImagePullPolicyNever        DeploymentContainerImagePullPolicy = "Never"
+)
+
+// Defines values for DeploymentContainerRestartPolicy.
+const (
+	DeploymentContainerRestartPolicyAlways DeploymentContainerRestartPolicy = "Always"
+)
+
+// Defines values for DeploymentContainerTerminationMessagePolicy.
+const (
+	DeploymentContainerTerminationMessagePolicyFallbackToLogsOnError DeploymentContainerTerminationMessagePolicy = "FallbackToLogsOnError"
+	DeploymentContainerTerminationMessagePolicyFile                  DeploymentContainerTerminationMessagePolicy = "File"
+)
+
+// Defines values for DeploymentContainerPortProtocol.
+const (
+	SCTP DeploymentContainerPortProtocol = "SCTP"
+	TCP  DeploymentContainerPortProtocol = "TCP"
+	UDP  DeploymentContainerPortProtocol = "UDP"
+)
+
+// Defines values for DeploymentEmptyDirVolumeMedium.
+const (
+	DeploymentEmptyDirVolumeMediumEmpty  DeploymentEmptyDirVolumeMedium = ""
+	DeploymentEmptyDirVolumeMediumMemory DeploymentEmptyDirVolumeMedium = "Memory"
+)
+
+// Defines values for DeploymentHTTPGetActionScheme.
+const (
+	HTTP  DeploymentHTTPGetActionScheme = "HTTP"
+	HTTPS DeploymentHTTPGetActionScheme = "HTTPS"
+)
+
+// Defines values for DeploymentHostPathVolumeType.
+const (
+	DeploymentHostPathVolumeTypeBlockDevice       DeploymentHostPathVolumeType = "BlockDevice"
+	DeploymentHostPathVolumeTypeCharDevice        DeploymentHostPathVolumeType = "CharDevice"
+	DeploymentHostPathVolumeTypeDirectory         DeploymentHostPathVolumeType = "Directory"
+	DeploymentHostPathVolumeTypeDirectoryOrCreate DeploymentHostPathVolumeType = "DirectoryOrCreate"
+	DeploymentHostPathVolumeTypeEmpty             DeploymentHostPathVolumeType = ""
+	DeploymentHostPathVolumeTypeFile              DeploymentHostPathVolumeType = "File"
+	DeploymentHostPathVolumeTypeFileOrCreate      DeploymentHostPathVolumeType = "FileOrCreate"
+	DeploymentHostPathVolumeTypeSocket            DeploymentHostPathVolumeType = "Socket"
+)
+
+// Defines values for DeploymentLabelRequirementOperator.
+const (
+	DeploymentLabelRequirementOperatorDoesNotExist DeploymentLabelRequirementOperator = "DoesNotExist"
+	DeploymentLabelRequirementOperatorExists       DeploymentLabelRequirementOperator = "Exists"
+	DeploymentLabelRequirementOperatorIn           DeploymentLabelRequirementOperator = "In"
+	DeploymentLabelRequirementOperatorNotIn        DeploymentLabelRequirementOperator = "NotIn"
+)
+
+// Defines values for DeploymentNodeRequirementOperator.
+const (
+	DeploymentNodeRequirementOperatorDoesNotExist DeploymentNodeRequirementOperator = "DoesNotExist"
+	DeploymentNodeRequirementOperatorExists       DeploymentNodeRequirementOperator = "Exists"
+	DeploymentNodeRequirementOperatorGt           DeploymentNodeRequirementOperator = "Gt"
+	DeploymentNodeRequirementOperatorIn           DeploymentNodeRequirementOperator = "In"
+	DeploymentNodeRequirementOperatorLt           DeploymentNodeRequirementOperator = "Lt"
+	DeploymentNodeRequirementOperatorNotIn        DeploymentNodeRequirementOperator = "NotIn"
+)
+
+// Defines values for DeploymentPodSecurityContextFsGroupChangePolicy.
+const (
+	Always         DeploymentPodSecurityContextFsGroupChangePolicy = "Always"
+	OnRootMismatch DeploymentPodSecurityContextFsGroupChangePolicy = "OnRootMismatch"
+)
+
+// Defines values for DeploymentPodSecurityContextSupplementalGroupsPolicy.
+const (
+	DeploymentPodSecurityContextSupplementalGroupsPolicyMerge  DeploymentPodSecurityContextSupplementalGroupsPolicy = "Merge"
+	DeploymentPodSecurityContextSupplementalGroupsPolicyStrict DeploymentPodSecurityContextSupplementalGroupsPolicy = "Strict"
+)
+
+// Defines values for DeploymentSeccompProfileType.
+const (
+	Localhost      DeploymentSeccompProfileType = "Localhost"
+	RuntimeDefault DeploymentSeccompProfileType = "RuntimeDefault"
+	Unconfined     DeploymentSeccompProfileType = "Unconfined"
+)
+
+// Defines values for DeploymentSecurityContextProcMount.
+const (
+	Default  DeploymentSecurityContextProcMount = "Default"
+	Unmasked DeploymentSecurityContextProcMount = "Unmasked"
+)
+
+// Defines values for DeploymentStrategyType.
+const (
+	DeploymentStrategyTypeRecreate      DeploymentStrategyType = "Recreate"
+	DeploymentStrategyTypeRollingUpdate DeploymentStrategyType = "RollingUpdate"
+)
+
+// Defines values for DeploymentTolerationEffect.
+const (
+	DeploymentTolerationEffectEmpty            DeploymentTolerationEffect = ""
+	DeploymentTolerationEffectNoExecute        DeploymentTolerationEffect = "NoExecute"
+	DeploymentTolerationEffectNoSchedule       DeploymentTolerationEffect = "NoSchedule"
+	DeploymentTolerationEffectPreferNoSchedule DeploymentTolerationEffect = "PreferNoSchedule"
+)
+
+// Defines values for DeploymentTolerationOperator.
+const (
+	Equal  DeploymentTolerationOperator = "Equal"
+	Exists DeploymentTolerationOperator = "Exists"
+)
+
+// Defines values for DeploymentUpdateStrategyType.
+const (
+	DeploymentUpdateStrategyTypeOnDelete      DeploymentUpdateStrategyType = "OnDelete"
+	DeploymentUpdateStrategyTypeRollingUpdate DeploymentUpdateStrategyType = "RollingUpdate"
+)
+
+// Defines values for DeploymentVolumeMountMountPropagation.
+const (
+	Bidirectional   DeploymentVolumeMountMountPropagation = "Bidirectional"
+	HostToContainer DeploymentVolumeMountMountPropagation = "HostToContainer"
+	None            DeploymentVolumeMountMountPropagation = "None"
+)
+
+// Defines values for DeploymentVolumeMountRecursiveReadOnly.
+const (
+	Disabled   DeploymentVolumeMountRecursiveReadOnly = "Disabled"
+	Enabled    DeploymentVolumeMountRecursiveReadOnly = "Enabled"
+	IfPossible DeploymentVolumeMountRecursiveReadOnly = "IfPossible"
+)
+
 // Defines values for EndpointQueryOperation.
 const (
 	EndpointQueryOperationDeleteObject EndpointQueryOperation = "DeleteObject"
@@ -318,7 +450,7 @@ const (
 
 // Defines values for UndefinedEnum.
 const (
-	UndefinedEnumUndefined UndefinedEnum = 0
+	Undefined UndefinedEnum = 0
 )
 
 // CallSemantics Delivery semantics for a stream link — controls how messages are passed between nodes.
@@ -557,6 +689,572 @@ type DataConnectorType int
 // Use `custom` for user-defined structs, `struct` for inline struct definitions,
 // `array` for slices, `map` for maps, and `any` for untyped/interface values.
 type DataType string
+
+// DeploymentAffinity defines model for DeploymentAffinity.
+type DeploymentAffinity struct {
+	NodeAffinity    *DeploymentNodeAffinity `json:"nodeAffinity,omitempty"`
+	PodAffinity     *DeploymentPodAffinity  `json:"podAffinity,omitempty"`
+	PodAntiAffinity *DeploymentPodAffinity  `json:"podAntiAffinity,omitempty"`
+}
+
+// DeploymentCSIVolume defines model for DeploymentCSIVolume.
+type DeploymentCSIVolume struct {
+	Driver               *string                    `json:"driver,omitempty"`
+	FsType               *string                    `json:"fsType,omitempty"`
+	NodePublishSecretRef *DeploymentObjectReference `json:"nodePublishSecretRef,omitempty"`
+	ReadOnly             *bool                      `json:"readOnly,omitempty"`
+
+	// VolumeAttributes Explicit string dictionary for labels, annotations or node selectors.
+	VolumeAttributes *DeploymentStringMap `json:"volumeAttributes,omitempty"`
+}
+
+// DeploymentCapabilities defines model for DeploymentCapabilities.
+type DeploymentCapabilities struct {
+	Add  *[]string `json:"add,omitempty"`
+	Drop *[]string `json:"drop,omitempty"`
+}
+
+// DeploymentConfigMapKeyRef defines model for DeploymentConfigMapKeyRef.
+type DeploymentConfigMapKeyRef struct {
+	Key      *string `json:"key,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Optional *bool   `json:"optional,omitempty"`
+}
+
+// DeploymentConfigMapVolume defines model for DeploymentConfigMapVolume.
+type DeploymentConfigMapVolume struct {
+	DefaultMode *int                   `json:"defaultMode,omitempty"`
+	Items       *[]DeploymentKeyToPath `json:"items,omitempty"`
+	Name        *string                `json:"name,omitempty"`
+	Optional    *bool                  `json:"optional,omitempty"`
+}
+
+// DeploymentContainer defines model for DeploymentContainer.
+type DeploymentContainer struct {
+	Args                     *[]string                                    `json:"args,omitempty"`
+	Command                  *[]string                                    `json:"command,omitempty"`
+	Env                      *[]DeploymentEnvVar                          `json:"env,omitempty"`
+	EnvFrom                  *[]DeploymentEnvFrom                         `json:"envFrom,omitempty"`
+	Image                    *string                                      `json:"image,omitempty"`
+	ImagePullPolicy          *DeploymentContainerImagePullPolicy          `json:"imagePullPolicy,omitempty"`
+	Lifecycle                *DeploymentLifecycle                         `json:"lifecycle,omitempty"`
+	LivenessProbe            *DeploymentProbeSpec                         `json:"livenessProbe,omitempty"`
+	Name                     *string                                      `json:"name,omitempty"`
+	Ports                    *[]DeploymentContainerPort                   `json:"ports,omitempty"`
+	ReadinessProbe           *DeploymentProbeSpec                         `json:"readinessProbe,omitempty"`
+	Resources                *DeploymentResources                         `json:"resources,omitempty"`
+	RestartPolicy            *DeploymentContainerRestartPolicy            `json:"restartPolicy,omitempty"`
+	SecurityContext          *DeploymentSecurityContext                   `json:"securityContext,omitempty"`
+	StartupProbe             *DeploymentProbeSpec                         `json:"startupProbe,omitempty"`
+	Stdin                    *bool                                        `json:"stdin,omitempty"`
+	StdinOnce                *bool                                        `json:"stdinOnce,omitempty"`
+	TerminationMessagePath   *string                                      `json:"terminationMessagePath,omitempty"`
+	TerminationMessagePolicy *DeploymentContainerTerminationMessagePolicy `json:"terminationMessagePolicy,omitempty"`
+	Tty                      *bool                                        `json:"tty,omitempty"`
+	VolumeMounts             *[]DeploymentVolumeMount                     `json:"volumeMounts,omitempty"`
+	WorkingDir               *string                                      `json:"workingDir,omitempty"`
+}
+
+// DeploymentContainerImagePullPolicy defines model for DeploymentContainer.ImagePullPolicy.
+type DeploymentContainerImagePullPolicy string
+
+// DeploymentContainerRestartPolicy defines model for DeploymentContainer.RestartPolicy.
+type DeploymentContainerRestartPolicy string
+
+// DeploymentContainerTerminationMessagePolicy defines model for DeploymentContainer.TerminationMessagePolicy.
+type DeploymentContainerTerminationMessagePolicy string
+
+// DeploymentContainerPort defines model for DeploymentContainerPort.
+type DeploymentContainerPort struct {
+	ContainerPort *int                             `json:"containerPort,omitempty"`
+	HostIP        *string                          `json:"hostIP,omitempty"`
+	HostPort      *int                             `json:"hostPort,omitempty"`
+	Name          *string                          `json:"name,omitempty"`
+	Protocol      *DeploymentContainerPortProtocol `json:"protocol,omitempty"`
+}
+
+// DeploymentContainerPortProtocol defines model for DeploymentContainerPort.Protocol.
+type DeploymentContainerPortProtocol string
+
+// DeploymentDownwardAPIItem defines model for DeploymentDownwardAPIItem.
+type DeploymentDownwardAPIItem struct {
+	FieldRef         *DeploymentFieldSelector         `json:"fieldRef,omitempty"`
+	Mode             *int                             `json:"mode,omitempty"`
+	Path             *string                          `json:"path,omitempty"`
+	ResourceFieldRef *DeploymentResourceFieldSelector `json:"resourceFieldRef,omitempty"`
+}
+
+// DeploymentDownwardAPIProjection defines model for DeploymentDownwardAPIProjection.
+type DeploymentDownwardAPIProjection struct {
+	Items *[]DeploymentDownwardAPIItem `json:"items,omitempty"`
+}
+
+// DeploymentDownwardAPIVolume defines model for DeploymentDownwardAPIVolume.
+type DeploymentDownwardAPIVolume struct {
+	DefaultMode *int                         `json:"defaultMode,omitempty"`
+	Items       *[]DeploymentDownwardAPIItem `json:"items,omitempty"`
+}
+
+// DeploymentEmptyDirVolume defines model for DeploymentEmptyDirVolume.
+type DeploymentEmptyDirVolume struct {
+	Medium    *DeploymentEmptyDirVolumeMedium `json:"medium,omitempty"`
+	SizeLimit *string                         `json:"sizeLimit,omitempty"`
+}
+
+// DeploymentEmptyDirVolumeMedium defines model for DeploymentEmptyDirVolume.Medium.
+type DeploymentEmptyDirVolumeMedium string
+
+// DeploymentEnvFrom defines model for DeploymentEnvFrom.
+type DeploymentEnvFrom struct {
+	ConfigMapRef *DeploymentLocalObjectRef `json:"configMapRef,omitempty"`
+	Prefix       *string                   `json:"prefix,omitempty"`
+	SecretRef    *DeploymentLocalObjectRef `json:"secretRef,omitempty"`
+}
+
+// DeploymentEnvValueSource defines model for DeploymentEnvValueSource.
+type DeploymentEnvValueSource struct {
+	ConfigMapKeyRef  *DeploymentConfigMapKeyRef       `json:"configMapKeyRef,omitempty"`
+	FieldRef         *DeploymentFieldSelector         `json:"fieldRef,omitempty"`
+	ResourceFieldRef *DeploymentResourceFieldSelector `json:"resourceFieldRef,omitempty"`
+
+	// SecretKeyRef Reference to a key in an existing namespace-local Secret, never a credential value.
+	SecretKeyRef *DeploymentSecretKeyRef `json:"secretKeyRef,omitempty"`
+}
+
+// DeploymentEnvVar defines model for DeploymentEnvVar.
+type DeploymentEnvVar struct {
+	Name      *string                   `json:"name,omitempty"`
+	Value     *string                   `json:"value,omitempty"`
+	ValueFrom *DeploymentEnvValueSource `json:"valueFrom,omitempty"`
+}
+
+// DeploymentExecAction defines model for DeploymentExecAction.
+type DeploymentExecAction struct {
+	Command *[]string `json:"command,omitempty"`
+}
+
+// DeploymentFieldSelector defines model for DeploymentFieldSelector.
+type DeploymentFieldSelector struct {
+	ApiVersion *string `json:"apiVersion,omitempty"`
+	FieldPath  *string `json:"fieldPath,omitempty"`
+}
+
+// DeploymentGRPCAction defines model for DeploymentGRPCAction.
+type DeploymentGRPCAction struct {
+	Port    *int    `json:"port,omitempty"`
+	Service *string `json:"service,omitempty"`
+}
+
+// DeploymentHTTPGetAction defines model for DeploymentHTTPGetAction.
+type DeploymentHTTPGetAction struct {
+	Host        *string                 `json:"host,omitempty"`
+	HttpHeaders *[]DeploymentHTTPHeader `json:"httpHeaders,omitempty"`
+	Path        *string                 `json:"path,omitempty"`
+
+	// Port Numeric container port or a named port; not arbitrary JSON.
+	Port   *DeploymentPort                `json:"port,omitempty"`
+	Scheme *DeploymentHTTPGetActionScheme `json:"scheme,omitempty"`
+}
+
+// DeploymentHTTPGetActionScheme defines model for DeploymentHTTPGetAction.Scheme.
+type DeploymentHTTPGetActionScheme string
+
+// DeploymentHTTPHeader defines model for DeploymentHTTPHeader.
+type DeploymentHTTPHeader struct {
+	Name  *string `json:"name,omitempty"`
+	Value *string `json:"value,omitempty"`
+}
+
+// DeploymentHostPathVolume defines model for DeploymentHostPathVolume.
+type DeploymentHostPathVolume struct {
+	Path *string                       `json:"path,omitempty"`
+	Type *DeploymentHostPathVolumeType `json:"type,omitempty"`
+}
+
+// DeploymentHostPathVolumeType defines model for DeploymentHostPathVolume.Type.
+type DeploymentHostPathVolumeType string
+
+// DeploymentIntOrPercent Nonnegative integer count or percentage, for example 1 or "25%".
+type DeploymentIntOrPercent = DeploymentCountOrPercent
+
+// DeploymentKeyProjection defines model for DeploymentKeyProjection.
+type DeploymentKeyProjection struct {
+	Items    *[]DeploymentKeyToPath `json:"items,omitempty"`
+	Name     *string                `json:"name,omitempty"`
+	Optional *bool                  `json:"optional,omitempty"`
+}
+
+// DeploymentKeyToPath defines model for DeploymentKeyToPath.
+type DeploymentKeyToPath struct {
+	Key  *string `json:"key,omitempty"`
+	Mode *int    `json:"mode,omitempty"`
+	Path *string `json:"path,omitempty"`
+}
+
+// DeploymentLabelRequirement defines model for DeploymentLabelRequirement.
+type DeploymentLabelRequirement struct {
+	Key      *string                             `json:"key,omitempty"`
+	Operator *DeploymentLabelRequirementOperator `json:"operator,omitempty"`
+	Values   *[]string                           `json:"values,omitempty"`
+}
+
+// DeploymentLabelRequirementOperator defines model for DeploymentLabelRequirement.Operator.
+type DeploymentLabelRequirementOperator string
+
+// DeploymentLabelSelector defines model for DeploymentLabelSelector.
+type DeploymentLabelSelector struct {
+	MatchExpressions *[]DeploymentLabelRequirement `json:"matchExpressions,omitempty"`
+
+	// MatchLabels Explicit string dictionary for labels, annotations or node selectors.
+	MatchLabels *DeploymentStringMap `json:"matchLabels,omitempty"`
+}
+
+// DeploymentLifecycle defines model for DeploymentLifecycle.
+type DeploymentLifecycle struct {
+	PostStart *DeploymentLifecycleHandler `json:"postStart,omitempty"`
+	PreStop   *DeploymentLifecycleHandler `json:"preStop,omitempty"`
+}
+
+// DeploymentLifecycleHandler defines model for DeploymentLifecycleHandler.
+type DeploymentLifecycleHandler struct {
+	Exec      *DeploymentExecAction      `json:"exec,omitempty"`
+	HttpGet   *DeploymentHTTPGetAction   `json:"httpGet,omitempty"`
+	Sleep     *DeploymentSleepAction     `json:"sleep,omitempty"`
+	TcpSocket *DeploymentTCPSocketAction `json:"tcpSocket,omitempty"`
+}
+
+// DeploymentLocalObjectRef defines model for DeploymentLocalObjectRef.
+type DeploymentLocalObjectRef struct {
+	Name     *string `json:"name,omitempty"`
+	Optional *bool   `json:"optional,omitempty"`
+}
+
+// DeploymentNodeAffinity defines model for DeploymentNodeAffinity.
+type DeploymentNodeAffinity struct {
+	PreferredDuringSchedulingIgnoredDuringExecution *[]DeploymentPreferredNodeTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+	RequiredDuringSchedulingIgnoredDuringExecution  *DeploymentNodeSelector        `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// DeploymentNodeRequirement defines model for DeploymentNodeRequirement.
+type DeploymentNodeRequirement struct {
+	Key      *string                            `json:"key,omitempty"`
+	Operator *DeploymentNodeRequirementOperator `json:"operator,omitempty"`
+	Values   *[]string                          `json:"values,omitempty"`
+}
+
+// DeploymentNodeRequirementOperator defines model for DeploymentNodeRequirement.Operator.
+type DeploymentNodeRequirementOperator string
+
+// DeploymentNodeSelector defines model for DeploymentNodeSelector.
+type DeploymentNodeSelector struct {
+	NodeSelectorTerms *[]DeploymentNodeSelectorTerm `json:"nodeSelectorTerms,omitempty"`
+}
+
+// DeploymentNodeSelectorTerm defines model for DeploymentNodeSelectorTerm.
+type DeploymentNodeSelectorTerm struct {
+	MatchExpressions *[]DeploymentNodeRequirement `json:"matchExpressions,omitempty"`
+	MatchFields      *[]DeploymentNodeRequirement `json:"matchFields,omitempty"`
+}
+
+// DeploymentObjectReference defines model for DeploymentObjectReference.
+type DeploymentObjectReference struct {
+	Name *string `json:"name,omitempty"`
+}
+
+// DeploymentPVCVolume defines model for DeploymentPVCVolume.
+type DeploymentPVCVolume struct {
+	ClaimName *string `json:"claimName,omitempty"`
+	ReadOnly  *bool   `json:"readOnly,omitempty"`
+}
+
+// DeploymentPodAffinity defines model for DeploymentPodAffinity.
+type DeploymentPodAffinity struct {
+	PreferredDuringSchedulingIgnoredDuringExecution *[]DeploymentWeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+	RequiredDuringSchedulingIgnoredDuringExecution  *[]DeploymentPodAffinityTerm         `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// DeploymentPodAffinityTerm defines model for DeploymentPodAffinityTerm.
+type DeploymentPodAffinityTerm struct {
+	LabelSelector     *DeploymentLabelSelector `json:"labelSelector,omitempty"`
+	MatchLabelKeys    *[]string                `json:"matchLabelKeys,omitempty"`
+	MismatchLabelKeys *[]string                `json:"mismatchLabelKeys,omitempty"`
+	NamespaceSelector *DeploymentLabelSelector `json:"namespaceSelector,omitempty"`
+	Namespaces        *[]string                `json:"namespaces,omitempty"`
+	TopologyKey       *string                  `json:"topologyKey,omitempty"`
+}
+
+// DeploymentPodSecurityContext defines model for DeploymentPodSecurityContext.
+type DeploymentPodSecurityContext struct {
+	FsGroup                  *int64                                                `json:"fsGroup,omitempty"`
+	FsGroupChangePolicy      *DeploymentPodSecurityContextFsGroupChangePolicy      `json:"fsGroupChangePolicy,omitempty"`
+	RunAsGroup               *int64                                                `json:"runAsGroup,omitempty"`
+	RunAsNonRoot             *bool                                                 `json:"runAsNonRoot,omitempty"`
+	RunAsUser                *int64                                                `json:"runAsUser,omitempty"`
+	SeLinuxOptions           *DeploymentSELinuxOptions                             `json:"seLinuxOptions,omitempty"`
+	SeccompProfile           *DeploymentSeccompProfile                             `json:"seccompProfile,omitempty"`
+	SupplementalGroups       *[]int64                                              `json:"supplementalGroups,omitempty"`
+	SupplementalGroupsPolicy *DeploymentPodSecurityContextSupplementalGroupsPolicy `json:"supplementalGroupsPolicy,omitempty"`
+	Sysctls                  *[]DeploymentSysctl                                   `json:"sysctls,omitempty"`
+}
+
+// DeploymentPodSecurityContextFsGroupChangePolicy defines model for DeploymentPodSecurityContext.FsGroupChangePolicy.
+type DeploymentPodSecurityContextFsGroupChangePolicy string
+
+// DeploymentPodSecurityContextSupplementalGroupsPolicy defines model for DeploymentPodSecurityContext.SupplementalGroupsPolicy.
+type DeploymentPodSecurityContextSupplementalGroupsPolicy string
+
+// DeploymentPort Numeric container port or a named port; not arbitrary JSON.
+type DeploymentPort = DeploymentPortValue
+
+// DeploymentPreferredNodeTerm defines model for DeploymentPreferredNodeTerm.
+type DeploymentPreferredNodeTerm struct {
+	Preference *DeploymentNodeSelectorTerm `json:"preference,omitempty"`
+	Weight     *int                        `json:"weight,omitempty"`
+}
+
+// DeploymentProbe defines model for DeploymentProbe.
+type DeploymentProbe struct {
+	Enabled             *bool                `json:"enabled,omitempty"`
+	FailureThreshold    *int                 `json:"failureThreshold,omitempty"`
+	InitialDelaySeconds *int                 `json:"initialDelaySeconds,omitempty"`
+	Path                *string              `json:"path,omitempty"`
+	PeriodSeconds       *int                 `json:"periodSeconds,omitempty"`
+	Spec                *DeploymentProbeSpec `json:"spec,omitempty"`
+	SuccessThreshold    *int                 `json:"successThreshold,omitempty"`
+	TimeoutSeconds      *int                 `json:"timeoutSeconds,omitempty"`
+}
+
+// DeploymentProbeSpec defines model for DeploymentProbeSpec.
+type DeploymentProbeSpec struct {
+	Exec                          *DeploymentExecAction      `json:"exec,omitempty"`
+	FailureThreshold              *int                       `json:"failureThreshold,omitempty"`
+	Grpc                          *DeploymentGRPCAction      `json:"grpc,omitempty"`
+	HttpGet                       *DeploymentHTTPGetAction   `json:"httpGet,omitempty"`
+	InitialDelaySeconds           *int                       `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds                 *int                       `json:"periodSeconds,omitempty"`
+	SuccessThreshold              *int                       `json:"successThreshold,omitempty"`
+	TcpSocket                     *DeploymentTCPSocketAction `json:"tcpSocket,omitempty"`
+	TerminationGracePeriodSeconds *int                       `json:"terminationGracePeriodSeconds,omitempty"`
+	TimeoutSeconds                *int                       `json:"timeoutSeconds,omitempty"`
+}
+
+// DeploymentProbes defines model for DeploymentProbes.
+type DeploymentProbes struct {
+	Liveness  *DeploymentProbe `json:"liveness,omitempty"`
+	Readiness *DeploymentProbe `json:"readiness,omitempty"`
+	Startup   *DeploymentProbe `json:"startup,omitempty"`
+}
+
+// DeploymentProjectedVolume defines model for DeploymentProjectedVolume.
+type DeploymentProjectedVolume struct {
+	DefaultMode *int                          `json:"defaultMode,omitempty"`
+	Sources     *[]DeploymentVolumeProjection `json:"sources,omitempty"`
+}
+
+// DeploymentResourceFieldSelector defines model for DeploymentResourceFieldSelector.
+type DeploymentResourceFieldSelector struct {
+	ContainerName *string `json:"containerName,omitempty"`
+	Divisor       *string `json:"divisor,omitempty"`
+	Resource      *string `json:"resource,omitempty"`
+}
+
+// DeploymentResources defines model for DeploymentResources.
+type DeploymentResources struct {
+	// Limits Explicit string dictionary for labels, annotations or node selectors.
+	Limits *DeploymentStringMap `json:"limits,omitempty"`
+
+	// Requests Explicit string dictionary for labels, annotations or node selectors.
+	Requests *DeploymentStringMap `json:"requests,omitempty"`
+}
+
+// DeploymentRollingUpdate defines model for DeploymentRollingUpdate.
+type DeploymentRollingUpdate struct {
+	// MaxSurge Nonnegative integer count or percentage, for example 1 or "25%".
+	MaxSurge *DeploymentIntOrPercent `json:"maxSurge,omitempty"`
+
+	// MaxUnavailable Nonnegative integer count or percentage, for example 1 or "25%".
+	MaxUnavailable *DeploymentIntOrPercent `json:"maxUnavailable,omitempty"`
+}
+
+// DeploymentSELinuxOptions defines model for DeploymentSELinuxOptions.
+type DeploymentSELinuxOptions struct {
+	Level *string `json:"level,omitempty"`
+	Role  *string `json:"role,omitempty"`
+	Type  *string `json:"type,omitempty"`
+	User  *string `json:"user,omitempty"`
+}
+
+// DeploymentSeccompProfile defines model for DeploymentSeccompProfile.
+type DeploymentSeccompProfile struct {
+	LocalhostProfile *string                       `json:"localhostProfile,omitempty"`
+	Type             *DeploymentSeccompProfileType `json:"type,omitempty"`
+}
+
+// DeploymentSeccompProfileType defines model for DeploymentSeccompProfile.Type.
+type DeploymentSeccompProfileType string
+
+// DeploymentSecretKeyRef Reference to a key in an existing namespace-local Secret, never a credential value.
+type DeploymentSecretKeyRef struct {
+	Key      *string `json:"key,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	Optional *bool   `json:"optional,omitempty"`
+}
+
+// DeploymentSecretVolume defines model for DeploymentSecretVolume.
+type DeploymentSecretVolume struct {
+	DefaultMode *int                   `json:"defaultMode,omitempty"`
+	Items       *[]DeploymentKeyToPath `json:"items,omitempty"`
+	Optional    *bool                  `json:"optional,omitempty"`
+	SecretName  *string                `json:"secretName,omitempty"`
+}
+
+// DeploymentSecurityContext defines model for DeploymentSecurityContext.
+type DeploymentSecurityContext struct {
+	AllowPrivilegeEscalation *bool                               `json:"allowPrivilegeEscalation,omitempty"`
+	Capabilities             *DeploymentCapabilities             `json:"capabilities,omitempty"`
+	Privileged               *bool                               `json:"privileged,omitempty"`
+	ProcMount                *DeploymentSecurityContextProcMount `json:"procMount,omitempty"`
+	ReadOnlyRootFilesystem   *bool                               `json:"readOnlyRootFilesystem,omitempty"`
+	RunAsGroup               *int64                              `json:"runAsGroup,omitempty"`
+	RunAsNonRoot             *bool                               `json:"runAsNonRoot,omitempty"`
+	RunAsUser                *int64                              `json:"runAsUser,omitempty"`
+	SeLinuxOptions           *DeploymentSELinuxOptions           `json:"seLinuxOptions,omitempty"`
+	SeccompProfile           *DeploymentSeccompProfile           `json:"seccompProfile,omitempty"`
+}
+
+// DeploymentSecurityContextProcMount defines model for DeploymentSecurityContext.ProcMount.
+type DeploymentSecurityContextProcMount string
+
+// DeploymentServiceAccount Reference to an existing namespace-local service account; does not create credentials or grants.
+type DeploymentServiceAccount struct {
+	AutomountServiceAccountToken *bool   `json:"automountServiceAccountToken,omitempty"`
+	Name                         *string `json:"name,omitempty"`
+}
+
+// DeploymentSettings Optional code-generation deployment policy; does not alter runtime graph semantics.
+type DeploymentSettings struct {
+	// Kubernetes Optional project defaults or service overrides for generated Helm values.
+	// Nested records are partial overrides too. x-effective-required names
+	// fields needed after project/service inheritance, not fields that must
+	// be repeated in every override. Omitted fields must never become defaults.
+	// Omission inherits; arrays replace; nested mappings merge, with explicitly
+	// empty mappings clearing inherited entries. No platform policy is invented
+	// when settings are absent. User-owned environment Helm values apply last.
+	Kubernetes *KubernetesDeploymentSettings `json:"kubernetes,omitempty"`
+}
+
+// DeploymentSleepAction defines model for DeploymentSleepAction.
+type DeploymentSleepAction struct {
+	Seconds *int64 `json:"seconds,omitempty"`
+}
+
+// DeploymentStatefulRollingUpdate defines model for DeploymentStatefulRollingUpdate.
+type DeploymentStatefulRollingUpdate struct {
+	// MaxUnavailable Nonnegative integer count or percentage, for example 1 or "25%".
+	MaxUnavailable *DeploymentIntOrPercent `json:"maxUnavailable,omitempty"`
+	Partition      *int                    `json:"partition,omitempty"`
+}
+
+// DeploymentStrategy defines model for DeploymentStrategy.
+type DeploymentStrategy struct {
+	RollingUpdate *DeploymentRollingUpdate `json:"rollingUpdate,omitempty"`
+	Type          *DeploymentStrategyType  `json:"type,omitempty"`
+}
+
+// DeploymentStrategyType defines model for DeploymentStrategy.Type.
+type DeploymentStrategyType string
+
+// DeploymentStringMap Explicit string dictionary for labels, annotations or node selectors.
+type DeploymentStringMap map[string]string
+
+// DeploymentSysctl defines model for DeploymentSysctl.
+type DeploymentSysctl struct {
+	Name  *string `json:"name,omitempty"`
+	Value *string `json:"value,omitempty"`
+}
+
+// DeploymentTCPSocketAction defines model for DeploymentTCPSocketAction.
+type DeploymentTCPSocketAction struct {
+	Host *string `json:"host,omitempty"`
+
+	// Port Numeric container port or a named port; not arbitrary JSON.
+	Port *DeploymentPort `json:"port,omitempty"`
+}
+
+// DeploymentTokenProjection defines model for DeploymentTokenProjection.
+type DeploymentTokenProjection struct {
+	Audience          *string `json:"audience,omitempty"`
+	ExpirationSeconds *int64  `json:"expirationSeconds,omitempty"`
+	Path              *string `json:"path,omitempty"`
+}
+
+// DeploymentToleration defines model for DeploymentToleration.
+type DeploymentToleration struct {
+	Effect            *DeploymentTolerationEffect   `json:"effect,omitempty"`
+	Key               *string                       `json:"key,omitempty"`
+	Operator          *DeploymentTolerationOperator `json:"operator,omitempty"`
+	TolerationSeconds *int64                        `json:"tolerationSeconds,omitempty"`
+	Value             *string                       `json:"value,omitempty"`
+}
+
+// DeploymentTolerationEffect defines model for DeploymentToleration.Effect.
+type DeploymentTolerationEffect string
+
+// DeploymentTolerationOperator defines model for DeploymentToleration.Operator.
+type DeploymentTolerationOperator string
+
+// DeploymentUpdateStrategy defines model for DeploymentUpdateStrategy.
+type DeploymentUpdateStrategy struct {
+	RollingUpdate *DeploymentStatefulRollingUpdate `json:"rollingUpdate,omitempty"`
+	Type          *DeploymentUpdateStrategyType    `json:"type,omitempty"`
+}
+
+// DeploymentUpdateStrategyType defines model for DeploymentUpdateStrategy.Type.
+type DeploymentUpdateStrategyType string
+
+// DeploymentVolume defines model for DeploymentVolume.
+type DeploymentVolume struct {
+	ConfigMap             *DeploymentConfigMapVolume   `json:"configMap,omitempty"`
+	Csi                   *DeploymentCSIVolume         `json:"csi,omitempty"`
+	DownwardAPI           *DeploymentDownwardAPIVolume `json:"downwardAPI,omitempty"`
+	EmptyDir              *DeploymentEmptyDirVolume    `json:"emptyDir,omitempty"`
+	HostPath              *DeploymentHostPathVolume    `json:"hostPath,omitempty"`
+	Name                  *string                      `json:"name,omitempty"`
+	PersistentVolumeClaim *DeploymentPVCVolume         `json:"persistentVolumeClaim,omitempty"`
+	Projected             *DeploymentProjectedVolume   `json:"projected,omitempty"`
+	Secret                *DeploymentSecretVolume      `json:"secret,omitempty"`
+}
+
+// DeploymentVolumeMount defines model for DeploymentVolumeMount.
+type DeploymentVolumeMount struct {
+	MountPath         *string                                 `json:"mountPath,omitempty"`
+	MountPropagation  *DeploymentVolumeMountMountPropagation  `json:"mountPropagation,omitempty"`
+	Name              *string                                 `json:"name,omitempty"`
+	ReadOnly          *bool                                   `json:"readOnly,omitempty"`
+	RecursiveReadOnly *DeploymentVolumeMountRecursiveReadOnly `json:"recursiveReadOnly,omitempty"`
+	SubPath           *string                                 `json:"subPath,omitempty"`
+	SubPathExpr       *string                                 `json:"subPathExpr,omitempty"`
+}
+
+// DeploymentVolumeMountMountPropagation defines model for DeploymentVolumeMount.MountPropagation.
+type DeploymentVolumeMountMountPropagation string
+
+// DeploymentVolumeMountRecursiveReadOnly defines model for DeploymentVolumeMount.RecursiveReadOnly.
+type DeploymentVolumeMountRecursiveReadOnly string
+
+// DeploymentVolumeProjection defines model for DeploymentVolumeProjection.
+type DeploymentVolumeProjection struct {
+	ConfigMap           *DeploymentKeyProjection         `json:"configMap,omitempty"`
+	DownwardAPI         *DeploymentDownwardAPIProjection `json:"downwardAPI,omitempty"`
+	Secret              *DeploymentKeyProjection         `json:"secret,omitempty"`
+	ServiceAccountToken *DeploymentTokenProjection       `json:"serviceAccountToken,omitempty"`
+}
+
+// DeploymentWeightedPodAffinityTerm defines model for DeploymentWeightedPodAffinityTerm.
+type DeploymentWeightedPodAffinityTerm struct {
+	PodAffinityTerm *DeploymentPodAffinityTerm `json:"podAffinityTerm,omitempty"`
+	Weight          *int                       `json:"weight,omitempty"`
+}
 
 // Endpoint A specific entry or exit point on a data connector — an HTTP route, a Kafka topic,
 // or a gRPC method. Each Input, Sink or Query stream node references exactly one endpoint.
@@ -832,6 +1530,50 @@ type KafkaSaslMechanism string
 // KafkaSecurityProtocol Kafka client transport security protocol.
 type KafkaSecurityProtocol string
 
+// KubernetesDeploymentSettings Optional project defaults or service overrides for generated Helm values.
+// Nested records are partial overrides too. x-effective-required names
+// fields needed after project/service inheritance, not fields that must
+// be repeated in every override. Omitted fields must never become defaults.
+// Omission inherits; arrays replace; nested mappings merge, with explicitly
+// empty mappings clearing inherited entries. No platform policy is invented
+// when settings are absent. User-owned environment Helm values apply last.
+type KubernetesDeploymentSettings struct {
+	Affinity *DeploymentAffinity `json:"affinity,omitempty"`
+
+	// Annotations Explicit string dictionary for labels, annotations or node selectors.
+	Annotations        *DeploymentStringMap     `json:"annotations,omitempty"`
+	Command            *[]string                `json:"command,omitempty"`
+	DeploymentStrategy *DeploymentStrategy      `json:"deploymentStrategy,omitempty"`
+	ExtraContainers    *[]DeploymentContainer   `json:"extraContainers,omitempty"`
+	ExtraEnv           *[]DeploymentEnvVar      `json:"extraEnv,omitempty"`
+	ExtraEnvFrom       *[]DeploymentEnvFrom     `json:"extraEnvFrom,omitempty"`
+	ExtraVolumeMounts  *[]DeploymentVolumeMount `json:"extraVolumeMounts,omitempty"`
+	ExtraVolumes       *[]DeploymentVolume      `json:"extraVolumes,omitempty"`
+	InitContainers     *[]DeploymentContainer   `json:"initContainers,omitempty"`
+
+	// NodeSelector Explicit string dictionary for labels, annotations or node selectors.
+	NodeSelector *DeploymentStringMap `json:"nodeSelector,omitempty"`
+
+	// PodAnnotations Explicit string dictionary for labels, annotations or node selectors.
+	PodAnnotations *DeploymentStringMap `json:"podAnnotations,omitempty"`
+
+	// PodLabels Explicit string dictionary for labels, annotations or node selectors.
+	PodLabels          *DeploymentStringMap               `json:"podLabels,omitempty"`
+	PodSecurityContext *DeploymentPodSecurityContext      `json:"podSecurityContext,omitempty"`
+	Probes             *DeploymentProbes                  `json:"probes,omitempty"`
+	ReplicaCount       *int                               `json:"replicaCount,omitempty"`
+	Resources          *DeploymentResources               `json:"resources,omitempty"`
+	SecretEnv          *map[string]DeploymentSecretKeyRef `json:"secretEnv,omitempty"`
+	SecretEnvFrom      *[]string                          `json:"secretEnvFrom,omitempty"`
+	SecurityContext    *DeploymentSecurityContext         `json:"securityContext,omitempty"`
+
+	// ServiceAccount Reference to an existing namespace-local service account; does not create credentials or grants.
+	ServiceAccount                *DeploymentServiceAccount `json:"serviceAccount,omitempty"`
+	TerminationGracePeriodSeconds *int                      `json:"terminationGracePeriodSeconds,omitempty"`
+	Tolerations                   *[]DeploymentToleration   `json:"tolerations,omitempty"`
+	UpdateStrategy                *DeploymentUpdateStrategy `json:"updateStrategy,omitempty"`
+}
+
 // KubernetesWorkloadType Kubernetes workload controller generated for a service.
 type KubernetesWorkloadType string
 
@@ -921,6 +1663,9 @@ type ProgrammingLanguage int
 
 // ProjectSettings Global metadata for the topology project.
 type ProjectSettings struct {
+	// Deployment Optional code-generation deployment policy; does not alter runtime graph semantics.
+	Deployment *DeploymentSettings `json:"deployment,omitempty"`
+
 	// ModuleVersion Semantic version tag used when publishing modules to Git (e.g. `v0.2.2`). Defaults to `v0.2.2`.
 	ModuleVersion *string `json:"moduleVersion,omitempty"`
 
@@ -960,6 +1705,9 @@ type Service struct {
 
 	// DefaultGrpcTimeout Default gRPC call timeout in milliseconds.
 	DefaultGrpcTimeout int `json:"defaultGrpcTimeout"`
+
+	// Deployment Optional code-generation deployment policy; does not alter runtime graph semantics.
+	Deployment *DeploymentSettings `json:"deployment,omitempty"`
 
 	// Environment Deployment environment for the service. Controls which observability engines
 	// are selected in the generated bootstrap code.

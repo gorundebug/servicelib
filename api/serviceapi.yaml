@@ -218,6 +218,8 @@ components:
       description: Global metadata for the topology project.
       additionalProperties: false
       properties:
+        deployment:
+          $ref: '#/components/schemas/DeploymentSettings'
         name:
           type: string
           description: Human-readable project name. Used in generated file headers.
@@ -230,6 +232,739 @@ components:
       required:
         - name
 
+    DeploymentSettings:
+      type: object
+      description: Optional code-generation deployment policy; does not alter runtime graph semantics.
+      additionalProperties: false
+      properties:
+        kubernetes:
+          $ref: '#/components/schemas/KubernetesDeploymentSettings'
+
+    DeploymentSecretKeyRef:
+      type: object
+      description: Reference to a key in an existing namespace-local Secret, never a credential value.
+      additionalProperties: false
+      x-effective-required: [name, key]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        key:
+          type: string
+          minLength: 1
+        optional:
+          type: boolean
+
+    DeploymentStringMap:
+      type: object
+      description: Explicit string dictionary for labels, annotations or node selectors.
+      additionalProperties:
+        type: string
+
+    DeploymentResources:
+      type: object
+      additionalProperties: false
+      properties:
+        requests:
+          $ref: '#/components/schemas/DeploymentStringMap'
+        limits:
+          $ref: '#/components/schemas/DeploymentStringMap'
+
+    DeploymentIntOrPercent:
+      description: Nonnegative integer count or percentage, for example 1 or "25%".
+      x-go-type: DeploymentCountOrPercent
+      oneOf:
+        - type: integer
+          minimum: 0
+        - type: string
+          pattern: '^[0-9]+%$'
+
+    DeploymentRollingUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        maxSurge:
+          $ref: '#/components/schemas/DeploymentIntOrPercent'
+        maxUnavailable:
+          $ref: '#/components/schemas/DeploymentIntOrPercent'
+
+    DeploymentStrategy:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [RollingUpdate, Recreate]
+        rollingUpdate:
+          $ref: '#/components/schemas/DeploymentRollingUpdate'
+
+    DeploymentStatefulRollingUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        partition:
+          type: integer
+          minimum: 0
+        maxUnavailable:
+          $ref: '#/components/schemas/DeploymentIntOrPercent'
+
+    DeploymentUpdateStrategy:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [RollingUpdate, OnDelete]
+        rollingUpdate:
+          $ref: '#/components/schemas/DeploymentStatefulRollingUpdate'
+
+    DeploymentSeccompProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [RuntimeDefault, Localhost, Unconfined]
+        localhostProfile:
+          type: string
+
+    DeploymentSELinuxOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          type: string
+        role:
+          type: string
+        type:
+          type: string
+        level:
+          type: string
+
+    DeploymentCapabilities:
+      type: object
+      additionalProperties: false
+      properties:
+        add:
+          type: array
+          items:
+            type: string
+        drop:
+          type: array
+          items:
+            type: string
+
+    DeploymentSecurityContext:
+      type: object
+      additionalProperties: false
+      properties:
+        runAsUser:
+          type: integer
+          format: int64
+          minimum: 0
+        runAsGroup:
+          type: integer
+          format: int64
+          minimum: 0
+        runAsNonRoot:
+          type: boolean
+        privileged:
+          type: boolean
+        allowPrivilegeEscalation:
+          type: boolean
+        readOnlyRootFilesystem:
+          type: boolean
+        capabilities:
+          $ref: '#/components/schemas/DeploymentCapabilities'
+        seccompProfile:
+          $ref: '#/components/schemas/DeploymentSeccompProfile'
+        seLinuxOptions:
+          $ref: '#/components/schemas/DeploymentSELinuxOptions'
+        procMount:
+          type: string
+          enum: [Default, Unmasked]
+
+    DeploymentSysctl:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name, value]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+
+    DeploymentPodSecurityContext:
+      type: object
+      additionalProperties: false
+      properties:
+        runAsUser:
+          type: integer
+          format: int64
+          minimum: 0
+        runAsGroup:
+          type: integer
+          format: int64
+          minimum: 0
+        runAsNonRoot:
+          type: boolean
+        fsGroup:
+          type: integer
+          format: int64
+          minimum: 0
+        fsGroupChangePolicy:
+          type: string
+          enum: [Always, OnRootMismatch]
+        supplementalGroups:
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 0
+        supplementalGroupsPolicy:
+          type: string
+          enum: [Merge, Strict]
+        seccompProfile:
+          $ref: '#/components/schemas/DeploymentSeccompProfile'
+        seLinuxOptions:
+          $ref: '#/components/schemas/DeploymentSELinuxOptions'
+        sysctls:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentSysctl'
+
+    DeploymentServiceAccount:
+      type: object
+      description: Reference to an existing namespace-local service account; does not create credentials or grants.
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        automountServiceAccountToken:
+          type: boolean
+
+    DeploymentLocalObjectRef:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        optional: {type: boolean}
+
+    DeploymentConfigMapKeyRef:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name, key]
+      properties:
+        name: {type: string, minLength: 1}
+        key: {type: string, minLength: 1}
+        optional: {type: boolean}
+
+    DeploymentFieldSelector:
+      type: object
+      additionalProperties: false
+      properties:
+        apiVersion: {type: string}
+        fieldPath: {type: string}
+
+    DeploymentResourceFieldSelector:
+      type: object
+      additionalProperties: false
+      properties:
+        containerName: {type: string}
+        resource: {type: string}
+        divisor: {type: string}
+
+    DeploymentEnvValueSource:
+      type: object
+      additionalProperties: false
+      properties:
+        fieldRef: {$ref: '#/components/schemas/DeploymentFieldSelector'}
+        resourceFieldRef: {$ref: '#/components/schemas/DeploymentResourceFieldSelector'}
+        secretKeyRef: {$ref: '#/components/schemas/DeploymentSecretKeyRef'}
+        configMapKeyRef: {$ref: '#/components/schemas/DeploymentConfigMapKeyRef'}
+
+    DeploymentEnvVar:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name]
+      properties:
+        name: {type: string, minLength: 1}
+        value: {type: string}
+        valueFrom: {$ref: '#/components/schemas/DeploymentEnvValueSource'}
+
+    DeploymentEnvFrom:
+      type: object
+      additionalProperties: false
+      properties:
+        prefix: {type: string}
+        secretRef: {$ref: '#/components/schemas/DeploymentLocalObjectRef'}
+        configMapRef: {$ref: '#/components/schemas/DeploymentLocalObjectRef'}
+
+    DeploymentPort:
+      description: Numeric container port or a named port; not arbitrary JSON.
+      x-go-type: DeploymentPortValue
+      oneOf:
+        - {type: integer, minimum: 1, maximum: 65535}
+        - {type: string, minLength: 1, maxLength: 15, pattern: '^([0-9]+-)*[0-9]*[a-z][a-z0-9]*(-[a-z0-9]+)*$'}
+
+    DeploymentExecAction:
+      type: object
+      additionalProperties: false
+      properties:
+        command: {type: array, items: {type: string}}
+
+    DeploymentHTTPHeader:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name, value]
+      properties:
+        name: {type: string}
+        value: {type: string}
+
+    DeploymentHTTPGetAction:
+      type: object
+      additionalProperties: false
+      properties:
+        host: {type: string}
+        path: {type: string}
+        port: {$ref: '#/components/schemas/DeploymentPort'}
+        scheme: {type: string, enum: [HTTP, HTTPS]}
+        httpHeaders:
+          type: array
+          items: {$ref: '#/components/schemas/DeploymentHTTPHeader'}
+
+    DeploymentTCPSocketAction:
+      type: object
+      additionalProperties: false
+      properties:
+        host: {type: string}
+        port: {$ref: '#/components/schemas/DeploymentPort'}
+
+    DeploymentGRPCAction:
+      type: object
+      additionalProperties: false
+      properties:
+        port: {type: integer, minimum: 1, maximum: 65535}
+        service: {type: string}
+
+    DeploymentProbeSpec:
+      type: object
+      additionalProperties: false
+      properties:
+        exec: {$ref: '#/components/schemas/DeploymentExecAction'}
+        httpGet: {$ref: '#/components/schemas/DeploymentHTTPGetAction'}
+        tcpSocket: {$ref: '#/components/schemas/DeploymentTCPSocketAction'}
+        grpc: {$ref: '#/components/schemas/DeploymentGRPCAction'}
+        initialDelaySeconds: {type: integer, minimum: 0}
+        periodSeconds: {type: integer, minimum: 1}
+        timeoutSeconds: {type: integer, minimum: 1}
+        successThreshold: {type: integer, minimum: 1}
+        failureThreshold: {type: integer, minimum: 1}
+        terminationGracePeriodSeconds: {type: integer, minimum: 1}
+
+    DeploymentProbe:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled: {type: boolean}
+        path: {type: string}
+        initialDelaySeconds: {type: integer, minimum: 0}
+        periodSeconds: {type: integer, minimum: 1}
+        timeoutSeconds: {type: integer, minimum: 1}
+        successThreshold: {type: integer, minimum: 1}
+        failureThreshold: {type: integer, minimum: 1}
+        spec: {$ref: '#/components/schemas/DeploymentProbeSpec'}
+
+    DeploymentProbes:
+      type: object
+      additionalProperties: false
+      properties:
+        startup: {$ref: '#/components/schemas/DeploymentProbe'}
+        readiness: {$ref: '#/components/schemas/DeploymentProbe'}
+        liveness: {$ref: '#/components/schemas/DeploymentProbe'}
+
+    DeploymentVolumeMount:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name, mountPath]
+      properties:
+        name: {type: string}
+        mountPath: {type: string}
+        subPath: {type: string}
+        subPathExpr: {type: string}
+        readOnly: {type: boolean}
+        recursiveReadOnly: {type: string, enum: [Disabled, IfPossible, Enabled]}
+        mountPropagation: {type: string, enum: [None, HostToContainer, Bidirectional]}
+
+    DeploymentKeyToPath:
+      type: object
+      additionalProperties: false
+      x-effective-required: [key, path]
+      properties:
+        key: {type: string}
+        path: {type: string}
+        mode: {type: integer, minimum: 0, maximum: 511}
+
+    DeploymentEmptyDirVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        medium: {type: string, enum: ['', Memory]}
+        sizeLimit: {type: string}
+
+    DeploymentPVCVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        claimName: {type: string}
+        readOnly: {type: boolean}
+
+    DeploymentConfigMapVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        optional: {type: boolean}
+        defaultMode: {type: integer, minimum: 0, maximum: 511}
+        items: {type: array, items: {$ref: '#/components/schemas/DeploymentKeyToPath'}}
+
+    DeploymentSecretVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        secretName: {type: string}
+        optional: {type: boolean}
+        defaultMode: {type: integer, minimum: 0, maximum: 511}
+        items: {type: array, items: {$ref: '#/components/schemas/DeploymentKeyToPath'}}
+
+    DeploymentHostPathVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        path: {type: string}
+        type: {type: string, enum: ['', DirectoryOrCreate, Directory, FileOrCreate, File, Socket, CharDevice, BlockDevice]}
+
+    DeploymentDownwardAPIItem:
+      type: object
+      additionalProperties: false
+      properties:
+        path: {type: string}
+        mode: {type: integer, minimum: 0, maximum: 511}
+        fieldRef: {$ref: '#/components/schemas/DeploymentFieldSelector'}
+        resourceFieldRef: {$ref: '#/components/schemas/DeploymentResourceFieldSelector'}
+
+    DeploymentDownwardAPIVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        defaultMode: {type: integer, minimum: 0, maximum: 511}
+        items: {type: array, items: {$ref: '#/components/schemas/DeploymentDownwardAPIItem'}}
+
+    DeploymentKeyProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        optional: {type: boolean}
+        items: {type: array, items: {$ref: '#/components/schemas/DeploymentKeyToPath'}}
+
+    DeploymentTokenProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        audience: {type: string}
+        expirationSeconds: {type: integer, format: int64, minimum: 600}
+        path: {type: string}
+
+    DeploymentDownwardAPIProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DeploymentDownwardAPIItem'}}
+
+    DeploymentVolumeProjection:
+      type: object
+      additionalProperties: false
+      properties:
+        secret: {$ref: '#/components/schemas/DeploymentKeyProjection'}
+        configMap: {$ref: '#/components/schemas/DeploymentKeyProjection'}
+        downwardAPI: {$ref: '#/components/schemas/DeploymentDownwardAPIProjection'}
+        serviceAccountToken: {$ref: '#/components/schemas/DeploymentTokenProjection'}
+
+    DeploymentProjectedVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        defaultMode: {type: integer, minimum: 0, maximum: 511}
+        sources: {type: array, items: {$ref: '#/components/schemas/DeploymentVolumeProjection'}}
+
+    DeploymentObjectReference:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+
+    DeploymentCSIVolume:
+      type: object
+      additionalProperties: false
+      properties:
+        driver: {type: string}
+        readOnly: {type: boolean}
+        fsType: {type: string}
+        volumeAttributes: {$ref: '#/components/schemas/DeploymentStringMap'}
+        nodePublishSecretRef: {$ref: '#/components/schemas/DeploymentObjectReference'}
+
+    DeploymentVolume:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name]
+      properties:
+        name: {type: string}
+        emptyDir: {$ref: '#/components/schemas/DeploymentEmptyDirVolume'}
+        persistentVolumeClaim: {$ref: '#/components/schemas/DeploymentPVCVolume'}
+        secret: {$ref: '#/components/schemas/DeploymentSecretVolume'}
+        configMap: {$ref: '#/components/schemas/DeploymentConfigMapVolume'}
+        hostPath: {$ref: '#/components/schemas/DeploymentHostPathVolume'}
+        downwardAPI: {$ref: '#/components/schemas/DeploymentDownwardAPIVolume'}
+        projected: {$ref: '#/components/schemas/DeploymentProjectedVolume'}
+        csi: {$ref: '#/components/schemas/DeploymentCSIVolume'}
+
+    DeploymentContainerPort:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        containerPort: {type: integer, minimum: 1, maximum: 65535}
+        hostPort: {type: integer, minimum: 0, maximum: 65535}
+        hostIP: {type: string}
+        protocol: {type: string, enum: [TCP, UDP, SCTP]}
+
+    DeploymentSleepAction:
+      type: object
+      additionalProperties: false
+      properties:
+        seconds: {type: integer, format: int64, minimum: 0}
+
+    DeploymentLifecycleHandler:
+      type: object
+      additionalProperties: false
+      properties:
+        exec: {$ref: '#/components/schemas/DeploymentExecAction'}
+        httpGet: {$ref: '#/components/schemas/DeploymentHTTPGetAction'}
+        tcpSocket: {$ref: '#/components/schemas/DeploymentTCPSocketAction'}
+        sleep: {$ref: '#/components/schemas/DeploymentSleepAction'}
+
+    DeploymentLifecycle:
+      type: object
+      additionalProperties: false
+      properties:
+        postStart: {$ref: '#/components/schemas/DeploymentLifecycleHandler'}
+        preStop: {$ref: '#/components/schemas/DeploymentLifecycleHandler'}
+
+    DeploymentContainer:
+      type: object
+      additionalProperties: false
+      x-effective-required: [name, image]
+      properties:
+        name: {type: string}
+        image: {type: string}
+        imagePullPolicy: {type: string, enum: [Always, Never, IfNotPresent]}
+        command: {type: array, items: {type: string}}
+        args: {type: array, items: {type: string}}
+        workingDir: {type: string}
+        env: {type: array, items: {$ref: '#/components/schemas/DeploymentEnvVar'}}
+        envFrom: {type: array, items: {$ref: '#/components/schemas/DeploymentEnvFrom'}}
+        ports: {type: array, items: {$ref: '#/components/schemas/DeploymentContainerPort'}}
+        resources: {$ref: '#/components/schemas/DeploymentResources'}
+        volumeMounts: {type: array, items: {$ref: '#/components/schemas/DeploymentVolumeMount'}}
+        securityContext: {$ref: '#/components/schemas/DeploymentSecurityContext'}
+        startupProbe: {$ref: '#/components/schemas/DeploymentProbeSpec'}
+        readinessProbe: {$ref: '#/components/schemas/DeploymentProbeSpec'}
+        livenessProbe: {$ref: '#/components/schemas/DeploymentProbeSpec'}
+        lifecycle: {$ref: '#/components/schemas/DeploymentLifecycle'}
+        terminationMessagePath: {type: string}
+        terminationMessagePolicy: {type: string, enum: [File, FallbackToLogsOnError]}
+        restartPolicy: {type: string, enum: [Always]}
+        stdin: {type: boolean}
+        stdinOnce: {type: boolean}
+        tty: {type: boolean}
+
+    DeploymentToleration:
+      type: object
+      additionalProperties: false
+      properties:
+        key: {type: string}
+        operator: {type: string, enum: [Exists, Equal]}
+        value: {type: string}
+        effect: {type: string, enum: ['', NoSchedule, PreferNoSchedule, NoExecute]}
+        tolerationSeconds: {type: integer, format: int64, minimum: 0}
+
+    DeploymentLabelRequirement:
+      type: object
+      additionalProperties: false
+      properties:
+        key: {type: string}
+        operator: {type: string, enum: [In, NotIn, Exists, DoesNotExist]}
+        values: {type: array, items: {type: string}}
+
+    DeploymentLabelSelector:
+      type: object
+      additionalProperties: false
+      properties:
+        matchLabels: {$ref: '#/components/schemas/DeploymentStringMap'}
+        matchExpressions: {type: array, items: {$ref: '#/components/schemas/DeploymentLabelRequirement'}}
+
+    DeploymentNodeRequirement:
+      type: object
+      additionalProperties: false
+      properties:
+        key: {type: string}
+        operator: {type: string, enum: [In, NotIn, Exists, DoesNotExist, Gt, Lt]}
+        values: {type: array, items: {type: string}}
+
+    DeploymentNodeSelectorTerm:
+      type: object
+      additionalProperties: false
+      properties:
+        matchExpressions: {type: array, items: {$ref: '#/components/schemas/DeploymentNodeRequirement'}}
+        matchFields: {type: array, items: {$ref: '#/components/schemas/DeploymentNodeRequirement'}}
+
+    DeploymentNodeSelector:
+      type: object
+      additionalProperties: false
+      properties:
+        nodeSelectorTerms: {type: array, items: {$ref: '#/components/schemas/DeploymentNodeSelectorTerm'}}
+
+    DeploymentPreferredNodeTerm:
+      type: object
+      additionalProperties: false
+      properties:
+        weight: {type: integer, minimum: 1, maximum: 100}
+        preference: {$ref: '#/components/schemas/DeploymentNodeSelectorTerm'}
+
+    DeploymentNodeAffinity:
+      type: object
+      additionalProperties: false
+      properties:
+        requiredDuringSchedulingIgnoredDuringExecution: {$ref: '#/components/schemas/DeploymentNodeSelector'}
+        preferredDuringSchedulingIgnoredDuringExecution: {type: array, items: {$ref: '#/components/schemas/DeploymentPreferredNodeTerm'}}
+
+    DeploymentPodAffinityTerm:
+      type: object
+      additionalProperties: false
+      properties:
+        labelSelector: {$ref: '#/components/schemas/DeploymentLabelSelector'}
+        namespaceSelector: {$ref: '#/components/schemas/DeploymentLabelSelector'}
+        namespaces: {type: array, items: {type: string}}
+        topologyKey: {type: string}
+        matchLabelKeys: {type: array, items: {type: string}}
+        mismatchLabelKeys: {type: array, items: {type: string}}
+
+    DeploymentWeightedPodAffinityTerm:
+      type: object
+      additionalProperties: false
+      properties:
+        weight: {type: integer, minimum: 1, maximum: 100}
+        podAffinityTerm: {$ref: '#/components/schemas/DeploymentPodAffinityTerm'}
+
+    DeploymentPodAffinity:
+      type: object
+      additionalProperties: false
+      properties:
+        requiredDuringSchedulingIgnoredDuringExecution: {type: array, items: {$ref: '#/components/schemas/DeploymentPodAffinityTerm'}}
+        preferredDuringSchedulingIgnoredDuringExecution: {type: array, items: {$ref: '#/components/schemas/DeploymentWeightedPodAffinityTerm'}}
+
+    DeploymentAffinity:
+      type: object
+      additionalProperties: false
+      properties:
+        nodeAffinity: {$ref: '#/components/schemas/DeploymentNodeAffinity'}
+        podAffinity: {$ref: '#/components/schemas/DeploymentPodAffinity'}
+        podAntiAffinity: {$ref: '#/components/schemas/DeploymentPodAffinity'}
+
+    KubernetesDeploymentSettings:
+      type: object
+      description: |
+        Optional project defaults or service overrides for generated Helm values.
+        Nested records are partial overrides too. x-effective-required names
+        fields needed after project/service inheritance, not fields that must
+        be repeated in every override. Omitted fields must never become defaults.
+        Omission inherits; arrays replace; nested mappings merge, with explicitly
+        empty mappings clearing inherited entries. No platform policy is invented
+        when settings are absent. User-owned environment Helm values apply last.
+      additionalProperties: false
+      properties:
+        replicaCount:
+          type: integer
+          minimum: 1
+        terminationGracePeriodSeconds:
+          type: integer
+          minimum: 0
+        deploymentStrategy:
+          $ref: '#/components/schemas/DeploymentStrategy'
+        updateStrategy:
+          $ref: '#/components/schemas/DeploymentUpdateStrategy'
+        command:
+          type: array
+          items:
+            type: string
+        initContainers:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentContainer'
+        extraContainers:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentContainer'
+        extraEnv:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentEnvVar'
+        secretEnv:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DeploymentSecretKeyRef'
+        secretEnvFrom:
+          type: array
+          items:
+            type: string
+        extraEnvFrom:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentEnvFrom'
+        extraVolumes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentVolume'
+        extraVolumeMounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentVolumeMount'
+        resources:
+          $ref: '#/components/schemas/DeploymentResources'
+        annotations:
+          $ref: '#/components/schemas/DeploymentStringMap'
+        podAnnotations:
+          $ref: '#/components/schemas/DeploymentStringMap'
+        podLabels:
+          $ref: '#/components/schemas/DeploymentStringMap'
+        podSecurityContext:
+          $ref: '#/components/schemas/DeploymentPodSecurityContext'
+        securityContext:
+          $ref: '#/components/schemas/DeploymentSecurityContext'
+        serviceAccount:
+          $ref: '#/components/schemas/DeploymentServiceAccount'
+        nodeSelector:
+          $ref: '#/components/schemas/DeploymentStringMap'
+        tolerations:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeploymentToleration'
+        affinity:
+          $ref: '#/components/schemas/DeploymentAffinity'
+        probes:
+          $ref: '#/components/schemas/DeploymentProbes'
+
     Service:
       type: object
       description: |
@@ -238,6 +973,8 @@ components:
         Go module path used for code generation.
       additionalProperties: false
       properties:
+        deployment:
+          $ref: '#/components/schemas/DeploymentSettings'
         id:
           type: integer
           description: Unique identifier for the service within the topology.
